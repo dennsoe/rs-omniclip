@@ -27,6 +27,7 @@ dapat membersihkan listener saat unmount.
 | M → R | `download:progress` | Kemajuan unduhan |
 | R → M | `trim:start` | Memotong video (lossless) |
 | M → R | `trim:complete` | Hasil pemotongan |
+| M → R | `system:stats` | Statistik CPU/RAM nyata (interval ~1 detik) |
 
 ## 3. Signature Lengkap `window.api`
 
@@ -40,7 +41,7 @@ interface Window {
 
     startProcessing: (payload: {
       files: FileItem[]
-      preset: 'quick' | 'standard' | 'archive' | 'whatsapp'
+      preset: 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'whatsapp'
     }) => void
 
     onProcessingProgress: (
@@ -83,6 +84,10 @@ interface Window {
         path?: string
         error?: string
       }) => void
+    ) => () => void
+
+    onSystemStats: (
+      cb: (data: { cpuPercent: number; ramUsedMb: number; ramTotalMb: number }) => void
     ) => () => void
   }
 }

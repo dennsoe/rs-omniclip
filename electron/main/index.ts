@@ -1,13 +1,59 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import path from 'node:path'
+import os from 'node:os'
 import { ensureFfmpeg } from '@engine/ffmpeg'
-import { processBatch, type PresetType, type ProcessFileInput, type ProcessProgress } from '@engine/processor'
+import {
+  processBatch,
+  type PresetType,
+  type ProcessFileInput,
+  type ProcessProgress
+} from '@engine/processor'
 import { trimVideo, type TrimPayload } from '@engine/trimmer'
 import { startDownload, type DownloadProgress } from '@engine/downloader'
 
 let mainWindow: BrowserWindow | null = null
 let engineReady = false
 let engineInitializing: Promise<void> | null = null
+
+// --- Statistik sistem (System Monitor data nyata) ---
+let statsTimer: NodeJS.Timeout | null = null
+let lastCpuTimes: { idle: number; total: number } | null = null
+
+function computeCpuPercent(): number {
+  const cpus = os.cpus()
+  let idle = 0
+  let total = 0
+  for (const cpu of cpus) {
+    const times = cpu.times as Record<string, number>
+    for (const key of Object.keys(times)) {
+      total += times[key]
+    }
+    idle += times.idle
+  }
+  const now = { idle, total }
+  if (!lastCpuTimes) {
+    lastCpuTimes = now
+    return 0
+  }
+  const idleDiff = now.idle - lastCpuTimes.idle
+  const totalDiff = now.total - lastCpuTimes.total
+  lastCpuTimes = now
+  if (totalDiff <= 0) return 0
+  return Math.min(100, Math.max(0, Math.round((1 - idleDiff / totalDiff) * 100)))
+}
+
+function startSystemStats(): void {
+  if (statsTimer) return
+  statsTimer = setInterval(() => {
+    const totalMem = os.totalmem()
+    const usedMem = totalMem - os.freemem()
+    emit('system:stats', {
+      cpu: computeCpuPercent(),
+      ramUsedMb: Math.round(usedMem / 1024 / 1024),
+      ramTotalMb: Math.round(totalMem / 1024 / 1024)
+    })
+  }, 1500)
+}
 
 function emit(channel: string, ...args: unknown[]): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -23,8 +69,8 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1320,
     height: 840,
-    minWidth: 980,
-    minHeight: 640,
+    minWidth: 720,
+    minHeight: 560,
     show: false,
     title: 'RS OmniClip',
     titleBarStyle: 'hiddenInset',
@@ -94,7 +140,10 @@ async function initEngine(): Promise<void> {
   return engineInitializing
 }
 
-async function handleProcessing(payload: { files: ProcessFileInput[]; preset: PresetType }): Promise<void> {
+async function handleProcessing(payload: {
+  files: ProcessFileInput[]
+  preset: PresetType
+}): Promise<void> {
   if (
     !payload ||
     !Array.isArray(payload.files) ||
@@ -185,6 +234,7 @@ if (!gotLock) {
     registerIpc()
     createWindow()
     void initEngine()
+    startSystemStats()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

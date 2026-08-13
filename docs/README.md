@@ -15,6 +15,7 @@ pemrosesan massal video pendek berbasis Electron-Vite (React + TypeScript).
 | [BUILD_AND_RELEASE.md](./BUILD_AND_RELEASE.md) | Panduan menjalankan, membangun, dan merilis aplikasi macOS |
 | [TESTING.md](./TESTING.md) | Strategi pengujian, smoke test mesin, dan daftar verifikasi |
 | [CURRENT_STATE.md](./CURRENT_STATE.md) | Kondisi terkini proyek (dipelihara setiap ada perubahan) |
+| [IMPLEMENTATION_GUIDE.md](./IMPLEMENTATION_GUIDE.md) | **Acuan utama** implementasi, sinkronisasi file & verifikasi |
 
 ## Prinsip Kunci Aplikasi
 

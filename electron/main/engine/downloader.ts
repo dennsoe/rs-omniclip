@@ -25,13 +25,20 @@ let ytdlpPromise: Promise<string | null> | null = null
  */
 export function ensureYtdlp(onStatus?: (message: string) => void): Promise<string | null> {
   if (!ytdlpPromise) {
-    ytdlpPromise = doEnsureYtdlp(onStatus).then((binPath) => {
-      // Jangan simpan hasil gagal (null): izinkan unduhan ulang nanti.
-      if (!binPath) {
+    ytdlpPromise = doEnsureYtdlp(onStatus)
+      .then((binPath) => {
+        // Jangan simpan hasil gagal (null): izinkan unduhan ulang nanti.
+        if (!binPath) {
+          ytdlpPromise = null
+        }
+        return binPath
+      })
+      .catch((err) => {
+        // Sama seperti ensureFfmpeg: jangan simpan promise yang reject,
+        // agar inisialisasi ulang dapat mencoba lagi tanpa restart.
         ytdlpPromise = null
-      }
-      return binPath
-    })
+        throw err
+      })
   }
   return ytdlpPromise
 }

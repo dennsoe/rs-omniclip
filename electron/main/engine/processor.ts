@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import { ensureFfmpeg, probe, runFfmpeg, type ProbeResult } from './ffmpeg'
 import { createOutputFolderForBatch } from './paths'
 
-export type PresetType = 'quick' | 'standard' | 'archive' | 'whatsapp'
+export type PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'whatsapp'
 
 export interface ProcessFileInput {
   id: string
@@ -18,6 +18,9 @@ export interface ProcessProgress {
   /** Pesan kegagalan opsional (diisi hanya saat status 'failed'). */
   error?: string
 }
+
+/** Target resolusi sumbu panjang (piksel). */
+type ScaleTarget = 720 | 1080 | 2160
 
 /** Target ukuran file WhatsApp dalam MB (batas umum berbagi video WA). */
 const WHATSAPP_TARGET_MB = 16
@@ -118,13 +121,11 @@ function buildArgSets(
   const common = ['-y', '-i', input, '-map_metadata', '-1']
 
   switch (preset) {
-    case 'quick': {
+    case 'metadata': {
       // Hanya menghapus metadata - remux lossless, tanpa re-encode.
       return [
         [...common, '-c', 'copy', '-movflags', '+faststart', output],
-        // Fallback: jika codec tidak dapat diremux ke .mp4 (mis. audio PCM,
-        // ProRes, HEVC dengan parameter tertentu), encode ulang minimal agar
-        // preset "Bagikan Cepat" tetap berhasil. Metadata tetap dihapus.
+        // Fallback: codec tidak dapat diremux ke .mp4 -> encode minimal.
         [
           ...common,
           '-c:v',
@@ -146,32 +147,12 @@ function buildArgSets(
       ]
     }
 
-    case 'standard': {
-      // Peningkat: upscale 1080p (sumbu panjang) + penajaman AI-like + denoise audio.
-      const scaleFilter =
-        "scale='if(gt(iw,ih),1080,-2)':'if(gt(iw,ih),-2,1080)':flags=lanczos"
-      const videoArgs = [
-        ...common,
-        '-vf',
-        `${scaleFilter},unsharp=5:5:0.6:5:5:0.0`,
-        '-c:v',
-        'libx264',
-        '-preset',
-        'veryfast',
-        '-crf',
-        '20',
-        '-pix_fmt',
-        'yuv420p'
-      ]
-      const audioArgs = ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
-
-      return [
-        // Set utama: dengan filter reduksi noise audio.
-        [...videoArgs, '-af', 'afftdn=nr=12:nf=-30', ...audioArgs, output],
-        // Fallback: tanpa filter audio (kompatibilitas codec audio tertentu).
-        [...videoArgs, ...audioArgs, output]
-      ]
-    }
+    case 'hd':
+      return buildEnhance(common, 720, output)
+    case 'fullhd':
+      return buildEnhance(common, 1080, output)
+    case 'uhd':
+      return buildEnhance(common, 2160, output)
 
     case 'archive': {
       // Arsip kualitas maks: resolusi asli + CRF 18.
@@ -225,7 +206,38 @@ function buildArgSets(
         ]
       ]
     }
+
+    default:
+      throw new Error(`Prasetel tidak dikenal: ${preset}`)
   }
+}
+
+/**
+ * Set argumen preset "peningkat": upscale ke target sumbu panjang +
+ * penajaman + denoise audio (dengan fallback tanpa filter audio).
+ */
+function buildEnhance(common: string[], target: ScaleTarget, output: string): string[][] {
+  const videoArgs = [
+    ...common,
+    '-vf',
+    `scale='if(gt(iw,ih),${target},-2)':'if(gt(iw,ih),-2,${target})':flags=lanczos,unsharp=5:5:0.6:5:5:0.0`,
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '20',
+    '-pix_fmt',
+    'yuv420p'
+  ]
+  const audioArgs = ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
+
+  return [
+    // Set utama: dengan filter reduksi noise audio.
+    [...videoArgs, '-af', 'afftdn=nr=12:nf=-30', ...audioArgs, output],
+    // Fallback: tanpa filter audio (kompatibilitas codec audio tertentu).
+    [...videoArgs, ...audioArgs, output]
+  ]
 }
 
 /**

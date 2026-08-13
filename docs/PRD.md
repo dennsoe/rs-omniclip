@@ -9,8 +9,8 @@ Status: Aktif (dipelihara)
 **RS OmniClip** adalah aplikasi desktop (Electron) untuk pemrosesan massal video
 pendek (< 1 menit) yang digunakan oleh tim internal. Aplikasi menggabungkan
 beberapa alat video umum menjadi satu "Super App": pembersih metadata, peningkat
-video, pengunduh universal, pemotong inline, watermark/caption, dan kompresor
-WhatsApp.
+video (HD/FullHD/4K), pengunduh universal, pemotong inline, arsip kualitas maks,
+dan kompresor WhatsApp. Watermark/subtitle tercatat sebagai fitur masa depan.
 
 Semua pemrosesan berjalan **100% lokal** menggunakan FFmpeg dan yt-dlp; tidak ada
 data yang dikirim ke server.
@@ -34,13 +34,13 @@ data yang dikirim ke server.
 
 | # | Fitur | Deskripsi | Prioritas |
 |---|---|---|---|
-| F1 | Pembersih Metadata Massal | Menghapus metadata (termasuk GPS/EXIF) via FFmpeg remux lossless. Prasetel `quick` | P0 |
-| F2 | Peningkat Video & Normalisasi Audio | Upscale 1080p (sumbu panjang), penajaman AI-like (`unsharp`), reduksi noise audio (`afftdn`). Prasetel `standard` | P0 |
+| F1 | Pembersih Metadata Massal | Menghapus metadata (termasuk GPS/EXIF) via FFmpeg remux lossless + fallback encode. Prasetel `metadata` | P0 |
+| F2 | Peningkat Video & Normalisasi Audio | Upscale sumbu panjang (HD 720p / FullHD 1080p / UHD 4K), penajaman (`unsharp`), reduksi noise audio (`afftdn`). Prasetel `hd`/`fullhd`/`uhd` | P0 |
 | F3 | Pengunduh Video Universal | Unduh dari YouTube, TikTok, Facebook, Instagram dll. via `yt-dlp` | P0 |
 | F4 | Pemotong Video Inline | Potong lossless (stream copy) per file, tanpa re-encode | P1 |
-| F5 | Watermark & Auto-Caption | Pengaturan tambahan pada sidebar (UI, backend menyusul) | P2 |
-| F6 | Kompresor WhatsApp | Target ukuran file otomatis (~16 MB). Prasetel `whatsapp` | P0 |
-| F7 | Arsip Kualitas Maks | Resolusi asli + CRF 18. Prasetel `archive` | P1 |
+| F5 | Kompresor WhatsApp | Target ukuran file otomatis (~16 MB). Prasetel `whatsapp` | P0 |
+| F6 | Arsip Kualitas Maks | Resolusi asli + CRF 18. Prasetel `archive` | P1 |
+| F7 | Watermark & Auto-Caption (masa depan) | Di roadmap; watermark butuh build FFmpeg dengan `drawtext`/overlay | P2 |
 
 ## 5. Kebutuhan Fungsional
 
@@ -49,11 +49,11 @@ data yang dikirim ke server.
 - **RF-1** Pengguna dapat menambah satu atau banyak video `.mp4` / `.mov`
   (drag-and-drop atau pemilih file).
 - **RF-2** Pengguna dapat mengurutkan antrean dengan drag-and-drop.
-- **RF-3** Pengguna dapat memilih salah satu prasetel: Bagikan Cepat (`quick`),
-  Standar Bersih & Jernih (`standard`), Arsip Kualitas Maks (`archive`),
-  Kompresi WhatsApp (`whatsapp`).
-- **RF-4** Pengguna dapat mengaktifkan "Subtitle Otomatis (AI)" dan
-  "Pasang Watermark Logo" (pengaturan UI; backend disiapkan pada fase berikutnya).
+- **RF-3** Pengguna dapat memilih salah satu prasetel: Hapus Metadata (`metadata`),
+  HD 720p (`hd`), Full HD 1080p (`fullhd`), UHD 4K (`uhd`),
+  Arsip Kualitas Maks (`archive`), Kompresi WhatsApp (`whatsapp`).
+- **RF-4** (dihapus) Kontrol mati (subtitle/watermark) tidak lagi ada di sidebar;
+  keduanya dipindah ke roadmap (lihat `IMPLEMENTATION_ROADMAP.md`).
 - **RF-5** Pengguna dapat memfilter antrean: Semua / Menunggu / Selesai / Gagal.
 - **RF-6** Pengguna dapat melihat pratinjau video (modal player) sebelum diproses.
 - **RF-7** Pengguna dapat menghapus satu item atau membersihkan seluruh antrean
@@ -77,7 +77,8 @@ data yang dikirim ke server.
 - **RF-16** Saat aplikasi dibuka, sistem menginisialisasi mesin (FFmpeg) dan
   menampilkan layar "Menyiapkan Mesin Video..." sampai siap.
 - **RF-17** Jika binary belum ada, sistem mengunduh otomatis (butuh internet).
-- **RF-18** Sistem menampilkan monitor System (CPU/RAM simulasi) di sidebar.
+- **RF-18** Sistem menampilkan monitor System (CPU/RAM **nyata** dari proses
+  utama, channel `system:stats`) di sidebar.
 
 ## 6. Kebutuhan Non-Fungsional
 
@@ -90,6 +91,7 @@ data yang dikirim ke server.
 | NFR-5 | Estetika | Light mode macOS premium, `backdrop-blur`, palet slate/blue, ikon `lucide-react` |
 | NFR-6 | Bahasa | Seluruh teks antarmuka Bahasa Indonesia, tanpa emoji |
 | NFR-7 | Ukuran antrean | Mendukung batch puluhan file sekaligus |
+| NFR-8 | Responsivitas | Layout bekerja di semua ukuran jendela (min 720x560) & mode; sidebar jadi drawer di < 768px |
 
 ## 7. User Stories
 
@@ -108,15 +110,16 @@ data yang dikirim ke server.
 
 - **Non-destruktif** adalah aturan mutlak: hasil selalu ke folder
   `[CLEANED] - YYYY-MM-DD`, nama file asli dipertahankan (ekstensi `.mp4`).
-- Fitur "Subtitle Otomatis (AI)" dan "Watermark" saat ini berupa kontrol UI;
-  implementasi backend direncanakan pada fase roadmap berikutnya.
-- Monitor System (CPU/RAM) menggunakan simulasi di renderer (tidak ada kontrak IPC
-  untuk statistik sistem asli).
+- Watermark teks **dihapus** karena build FFmpeg (evermeet 6.1) tidak punya
+  filter `drawtext`; pengembalian fitur tercatat di roadmap (butuh build lain
+  atau overlay gambar). Subtitle AI juga di roadmap.
+- Monitor System (CPU/RAM) menampilkan data **nyata** dari proses utama
+  (channel `system:stats`), bukan simulasi.
 - Target WhatsApp 16 MB (batas umum berbagi video WA).
 
 ## 9. Definisi Selesai (DoD)
 
 - Kode lolos `npm run typecheck`, `npm run lint`, dan `npm run build`.
-- Smoke test mesin (`scripts/engine-smoke-test.mjs`) lolos 9/9.
+- Smoke test mesin (`scripts/engine-smoke-test.mjs`) lolos 11/11.
 - UI memakai Bahasa Indonesia dan tanpa emoji.
 - Tidak ada error editor di seluruh workspace.

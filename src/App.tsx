@@ -4,8 +4,10 @@ import { motion, AnimatePresence } from 'motion/react'
 import {
   Loader2,
   UploadCloud,
-  Zap,
-  Settings2,
+  Eraser,
+  MonitorUp,
+  Monitor,
+  Tv,
   Archive,
   PlayCircle,
   Trash2,
@@ -16,8 +18,6 @@ import {
   DownloadCloud,
   Link as LinkIcon,
   MessageCircle,
-  Type,
-  Image as ImageIcon,
   XCircle,
   FolderOpen
 } from 'lucide-react'
@@ -67,11 +67,8 @@ export default function App(): React.ReactElement {
   const [downloads, setDownloads] = useState<DownloadItem[]>([])
   const [urlInput, setUrlInput] = useState('')
 
-  const [isAutoSubtitle, setIsAutoSubtitle] = useState(false)
-  const [isWatermark, setIsWatermark] = useState(false)
-
   const [files, setFiles] = useState<FileItem[]>([])
-  const [preset, setPreset] = useState<PresetType>('standard')
+  const [preset, setPreset] = useState<PresetType>('fullhd')
   const [isProcessing, setIsProcessing] = useState(false)
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
@@ -259,7 +256,11 @@ export default function App(): React.ReactElement {
       'video/quicktime': ['.mov']
     },
     disabled: isProcessing,
-    noClick: files.length > 0
+    // Klik & drag hanya aktif di halaman Pembersih (saat antrean kosong).
+    // Di halaman Pengunduh, klik TIDAK boleh membuka dialog file — input URL
+    // dan tombol harus tetap berfungsi normal.
+    noClick: activeMenu === 'downloader' || files.length > 0,
+    noDrag: activeMenu === 'downloader'
   })
 
   const clearList = (): void => {
@@ -342,7 +343,7 @@ export default function App(): React.ReactElement {
   if (!isAppReady) {
     return (
       <div className={isDarkMode ? 'dark' : ''}>
-        <div className="flex flex-col items-center justify-center h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans transition-colors duration-500">
+        <div className="flex flex-col items-center justify-center h-dvh bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans transition-colors duration-500">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -363,17 +364,19 @@ export default function App(): React.ReactElement {
     id: PresetType
     title: string
     desc: string
-    icon: typeof Zap
+    icon: typeof Monitor
   }> = [
-    { id: 'quick', title: 'Bagikan Cepat', desc: 'HANYA Hapus Metadata.', icon: Zap },
-    { id: 'standard', title: 'Standar Bersih & Jernih', desc: 'Tingkatkan ke 1080p + Audio.', icon: Settings2 },
-    { id: 'archive', title: 'Arsip Kualitas Maks', desc: 'Resolusi Asli + CRF 18.', icon: Archive },
-    { id: 'whatsapp', title: 'Kompresi WhatsApp', desc: 'Target ukuran file otomatis pas untuk dikirim via WA.', icon: MessageCircle }
+    { id: 'metadata', title: 'Hapus Metadata', desc: 'Bersihkan metadata/GPS, kualitas asli.', icon: Eraser },
+    { id: 'hd', title: 'HD 720p', desc: 'Tingkatkan ke HD 720p + penajaman + audio.', icon: MonitorUp },
+    { id: 'fullhd', title: 'Full HD 1080p', desc: 'Tingkatkan ke Full HD 1080p + penajaman + audio.', icon: Monitor },
+    { id: 'uhd', title: '4K UHD', desc: 'Tingkatkan ke 4K (2160p) + penajaman + audio.', icon: Tv },
+    { id: 'archive', title: 'Kualitas Asli', desc: 'Resolusi asli, CRF 18.', icon: Archive },
+    { id: 'whatsapp', title: 'Kompresi WhatsApp', desc: 'Ukuran pas untuk dikirim via WA.', icon: MessageCircle }
   ]
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>
-      <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden font-sans text-slate-800 dark:text-slate-100 transition-colors duration-500">
+      <div className="flex h-dvh bg-slate-50 dark:bg-slate-900 overflow-hidden font-sans text-slate-800 dark:text-slate-100 transition-colors duration-500">
         <Toasts toasts={toasts} />
         <ConfirmModal confirmAction={confirmAction} onClose={() => setConfirmAction(null)} onConfirm={handleConfirm} />
         <PreviewModal previewFile={previewFile} onClose={() => setPreviewFile(null)} />
@@ -402,7 +405,7 @@ export default function App(): React.ReactElement {
             width: isMobile ? 280 : files.length === 0 ? 260 : 320
           }}
           transition={{ type: 'spring', bounce: 0, duration: 0.8 }}
-          className={`sidebar bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200 dark:border-slate-800/80 flex flex-col h-full shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0 transition-colors overflow-hidden ${
+          className={`sidebar bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200 dark:border-slate-800/80 flex flex-col h-full shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0 transition-colors overflow-y-auto ${
             isMobile ? 'absolute inset-y-0 left-0 z-40' : 'relative z-20'
           }`}
         >
@@ -479,63 +482,11 @@ export default function App(): React.ReactElement {
                 })}
               </div>
 
-              <div className="px-6 pb-2 mt-6">
-                <h1 className="text-xs font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
-                  PENGATURAN TAMBAHAN
-                </h1>
-              </div>
-              <div className="p-4 pt-0 space-y-2">
-                <button
-                  onClick={() => setIsAutoSubtitle((v) => !v)}
-                  className={`w-full text-left flex items-center justify-between p-3 rounded-xl transition-all ${
-                    isAutoSubtitle
-                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <Type
-                      className={`w-5 h-5 shrink-0 ${isAutoSubtitle ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}
-                    />
-                    <span className="font-medium text-sm">Subtitle Otomatis (AI)</span>
-                  </div>
-                  <div
-                    className={`w-3 h-3 rounded-full transition-colors ${
-                      isAutoSubtitle
-                        ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-                        : 'bg-slate-200 dark:bg-slate-700'
-                    }`}
-                  />
-                </button>
-
-                <button
-                  onClick={() => setIsWatermark((v) => !v)}
-                  className={`w-full text-left flex items-center justify-between p-3 rounded-xl transition-all ${
-                    isWatermark
-                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <ImageIcon
-                      className={`w-5 h-5 shrink-0 ${isWatermark ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}
-                    />
-                    <span className="font-medium text-sm">Pasang Watermark Logo</span>
-                  </div>
-                  <div
-                    className={`w-3 h-3 rounded-full transition-colors ${
-                      isWatermark
-                        ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-                        : 'bg-slate-200 dark:bg-slate-700'
-                    }`}
-                  />
-                </button>
-              </div>
             </>
           )}
 
           <div className="mt-auto flex flex-col">
-            <SystemMonitor isProcessing={isProcessing} />
+            <SystemMonitor />
 
             <button
               onClick={() => setIsDarkMode((v) => !v)}
@@ -573,7 +524,7 @@ export default function App(): React.ReactElement {
           layout
           transition={{ type: 'spring', bounce: 0, duration: 0.8 }}
           {...(getRootProps() as Record<string, unknown>)}
-          className={`flex-1 relative flex flex-col h-full focus:outline-none transition-colors duration-500 ${
+          className={`flex-1 relative flex flex-col h-full min-w-0 focus:outline-none transition-colors duration-500 ${
             isDragActive ? 'bg-blue-50/50 dark:bg-slate-800/50' : 'bg-slate-50 dark:bg-slate-900'
           }`}
         >
@@ -634,8 +585,8 @@ export default function App(): React.ReactElement {
                     <div className="p-6 bg-blue-50 dark:bg-slate-800/50 text-blue-500 rounded-full mb-6 transition-colors">
                       <UploadCloud className="w-12 h-12" />
                     </div>
-                    <h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-100 transition-colors">
-                      Tarik & Lepas Video ke RS OmniClip
+                    <h2 className="text-xl sm:text-2xl font-semibold text-slate-800 dark:text-slate-100 transition-colors text-center px-4">
+                      Tarik &amp; Lepas Video ke RS OmniClip
                     </h2>
                     <p className="text-slate-500 dark:text-slate-400 mt-2 transition-colors">
                       Atau klik untuk menelusuri file .mp4, .mov
@@ -650,7 +601,7 @@ export default function App(): React.ReactElement {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 20 }}
                     transition={{ type: 'spring', bounce: 0.1, duration: 0.5 }}
-                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl m-4 mt-16 md:m-8 overflow-hidden flex flex-col max-h-[calc(100vh-140px)] relative z-10 transition-colors"
+                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl m-4 mt-16 md:m-8 overflow-hidden flex flex-col min-h-0 max-h-[calc(100dvh-150px)] relative z-10 transition-colors"
                   >
                     {/* Filter Header */}
                     <div className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 p-3 flex flex-col sm:flex-row gap-3 sm:gap-0 justify-between sm:items-center transition-colors">
@@ -720,7 +671,7 @@ export default function App(): React.ReactElement {
                     startProcessing()
                   }}
                   disabled={isProcessing}
-                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-500/30 px-10 py-4 rounded-full font-semibold text-lg flex items-center gap-3 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-500/30 px-8 py-3.5 sm:px-10 sm:py-4 rounded-full font-semibold text-base sm:text-lg flex items-center gap-3 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isProcessing ? (
                     <>
@@ -757,8 +708,8 @@ export default function App(): React.ReactElement {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col pt-16 md:pt-24 px-6 md:px-12 max-w-4xl mx-auto w-full z-10 relative">
-              <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">RS OmniClip - Pengunduh Video</h2>
+            <div className="flex-1 flex flex-col pt-16 md:pt-24 px-6 md:px-12 max-w-4xl mx-auto w-full min-h-0 overflow-y-auto z-10 relative">
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">RS OmniClip - Pengunduh Video</h2>
               <p className="text-slate-500 dark:text-slate-400 mb-8">
                 Unduh dari YouTube, TikTok, Facebook, Instagram, dan lainnya.
               </p>
