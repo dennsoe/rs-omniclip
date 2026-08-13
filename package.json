@@ -15,7 +15,7 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "lint": "eslint .",
     "build:mac": "npm run build && electron-builder --mac",
-    "build:win": "npm run build && electron-builder --win"
+    "build:win": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {
     "extract-zip": "^2.0.1",
@@ -68,6 +68,12 @@
     "win": {
       "target": ["nsis", "portable"],
       "artifactName": "RS-OmniClip-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "RS-OmniClip-${version}-${arch}-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "RS-OmniClip-${version}-${arch}-portable.${ext}"
     },
     "afterSign": "scripts/afterSign.js",
     "publish": {
