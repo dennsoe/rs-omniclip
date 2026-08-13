@@ -1,4 +1,4 @@
-import type { FileItem, PresetType } from '@lib/types'
+import type { FileItem, PresetType, ScrapeItem } from '@lib/types'
 
 /**
  * Kontrak jembatan IPC (window.api) antara renderer React dan backend Node.js.
@@ -21,7 +21,7 @@ declare global {
       ) => () => void
       onProcessingComplete: (cb: (data: { outputFolder: string }) => void) => () => void
       openFolder: (folderPath: string) => void
-      startDownload: (payload: { url: string; id?: string }) => void
+      startDownloadBatch: (urls: string[]) => void
       onDownloadProgress: (
         cb: (data: {
           id: string
@@ -30,6 +30,12 @@ declare global {
           status: 'downloading' | 'success' | 'failed'
           error?: string
         }) => void
+      ) => () => void
+      onDownloadComplete: (cb: (data: { total: number; success: number; failed: number }) => void) => () => void
+      /** Mengambil daftar video dari satu akun/halaman. */
+      scrapeAccount: (payload: { id: string; url: string }) => void
+      onScrapeComplete: (
+        cb: (data: { id: string; items: ScrapeItem[]; truncated?: boolean; error?: string }) => void
       ) => () => void
 
       // --- Ekstensi (tidak mengubah kontrak inti) ---

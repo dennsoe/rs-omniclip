@@ -21,6 +21,8 @@ import {
   MessageCircle,
   XCircle,
   FolderOpen,
+  ListVideo,
+  Search,
   type LucideIcon
 } from 'lucide-react'
 import {
@@ -38,7 +40,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
-import type { FileItem, PresetType, FileStatus } from '@lib/types'
+import type { FileItem, PresetType, FileStatus, ScrapeItem } from '@lib/types'
 import { useIsMobile } from '@hooks/use-mobile'
 import Toasts, { type ToastMessage, type ToastType } from '@components/Toasts'
 import ConfirmModal, { type ConfirmAction } from '@components/ConfirmModal'
@@ -68,7 +70,14 @@ export default function App(): React.ReactElement {
 
   const [activeMenu, setActiveMenu] = useState<'cleaner' | 'downloader'>('cleaner')
   const [downloads, setDownloads] = useState<DownloadItem[]>([])
-  const [urlInput, setUrlInput] = useState('')
+  const [linksText, setLinksText] = useState('')
+  const [scrapeUrl, setScrapeUrl] = useState('')
+  const [scrapeItems, setScrapeItems] = useState<ScrapeItem[] | null>(null)
+  const [scrapeTruncated, setScrapeTruncated] = useState(false)
+  const [scrapeSelected, setScrapeSelected] = useState<Record<string, boolean>>({})
+  const [isScraping, setIsScraping] = useState(false)
+  const [scrapeError, setScrapeError] = useState<string | null>(null)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   const [files, setFiles] = useState<FileItem[]>([])
   const [preset, setPreset] = useState<PresetType>('fullhd')
@@ -98,6 +107,24 @@ export default function App(): React.ReactElement {
       return f.status === filter
     })
   }, [files, filter])
+
+  // URL valid hasil parse textarea multi-link (dedupe, hanya http/https).
+  const validLinks = useMemo(() => {
+    return Array.from(
+      new Set(
+        linksText
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l && /^https?:\/\//i.test(l))
+      )
+    )
+  }, [linksText])
+
+  // URL terpilih dari hasil scrape akun.
+  const selectedUrls = useMemo(
+    () => (scrapeItems ?? []).filter((it) => scrapeSelected[it.url]).map((it) => it.url),
+    [scrapeItems, scrapeSelected]
+  )
 
   const addToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = Math.random().toString(36).substring(7)
@@ -190,44 +217,93 @@ export default function App(): React.ReactElement {
           return d
         })
       )
-      if (data.status === 'success') addToast('Video berhasil diunduh', 'success')
+      // Ringkasan keseluruhan dilaporkan lewat onDownloadComplete; di sini hanya
+      // peringatkan kegagalan agar antrean besar tidak membanjiri toast.
       if (data.status === 'failed') addToast('Gagal mengunduh video', 'error')
+    })
+
+    const offDownloadComplete = window.api.onDownloadComplete((data) => {
+      setIsDownloading(false)
+      if (data.failed > 0) {
+        addToast(`Unduhan selesai: ${data.success} berhasil, ${data.failed} gagal.`, 'error')
+      } else {
+        addToast(`Semua ${data.success} video berhasil diunduh.`, 'success')
+      }
+    })
+
+    const offScrape = window.api.onScrapeComplete((data) => {
+      setIsScraping(false)
+      if (data.error || !data.items) {
+        setScrapeError(data.error ?? 'Gagal mengambil daftar video.')
+        setScrapeItems(null)
+        setScrapeSelected({})
+        return
+      }
+      setScrapeItems(data.items)
+      setScrapeTruncated(!!data.truncated)
+      setScrapeSelected({})
+      if (data.items.length === 0) {
+        setScrapeError('Tidak ada video yang ditemukan pada akun/halaman ini.')
+      } else {
+        setScrapeError(null)
+      }
     })
 
     return () => {
       offProgress()
       offComplete()
       offDownload()
+      offDownloadComplete()
+      offScrape()
     }
   }, [addToast])
 
-  const startDownload = (): void => {
-    if (!urlInput.trim()) return
-    const newId = Math.random().toString(36).substring(7)
-    const url = urlInput.trim()
-
-    setDownloads((prev) => [{ id: newId, url, percent: 0, status: 'downloading' }, ...prev])
-    setUrlInput('')
-
-    if (window.api?.startDownload) {
-      window.api.startDownload({ url, id: newId })
+  const startBatchDownload = (urls: string[]): void => {
+    if (urls.length === 0 || isDownloading) return
+    setIsDownloading(true)
+    setDownloads((prev) => [
+      ...urls.map((url) => ({ id: url, url, percent: 0, status: 'downloading' as const })),
+      ...prev
+    ])
+    if (window.api?.startDownloadBatch) {
+      window.api.startDownloadBatch(urls)
     } else {
-      // Mode web/fallback: simulasi kemajuan.
-      let progress = 0
-      const interval = setInterval(() => {
-        progress += Math.random() * 10
-        if (progress >= 100) {
-          progress = 100
-          clearInterval(interval)
-          setDownloads((prev) =>
-            prev.map((d) => (d.id === newId ? { ...d, percent: 100, status: 'success' } : d))
-          )
-          addToast('Video berhasil diunduh', 'success')
-        } else {
-          setDownloads((prev) => prev.map((d) => (d.id === newId ? { ...d, percent: progress } : d)))
-        }
-      }, 500)
+      // Mode web/fallback: mesin tidak tersedia di browser biasa.
+      setIsDownloading(false)
+      setDownloads((prev) =>
+        prev.map((d) =>
+          urls.includes(d.url) && d.status === 'downloading'
+            ? { ...d, status: 'failed' as const, error: 'Hanya berjalan di aplikasi desktop (Electron).' }
+            : d
+        )
+      )
+      addToast('Unduhan hanya berjalan pada aplikasi desktop (Electron).', 'error')
     }
+  }
+
+  const handleScrape = (): void => {
+    const url = scrapeUrl.trim()
+    if (!url || isScraping) return
+    setIsScraping(true)
+    setScrapeError(null)
+    setScrapeItems(null)
+    setScrapeSelected({})
+    if (window.api?.scrapeAccount) {
+      window.api.scrapeAccount({ id: Math.random().toString(36).substring(7), url })
+    } else {
+      setIsScraping(false)
+      setScrapeError('Ambil daftar hanya berjalan pada aplikasi desktop (Electron).')
+    }
+  }
+
+  const toggleScrapeItem = (url: string): void => {
+    setScrapeSelected((prev) => ({ ...prev, [url]: !prev[url] }))
+  }
+
+  const toggleScrapeAll = (): void => {
+    if (!scrapeItems) return
+    const allSelected = scrapeItems.every((it) => scrapeSelected[it.url])
+    setScrapeSelected(allSelected ? {} : Object.fromEntries(scrapeItems.map((it) => [it.url, true])))
   }
 
   const onDrop = useCallback(
@@ -758,34 +834,161 @@ export default function App(): React.ReactElement {
             <div className="flex-1 flex flex-col pt-16 md:pt-24 px-6 md:px-12 max-w-4xl mx-auto w-full min-h-0 overflow-y-auto z-10 relative">
               <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">RS OmniClip - Pengunduh Video</h2>
               <p className="text-slate-500 dark:text-slate-400 mb-8">
-                Unduh dari YouTube, TikTok, Facebook, Instagram, dan lainnya.
+                Unduh banyak video sekaligus, atau ambil daftar video dari satu akun/halaman lalu pilih yang ingin diunduh.
               </p>
 
-              <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full p-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all mb-8">
-                <input
-                  type="url"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="Tempel tautan (URL) video di sini..."
-                  className="flex-1 bg-transparent border-none focus:outline-none px-4 text-slate-700 dark:text-slate-200 placeholder-slate-400"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      startDownload()
-                    }
-                  }}
+              {/* ---- UNDUH BANYAK LINK ---- */}
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 mb-4 relative z-10 transition-colors">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                      <LinkIcon className="w-4 h-4" />
+                    </span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                      Unduh dari Banyak Link
+                    </span>
+                  </div>
+                  {validLinks.length > 0 && (
+                    <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded-full shrink-0">
+                      {validLinks.length} link
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  value={linksText}
+                  onChange={(e) => setLinksText(e.target.value)}
+                  rows={4}
+                  placeholder={'Tempel banyak tautan, satu per baris:\nhttps://www.youtube.com/watch?v=...\nhttps://www.tiktok.com/@user/video/...'}
+                  className="w-full resize-none bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 />
-                <button
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    startDownload()
-                  }}
-                  disabled={!urlInput.trim()}
-                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-6 py-2 font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Unduh
-                </button>
+                <div className="flex justify-end">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      startBatchDownload(validLinks)
+                    }}
+                    disabled={validLinks.length === 0 || isDownloading}
+                    className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-5 py-2.5 text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isDownloading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <DownloadCloud className="w-4 h-4" />
+                    )}
+                    Unduh Semua ({validLinks.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* ---- AMBIL VIDEO DARI AKUN / HALAMAN ---- */}
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 mb-8 relative z-10 transition-colors">
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center shrink-0">
+                    <ListVideo className="w-4 h-4" />
+                  </span>
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    Ambil Video dari Akun / Halaman
+                  </span>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="url"
+                    value={scrapeUrl}
+                    onChange={(e) => setScrapeUrl(e.target.value)}
+                    placeholder="Tempel tautan akun/halaman, mis. https://www.tiktok.com/@username"
+                    className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-all"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleScrape()
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      handleScrape()
+                    }}
+                    disabled={!scrapeUrl.trim() || isScraping}
+                    className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl px-5 py-2 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isScraping ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Search className="w-4 h-4" />
+                    )}
+                    Ambil Daftar
+                  </button>
+                </div>
+
+                {scrapeError && (
+                  <p className="text-xs text-rose-500 dark:text-rose-400">{scrapeError}</p>
+                )}
+
+                {scrapeItems && scrapeItems.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                        {scrapeItems.length} video ditemukan
+                        {scrapeTruncated ? ' (menampilkan sebagian)' : ''}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            toggleScrapeAll()
+                          }}
+                          className="text-xs font-medium text-violet-600 dark:text-violet-400 hover:underline"
+                        >
+                          {scrapeItems.every((it) => scrapeSelected[it.url])
+                            ? 'Kosongkan Pilihan'
+                            : 'Pilih Semua'}
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            startBatchDownload(selectedUrls)
+                          }}
+                          disabled={selectedUrls.length === 0 || isDownloading}
+                          className="bg-violet-600 hover:bg-violet-700 text-white rounded-full px-4 py-1.5 text-xs font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <DownloadCloud className="w-3.5 h-3.5" />
+                          Unduh Terpilih ({selectedUrls.length})
+                        </button>
+                      </div>
+                    </div>
+                    <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-y-auto max-h-72 bg-slate-50/50 dark:bg-slate-900/40">
+                      {scrapeItems.map((item) => (
+                        <label
+                          key={item.url}
+                          className="flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!scrapeSelected[item.url]}
+                            onChange={() => toggleScrapeItem(item.url)}
+                            className="accent-violet-600 w-4 h-4 shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                              {item.title}
+                            </p>
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                              {item.url}
+                            </p>
+                          </div>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-600 shrink-0">
+                            #{item.index + 1}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {downloads.length > 0 && (

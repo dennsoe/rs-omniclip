@@ -9,7 +9,7 @@ import {
   type ProcessProgress
 } from '@engine/processor'
 import { trimVideo, type TrimPayload } from '@engine/trimmer'
-import { startDownload, type DownloadProgress } from '@engine/downloader'
+import { startDownloadBatch, scrapeAccount, type DownloadProgress } from '@engine/downloader'
 import { getTrackedPids, sampleProcess } from '@engine/procmon'
 
 let mainWindow: BrowserWindow | null = null
@@ -212,13 +212,43 @@ async function handleProcessing(payload: {
   }
 }
 
-function handleDownload(payload: { url: string; id?: string }): void {
-  if (!payload || typeof payload.url !== 'string') {
+function handleDownload(payload: { urls?: string[] }): void {
+  if (!payload || !Array.isArray(payload.urls)) {
     return
   }
-  void startDownload(payload, (p: DownloadProgress) => {
-    emit('download:progress', p)
-  })
+  const urls = payload.urls
+    .filter((u): u is string => typeof u === 'string' && u.trim() !== '')
+    .map((u) => u.trim())
+  if (urls.length === 0) {
+    return
+  }
+  void startDownloadBatch(
+    urls,
+    (p: DownloadProgress) => emit('download:progress', p),
+    (r) => emit('download:complete', r)
+  )
+}
+
+function handleScrape(payload: { id?: string; url?: string }): void {
+  const id = typeof payload?.id === 'string' && payload.id ? payload.id : generateScrapeId()
+  const url = typeof payload?.url === 'string' ? payload.url.trim() : ''
+  if (!url) {
+    emit('scrape:complete', { id, items: [], error: 'URL tidak valid.' })
+    return
+  }
+  void scrapeAccount(url)
+    .then((result) => emit('scrape:complete', { id, items: result.items, truncated: result.truncated }))
+    .catch((err) =>
+      emit('scrape:complete', {
+        id,
+        items: [],
+        error: err instanceof Error ? err.message : 'Gagal mengambil daftar video.'
+      })
+    )
+}
+
+function generateScrapeId(): string {
+  return `scrape-${Date.now().toString(36)}`
 }
 
 function handleTrim(payload: TrimPayload): void {
@@ -245,6 +275,10 @@ function registerIpc(): void {
 
   ipcMain.on('download:start', (_event, payload) => {
     handleDownload(payload)
+  })
+
+  ipcMain.on('scrape:start', (_event, payload) => {
+    handleScrape(payload)
   })
 
   ipcMain.on('trim:start', (_event, payload) => {

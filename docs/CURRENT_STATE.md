@@ -28,7 +28,7 @@ Aplikasi berfungsi end-to-end dan telah di-push ke GitHub.
 | Peningkat Video UHD 4K (`uhd`) | Selesai & terverifikasi |
 | Arsip Kualitas Maks (`archive`) | Selesai & terverifikasi |
 | Kompresor WhatsApp (`whatsapp`) | Selesai & terverifikasi |
-| Pengunduh Universal (yt-dlp) | Selesai (provisioning + progress) |
+| Pengunduh Universal (yt-dlp) | Selesai — multi-link batch + ambil daftar akun/halaman (scrape), pilihan checkbox, ringkasan akhir |
 | Pemotong Inline (lossless) | Selesai & terverifikasi |
 | Monitor System (CPU/RAM) | Selesai — pemakaian aplikasi nyata & realtime (`system:stats`, via `procmon` + `ps`, termasuk FFmpeg/yt-dlp) |
 | Watermark teks (`drawtext`) | DIHAPUS — build FFmpeg evermeet TIDAK punya filter `drawtext` |
@@ -82,6 +82,27 @@ Detail lengkap: `docs/ENGINE_SPEC.md` dan `docs/IPC_CONTRACT.md`.
 - **Responsivitas super**: `h-dvh`, sidebar scroll, `min-w-0`, ukuran responsif;
   jendela minimum 720x560, mobile drawer di bawah 768px.
 
+## Perombakan Pengunduh Video (2026-08-13)
+
+Halaman Pengunduh di-redesign total (input single link → multi-link + scrape):
+
+- **Unduh dari Banyak Link**: textarea satu URL per baris → badge jumlah link →
+  tombol "Unduh Semua (N)". Engine `startDownloadBatch(urls)` memproses URL
+  **berurutan** (progress per URL, `id` = URL) lalu `download:complete` berisi
+  `{ total, success, failed }` untuk toast ringkasan (bukan toast per URL).
+- **Ambil Video dari Akun / Halaman**: masukkan tautan akun (YouTube channel/@user,
+  TikTok @user, Instagram, dll) → `scrapeAccount(url)` via
+  `yt-dlp --flat-playlist --print "%(id)s\t%(title)s\t%(webpage_url)s"`
+  (cepat, tanpa unduh) → daftar item dengan checkbox + "Pilih Semua" +
+  "Unduh Terpilih (N)". Batas 500 item (`truncated: true`).
+- **Channel IPC baru**: `scrape:start` / `scrape:complete`; `download:start`
+  kini menerima `{ urls }`; `download:complete` untuk ringkasan akhir.
+- **Fallback web**: bila `window.api` tidak tersedia (tab browser), tampil pesan
+  informatif — tidak lagi menggantung spinner.
+- Verifikasi: typecheck + lint + build PASS; perintah `--flat-playlist`
+  diverifikasi di terminal menghasilkan `id|judul|url`; UI multi-link &
+  fallback web diuji via browser.
+
 ## Status Runtime
 
 - Aplikasi dapat dijalankan dengan `npm run dev`.
@@ -104,6 +125,11 @@ Detail lengkap: `docs/ENGINE_SPEC.md` dan `docs/IPC_CONTRACT.md`.
 6. **Build FFmpeg evermeet (6.1) TIDAK punya filter `drawtext`** — fitur
    watermark teks dihapus; bisa kembali hanya via build FFmpeg lain atau overlay.
 7. **Jendela minimum 720x560**; layout responsif `h-dvh` di semua ukuran & mode.
+8. **Batch unduh berurutan per URL** (tidak paralel) agar progress & rate-limit
+   yt-dlp stabil; `id` progress = URL sehingga pencocokan antrean konsisten.
+9. **Scrape akun memakai `--flat-playlist --print`** (daftar cepat tanpa unduh);
+   item hasil memakai kolom `%(webpage_url)s` (tautan langsung video) sehingga
+   langsung bisa dikirim ke `startDownloadBatch`.
 
 ## Hal yang Belum Dikerjakan
 
@@ -112,4 +138,6 @@ Detail lengkap: `docs/ENGINE_SPEC.md` dan `docs/IPC_CONTRACT.md`.
 - Subtitle Otomatis (AI): transkripsi lokal (mis. Whisper) — di roadmap.
 - Signing/notarisasi & distribusi publik.
 - Pengujian di Intel Mac.
+- Scrape akun privat (TikTok/IG) yang butuh cookie/login — saat ini hanya akun
+  publik; akun privat menampilkan pesan error informatif.
 - Lihat [IMPLEMENTATION_ROADMAP.md](./IMPLEMENTATION_ROADMAP.md) untuk detail.

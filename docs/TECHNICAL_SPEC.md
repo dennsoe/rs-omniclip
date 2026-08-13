@@ -120,14 +120,27 @@ Hasil build ke `out/main/index.js`, `out/preload/index.js`,
    kirim `processing:progress` (persen dari baris `time=` di stderr).
 6. Selesai → `processing:complete { outputFolder }`.
 
-## 8. Alur Proses Unduhan
+## 8. Alur Proses Unduhan (Batch & Scrape)
 
-1. Renderer: `window.api.startDownload({ url, id })`.
-2. Main: `handleDownload` → `startDownload` (engine/downloader.ts).
+### 8.1 Unduhan Banyak Link
+
+1. Renderer: `window.api.startDownloadBatch(urls)` (array URL; payload `{ urls }`).
+2. Main: `handleDownload` → `startDownloadBatch` (engine/downloader.ts) — loop
+   **berurutan** per URL.
 3. `ensureYtdlp()` memastikan binary yt-dlp tersedia.
-4. Spawn `yt-dlp --newline --no-playlist --progress -o <template> <url>`.
-5. Parse baris `[download] NN%` → `download:progress { id, url, percent, status }`.
-6. Output: `~/Downloads/RS-OmniClip/Unduhan/`.
+4. Tiap URL: spawn `yt-dlp --newline --no-playlist --progress -o <template> <url>`.
+5. Parse baris `[download] NN%` → `download:progress { id=url, url, percent, status }`.
+6. Selesai semua → `download:complete { total, success, failed }`.
+7. Output: `~/Downloads/RS-OmniClip/Unduhan/`.
+
+### 8.2 Ambil Daftar Akun / Halaman
+
+1. Renderer: `window.api.scrapeAccount({ id, url })`.
+2. Main: `handleScrape` → `scrapeAccount` (engine/downloader.ts).
+3. Spawn `yt-dlp --flat-playlist --no-warnings --print "%(id)s\t%(title)s\t%(webpage_url)s" <url>`.
+4. Parse tab-separated → `ScrapeItem[] { index, id, title, url }` (dedupe, max 500).
+5. Kirim `scrape:complete { id, items, truncated?, error? }`.
+6. Item terpilih (URL) dikirim ulang ke `startDownloadBatch`.
 
 ## 9. Siklus Hidup Aplikasi (main/index.ts)
 

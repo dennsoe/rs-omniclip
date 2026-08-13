@@ -187,17 +187,40 @@ Prioritas lokasi binary:
    `https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos`,
    disimpan sebagai `binDir/yt-dlp` lalu `chmod 755`.
 
-### 8.2 Unduhan (`startDownload`)
+### 8.2 Unduhan Banyak Link (`startDownloadBatch`)
+
+Menerima array URL dan memprosesnya **berurutan** (satu per satu) agar
+progress & rate-limit yt-dlp stabil. Setiap URL:
 
 ```
 yt-dlp --newline --no-playlist --progress -o "<downloadDir>/%(title).80B [%(id)s].%(ext)s" <url>
 ```
 
-- Parse baris `[download] NN%` dari stdout → event `download:progress`.
-- `--no-playlist` hanya mengambil satu video (bukan seluruh playlist).
-- Selesai (exit 0) → `success`; selain itu → `failed` dengan pesan `error`
-  (cuplikan stderr yt-dlp) yang ditampilkan di UI.
+- Parse baris `[download] NN%` dari stdout → event `download:progress` per URL
+  (`id` = URL).
+- `--no-playlist` hanya mengambil satu video per URL.
+- Selesai per URL (exit 0) → `success`; selain itu → `failed` dengan pesan
+  `error` (cuplikan stderr yt-dlp) yang ditampilkan di UI.
+- Setelah seluruh antrean → event `download:complete` berisi ringkasan
+  `{ total, success, failed }`.
 - Output ke `~/Downloads/RS-OmniClip/Unduhan/`.
+
+### 8.3 Ambil Daftar Akun / Halaman (`scrapeAccount`)
+
+Menampilkan daftar video dari satu akun/halaman (YouTube channel/@user, TikTok
+`@user`, Instagram username, dll) **tanpa mengunduh**:
+
+```
+yt-dlp --flat-playlist --no-warnings --print "%(id)s\t%(title)s\t%(webpage_url)s" <url>
+```
+
+- Parse output tab-separated menjadi `ScrapeItem[]` `{ index, id, title, url }`
+  (dedupe per URL).
+- Hasil dibatasi `MAX_SCRAPE_ITEMS = 500` agar UI tetap responsif; flag
+  `truncated: true` menandakan daftar dipotong.
+- URL yang dipakai untuk unduhan adalah kolom `%(webpage_url)s` (URL langsung
+  video), sehingga item terpilih bisa langsung dikirim ke `startDownloadBatch`.
+- Akun privat / gagal → error informatif dikirim lewat `scrape:complete`.
 
 ## 9. Batas Waktu & Keandalan
 

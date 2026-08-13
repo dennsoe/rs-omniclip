@@ -81,9 +81,14 @@ Dan pastikan panel Problems di VS Code tidak menunjukkan error
 - [ ] Format waktu salah / end <= start → toast error.
 
 ### 4.4 Pengunduh
-- [ ] Tempel URL YouTube → Unduh → progress tampil.
+- [ ] Tempel beberapa URL (satu per baris) → "Unduh Semua (N)" → progress tampil
+  per URL; ringkasan akhir muncul.
 - [ ] Selesai → status "Selesai"; file ada di `~/Downloads/RS-OmniClip/Unduhan/`.
-- [ ] URL tidak valid → status "Gagal".
+- [ ] URL tidak valid / akun privat → status "Gagal" + pesan error informatif.
+- [ ] Masukkan tautan akun/halaman (mis. `https://www.youtube.com/@Channel`) →
+  "Ambil Daftar" → daftar video muncul.
+- [ ] Centang sebagian video → "Unduh Terpilih (N)" → hanya item pilihan diunduh.
+- [ ] "Pilih Semua" / "Kosongkan Pilihan" bekerja dengan benar.
 
 ### 4.5 Estetika & bahasa
 - [ ] Semua teks Bahasa Indonesia, tanpa emoji.
