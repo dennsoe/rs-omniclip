@@ -81,14 +81,24 @@ Dan pastikan panel Problems di VS Code tidak menunjukkan error
 - [ ] Format waktu salah / end <= start → toast error.
 
 ### 4.4 Pengunduh
+- [ ] Sidebar nav: pill aktif biru bergeser (layoutId) saat berpindah menu;
+  konten halaman muncul dengan entrance fade.
+- [ ] PresetSelector: memilih preset → highlight gradien **melesor** (layoutId,
+  sama seperti sidebar) ke kartu baru + badge centang pop + tap feedback.
+- [ ] Toggle mode "Banyak Link" / "Akun / Halaman" (pill biru animasi) berpindah
+  dengan benar; hanya satu panel yang tampil di DOM (tidak ada duplikat).
+- [ ] Panel input memakai desain premium (ikon + judul + deskripsi, tanpa
+  header-bar label), aksen biru, tombol pill dengan shadow.
 - [ ] Tempel beberapa URL (satu per baris) → "Unduh Semua (N)" → progress tampil
   per URL; ringkasan akhir muncul.
 - [ ] Selesai → status "Selesai"; file ada di `~/Downloads/RS-OmniClip/Unduhan/`.
 - [ ] URL tidak valid / akun privat → status "Gagal" + pesan error informatif.
-- [ ] Masukkan tautan akun/halaman (mis. `https://www.youtube.com/@Channel`) →
-  "Ambil Daftar" → daftar video muncul.
+- [ ] Mode "Akun / Halaman": masukkan tautan akun/halaman (mis.
+  `https://www.youtube.com/@Channel`) → "Ambil Daftar" → daftar video muncul.
 - [ ] Centang sebagian video → "Unduh Terpilih (N)" → hanya item pilihan diunduh.
 - [ ] "Pilih Semua" / "Kosongkan Pilihan" bekerja dengan benar.
+- [ ] Layout & desain halaman Pengunduh konsisten dengan Pembersih Video
+  (header kompak, panel premium, aksen biru, tombol pill, animasi masuk).
 
 ### 4.5 Estetika & bahasa
 - [ ] Semua teks Bahasa Indonesia, tanpa emoji.

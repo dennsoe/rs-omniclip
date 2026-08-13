@@ -84,8 +84,10 @@ Detail lengkap: `docs/ENGINE_SPEC.md` dan `docs/IPC_CONTRACT.md`.
 
 ## Perombakan Pengunduh Video (2026-08-13)
 
-Halaman Pengunduh di-redesign total (input single link → multi-link + scrape):
+Halaman Pengunduh di-redesign total (single link → multi-link + scrape + toggle):
 
+- **Toggle dua mode**: segmented control "Banyak Link" / "Akun / Halaman" di
+  bagian atas; hanya satu mode tampil per waktu (state `downloaderMode`).
 - **Unduh dari Banyak Link**: textarea satu URL per baris → badge jumlah link →
   tombol "Unduh Semua (N)". Engine `startDownloadBatch(urls)` memproses URL
   **berurutan** (progress per URL, `id` = URL) lalu `download:complete` berisi
@@ -97,11 +99,34 @@ Halaman Pengunduh di-redesign total (input single link → multi-link + scrape):
   "Unduh Terpilih (N)". Batas 500 item (`truncated: true`).
 - **Channel IPC baru**: `scrape:start` / `scrape:complete`; `download:start`
   kini menerima `{ urls }`; `download:complete` untuk ringkasan akhir.
+- **Layout & desain diseragamkan dengan Pembersih Video** (hasil audit
+  inkonsistensi): model flex fixed-height (`flex-1 min-h-0`, area konten scroll
+  internal), header kompak "Unduh Video" + badge status mode aktif, aksen warna
+  seragam biru, tombol pill biru `bg-blue-600 ... shadow-blue-500/30 active:scale-95`,
+  padding `px-4 sm:px-6 md:px-8 pt-16 md:pt-8`.
+- **Redesign komponen premium (audit lanjutan)**: panel input TANPA header-bar
+  label ("Unduh dari Banyak Link"/"Ambil Video dari Akun / Halaman" dihapus) —
+  kini memakai pola empty-state Pembersih: ikon dalam kotak `p-4 bg-blue-50
+  rounded-2xl` + judul + deskripsi. Toggle mode memakai **pill animasi**
+  (`motion.span layoutId` — geser spring). Konten mode memakai `motion.div`
+  ber-key (entrance fade/y/scale saat berganti — HANYA satu panel di DOM,
+  tanpa kebocoran; `AnimatePresence mode="wait"` DIBUANG karena macet di motion
+  12). Item hasil scrape beranimasi stagger + hover `bg-blue-50/50`. Error
+  scrape memakai ikon `XCircle`.
+- **Polishing desain (audit final)**: header panel dikompres (ikon `p-2`+
+  judul `text-xs sm:text-sm`+deskripsi `text-[11px]`, panel `p-4`); input &
+  tombol **distandardisasi** (input/textarea `px-3.5 py-2.5 bg-slate-50/900-60`;
+  tombol primer `rounded-full px-5 py-2 font-semibold shadow-lg shadow-blue-500/30
+  active:scale-95`); **sidebar nav** memakai **pill aktif geser**
+  (`motion.span layoutId="nav-active-bg"`) + `whileTap` + konten halaman
+  ber-entrance (`motion.div` ber-key cleaner/downloader-page, fade/y 0.3s);
+  **PresetSelector** di-redesign — kartu aktif memakai **pill geser `layoutId="preset-active-bg"`** (`motion.span` gradien meluncur antar kartu, spring — konsisten dengan sidebar) + `layout` pada kartu + badge centang `Check` pop + `whileTap scale-0.97`.
 - **Fallback web**: bila `window.api` tidak tersedia (tab browser), tampil pesan
   informatif — tidak lagi menggantung spinner.
 - Verifikasi: typecheck + lint + build PASS; perintah `--flat-playlist`
-  diverifikasi di terminal menghasilkan `id|judul|url`; UI multi-link &
-  fallback web diuji via browser.
+  diverifikasi di terminal menghasilkan `id|judul|url`; toggle mode (pill
+  bergeser, badge berubah, hanya 1 panel di DOM), badge multi-link, nav pill,
+  animasi pilihan preset, dan fallback web diuji via browser.
 
 ## Status Runtime
 
