@@ -128,6 +128,73 @@ Halaman Pengunduh di-redesign total (single link → multi-link + scrape + toggl
   bergeser, badge berubah, hanya 1 panel di DOM), badge multi-link, nav pill,
   animasi pilihan preset, dan fallback web diuji via browser.
 
+## Mekanisme Pembaruan GRATIS (2026-08-13) — versi 1.1.0
+
+Aplikasi kini punya **mekanisme pembaruan 100% gratis** (tanpa biaya apa pun):
+
+- **Versi dinamis**: `package.json` naik ke **1.1.0**; versi lokal diambil dari
+  `app.getVersion()` dan tampil di halaman **Tentang & Update** (kartu
+  "RS OmniClip v1.1.0" pada bagian "Versi, Pembaruan & Resource").
+- **Cek update aplikasi**: main process memanggil
+  `GET https://api.github.com/repos/dennsoe/rs-omniclip/releases/latest`
+  (repo publik, **tanpa token**) → `tag_name` dibandingkan dengan versi lokal
+  (`compareVersions`). Bila lebih baru → badge "Update tersedia" + tombol
+  "Unduh Versi Baru" aktif. Tombol "Periksa Update" selalu tersedia.
+- **Strategi macOS = unduh manual (pilihan user)**: tombol "Unduh Versi Baru"
+  membuka halaman rilis GitHub (`shell.openExternal`) → user mengunduh dmg/zip
+  dan membukanya sendiri. Tidak butuh Developer ID/notarisasi ($99/thn) —
+  sepenuhnya gratis.
+- **Update resource (ffmpeg/yt-dlp) via manifest**: repo berisi
+  `resources.json` (`ffmpeg` pin `6.1`, `yt-dlp` = `latest`). Aplikasi
+  membandingkan versi terpasang (`bin/versions.json`, dideteksi via
+  `ffmpeg -version` / `yt-dlp --version`) dengan manifest → kartu Resource
+  Mesin menampilkan status per resource (hijau = terbaru, kuning = perlu
+  update). Tombol "Perbarui Resource" menghapus binary lama, reset cache
+  single-flight (`resetFfmpegCache`/`resetYtdlpCache`), lalu mengunduh ulang
+  (FFmpeg 6.1 via ffbinaries → fallback; yt-dlp = rilis terbaru GitHub).
+- **CI GitHub Actions**: `.github/workflows/release.yml` — saat push tag `v*`
+  otomatis `npm ci` → typecheck → build → `electron-builder --mac --publish
+  always` (unggah dmg + zip + `latest-mac.yml` ke GitHub Release).
+- **Modul**: `electron/main/engine/updater.ts` (checkForUpdate,
+  getResourceStatus, updateResources, recordInstalledVersions). Kontrak IPC
+  baru: `update:check`, `update:open`, `resource:check`, `resource:update`,
+  event `resource:status` (lihat `docs/IPC_CONTRACT.md`).
+- **Update resource hanya menghapus binary target** (`removeBinariesFor`),
+  bukan semuanya — resource yang masih baik tidak perlu diunduh ulang.
+- **Verifikasi**: typecheck/lint/build PASS; pola fetch ke GitHub API diuji
+  (yt-dlp latest = `2026.07.04` OK, repo belum rilis → 404 ditangani graceful);
+  halaman Tentang & Update + menu sidebar bawah + alur Bersihkan diuji via browser.
+
+## Perubahan UI (2026-08-13) — menu bawah & Bersihkan Daftar di halaman
+
+- Menu **"Tentang & Update" DIPINDAH dari nav atas ke bagian bawah sidebar**
+  (tepat di posisi lama "Bersihkan Daftar", dengan `border-t`). Nav atas kini
+  hanya 2 item: Pembersih Video & Pengunduh Video.
+- **"Bersihkan Daftar" DIHAPUS dari sidebar** → kini menjadi tombol
+  **"Bersihkan" di header "Antrean Video"** pada halaman Pembersih Video
+  (hanya tampil saat ada file & tidak sedang memproses; memicu modal
+  konfirmasi "Hapus Semua?").
+- **Versi "RS OmniClip v1.1.0" HANYA di halaman Tentang & Update** (kartu
+  "Versi Aplikasi" pada bagian "Versi, Pembaruan & Resource") — footer
+  sidebar yang menampilkan versi dihapus.
+
+## Perbaikan Bug: exit AnimatePresence macet (motion 12 + StrictMode)
+
+Audit forensik menemukan **bug nyata**: dengan `<React.StrictMode>` + motion 12,
+`AnimatePresence` TIDAK pernah menyelesaikan animasi exit → elemen (modal,
+queue, toast, panel) tertinggal permanen di DOM. Terbukti di alur "Bersihkan":
+setelah konfirmasi, modal "Hapus Semua?" dan panel antrean tetap menumpuk.
+
+**Fix**: SEMUA pemakaian `AnimatePresence` dikonversi ke pola aman
+(keyed `motion.div` dengan `initial`/`animate`, TANPA `exit`):
+- `App.tsx`: mobile overlay, ikon mode gelap, drag overlay, dan area
+  empty-state/queue (`mode="popLayout"` dibuang).
+- `ConfirmModal`, `PreviewModal` (kini `React.ReactElement | null`),
+  `Toasts`, dan panel trim `SortableFileItem`.
+- Efek: elemen unmount instan saat kondisi berubah (entrance tetap beranimasi),
+  tidak ada lagi ghost element. Terverifikasi via browser (modal/queue/toast/
+  panel potong/preview semua buka-tutup bersih).
+
 ## Status Runtime
 
 - Aplikasi dapat dijalankan dengan `npm run dev`.
@@ -161,7 +228,13 @@ Halaman Pengunduh di-redesign total (single link → multi-link + scrape + toggl
 - Watermark: butuh build FFmpeg dengan filter `drawtext` (atau pendekatan overlay
   gambar logo) — dicatat di roadmap, fitur teks dihapus dari UI & mesin.
 - Subtitle Otomatis (AI): transkripsi lokal (mis. Whisper) — di roadmap.
-- Signing/notarisasi & distribusi publik.
+- **Auto-update in-app (electron-updater)**: belum dipasang. Strategi saat ini
+  adalah unduh manual via halaman rilis (gratis). Bila ingin instalasi otomatis
+  di masa depan, butuh Developer ID + notarisasi (berbayar ~$99/thn).
+- Signing/notarisasi (untuk menghindari peringatan Gatekeeper saat membuka dmg).
+- Repo harus diubah ke **public** + release `v1.1.0` pertama agar tombol update
+  & CI berfungsi penuh (saat ini repo masih privat → API latest 404, ditangani
+  graceful dengan pesan versi terbaru "—").
 - Pengujian di Intel Mac.
 - Scrape akun privat (TikTok/IG) yang butuh cookie/login — saat ini hanya akun
   publik; akun privat menampilkan pesan error informatif.

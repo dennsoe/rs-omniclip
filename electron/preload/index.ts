@@ -30,6 +30,22 @@ interface TrimCompleteData {
   error?: string
 }
 
+interface UpdateInfoData {
+  current: string
+  latest: string | null
+  hasUpdate: boolean
+  url: string | null
+  notes: string | null
+}
+
+interface ResourceInfoData {
+  id: string
+  label: string
+  current: string | null
+  expected: string | null
+  outdated: boolean
+}
+
 const api = {
   // --- Kontrak inti jembatan IPC ---
   checkEngine: (): void => {
@@ -155,6 +171,36 @@ const api = {
     ipcRenderer.on('system:stats', listener)
     return () => {
       ipcRenderer.removeListener('system:stats', listener)
+    }
+  },
+
+  // --- Pembaruan aplikasi & resource (gratis, repo publik) ---
+  /** Memeriksa versi terbaru aplikasi dari GitHub Releases (tanpa token). */
+  checkForUpdate: (): Promise<UpdateInfoData> => {
+    return ipcRenderer.invoke('update:check')
+  },
+
+  /** Membuka halaman rilis GitHub di browser (strategi unduh manual macOS). */
+  openUpdatePage: (url: string): Promise<boolean> => {
+    return ipcRenderer.invoke('update:open', url)
+  },
+
+  /** Memeriksa status resource ffmpeg/yt-dlp terhadap manifest repo. */
+  checkResources: (): Promise<ResourceInfoData[]> => {
+    return ipcRenderer.invoke('resource:check')
+  },
+
+  /** Memperbarui resource yang outdated (atau semua bila force=true). */
+  updateResources: (force = false): Promise<ResourceInfoData[]> => {
+    return ipcRenderer.invoke('resource:update', force)
+  },
+
+  /** Status progres pembaruan resource dari proses utama. */
+  onResourceStatus: (cb: (message: string) => void): Unsubscribe => {
+    const listener = (_event: Electron.IpcRendererEvent, message: string): void => cb(message)
+    ipcRenderer.on('resource:status', listener)
+    return () => {
+      ipcRenderer.removeListener('resource:status', listener)
     }
   }
 }

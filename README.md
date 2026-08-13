@@ -20,6 +20,10 @@ desktop **Electron-Vite** dengan backend Node.js asli. Kode lama tersimpan di
 5. **Watermark & Auto-Caption** — Di roadmap (build FFmpeg saat ini tidak
    mendukung filter `drawtext`).
 6. **Kompresor WhatsApp** — Target ukuran file otomatis (~16 MB) untuk berbagi via WhatsApp.
+7. **Pembaruan GRATIS** — Tombol "Periksa Update" (cek rilis terbaru dari
+   GitHub tanpa biaya), versi tampil di footer + halaman "Tentang & Update",
+   dan perbarui resource mesin (FFmpeg/yt-dlp) via manifest `resources.json`.
+   Rilis otomatis via GitHub Actions saat tag `v*` di-push.
 
 ## Prinsip Kunci
 
@@ -58,6 +62,8 @@ rs-omni/
 │   ├── hooks/use-mobile.ts
 │   └── types/global.d.ts       # Deklarasi window.api (kontrak IPC)
 ├── scripts/engine-smoke-test.mjs  # Smoke test mesin (headless)
+├── resources.json              # Manifest resource mesin (ffmpeg/yt-dlp)
+├── .github/workflows/release.yml # CI rilis macOS (tag v*)
 ├── _archive_nextjs/            # Arsip ekspor Next.js lama
 └── out/                        # Hasil build electron-vite
 ```
@@ -75,12 +81,22 @@ window.api = {
   onProcessingProgress: (cb: (data: { id; percent; status: 'processing'|'success'|'failed' }) => void) => void
   onProcessingComplete: (cb: (data: { outputFolder: string }) => void) => void
   openFolder: (folderPath: string) => void
-  startDownload: (payload: { url: string; id?: string }) => void
-  onDownloadProgress: (cb: (data: { id; url; percent; status: 'downloading'|'success'|'failed' }) => void) => void
+  startDownloadBatch: (urls: string[]) => void                       // unduh banyak URL berurutan
+  onDownloadProgress: (cb: (data: { id; url; percent; status }) => void) => void
+  onDownloadComplete: (cb: (data: { total; success; failed }) => void) => void
+  scrapeAccount: (payload: { id: string; url: string }) => void      // ambil daftar video akun/halaman
+  onScrapeComplete: (cb: (data: { id; items: ScrapeItem[]; truncated?; error? }) => void) => void
+  onSystemStats: (cb: (data: { cpu; ramUsedMb; ramTotalMb }) => void) => void
   // Ekstensi:
   getPathForFile: (file: File) => string   // jalur absolut file yang di-drop
   trimVideo: (payload: { id; path; start; end }) => void
   onTrimComplete: (cb: (data: { id; success; path?; error? }) => void) => void
+  // Pembaruan (gratis):
+  checkForUpdate: () => Promise<UpdateInfo>        // cek rilis terbaru GitHub
+  openUpdatePage: (url: string) => Promise<boolean> // buka halaman rilis (unduh manual)
+  checkResources: () => Promise<ResourceInfo[]>     // status ffmpeg/yt-dlp vs manifest
+  updateResources: (force?: boolean) => Promise<ResourceInfo[]>
+  onResourceStatus: (cb: (message: string) => void) => void
 }
 ```
 
@@ -88,8 +104,10 @@ window.api = {
 
 | Preset | Perintah inti |
 |---|---|
-| `quick` (Bagikan Cepat) | `-map_metadata -1 -c copy -movflags +faststart` (remux lossless) |
-| `standard` (Bersih & Jernih) | upscale 1080p + `unsharp` + `afftdn`, `libx264 crf 20`, audio 192k (dengan fallback tanpa filter audio) |
+| `metadata` (Hapus Metadata) | remux lossless `-map_metadata -1 -c copy -movflags +faststart` (+ fallback re-encode minimal) |
+| `hd` (HD 720p) | upscale 720p + `unsharp` + `afftdn`, `libx264`, audio 192k |
+| `fullhd` (Full HD 1080p) | upscale 1080p + `unsharp` + `afftdn`, `libx264`, audio 192k (default) |
+| `uhd` (4K UHD) | upscale 2160p + `unsharp` + `afftdn` |
 | `archive` (Kualitas Maks) | `libx264 preset slow crf 18`, audio 256k |
 | `whatsapp` (Kompresi WA) | bitrate dihitung dari target 16 MB dan durasi video |
 
@@ -122,6 +140,22 @@ npm run build        # build electron-vite (out/)
 npm run build:mac    # build + paket .dmg/.zip (electron-builder)
 node scripts/engine-smoke-test.mjs   # smoke test mesin (verifikasi preset FFmpeg)
 ```
+
+## Pembaruan (Gratis)
+
+RS OmniClip memakai mekanisme pembaruan **tanpa biaya** (repo publik + GitHub):
+
+- **Cek versi terbaru**: aplikasi membaca rilis terbaru dari
+  `api.github.com/repos/dennsoe/rs-omniclip/releases/latest` (tanpa token).
+- **Unduh manual (macOS)**: tombol "Unduh Versi Baru" membuka halaman rilis
+  GitHub; user mengunduh dmg/zip dan membukanya sendiri — tidak butuh
+  Developer ID/notarisasi.
+- **Update resource**: `resources.json` di repo menentukan versi yang
+  diharapkan (FFmpeg 6.1, yt-dlp = rilis terbaru). Halaman "Tentang & Update"
+  menampilkan status dan tombol "Perbarui Resource".
+- **Rilis otomatis**: push tag `v*` memicu GitHub Actions
+  (`.github/workflows/release.yml`) → `electron-builder --mac --publish always`
+  mengunggah dmg + zip + `latest-mac.yml` ke GitHub Release.
 
 ## Catatan Keluaran
 

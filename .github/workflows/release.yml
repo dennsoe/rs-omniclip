@@ -1,0 +1,49 @@
+name: Release macOS
+
+# Membuat build rilis macOS (dmg + zip + latest-mac.yml) dan mengunggahnya
+# ke GitHub Release secara otomatis — SEPENUHNYA GRATIS (GitHub Actions,
+# tanpa biaya langganan; memanfaatkan GITHUB_TOKEN bawaan).
+#
+# Pemicu: push tag `v*` (mis. `git tag v1.1.0 && git push origin v1.1.0`).
+# Setelah workflow selesai, halaman Releases berisi dmg/zip siap unduh,
+# dan tombol "Unduh Versi Baru" di aplikasi mengarah ke halaman tersebut.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-mac:
+    name: Build & rilis macOS
+    runs-on: macos-latest
+    env:
+      # Skip code signing (aplikasi gratis tanpa Developer ID/notarisasi).
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Electron Builder (dmg + zip) & publish ke GitHub Release
+        run: npx electron-builder --mac --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

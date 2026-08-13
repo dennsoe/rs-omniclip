@@ -31,6 +31,11 @@ dapat membersihkan listener saat unmount.
 | R → M | `trim:start` | Memotong video (lossless) |
 | M → R | `trim:complete` | Hasil pemotongan |
 | M → R | `system:stats` | Pemakaian CPU/RAM aplikasi ini (realtime, interval ~1,5 detik) |
+| R → M | `update:check` (invoke) | Cek rilis terbaru aplikasi dari GitHub Releases API → `UpdateInfo` |
+| R → M | `update:open` (invoke) | Buka halaman rilis GitHub di browser (unduh manual macOS) |
+| R → M | `resource:check` (invoke) | Status resource ffmpeg/yt-dlp vs `resources.json` → `ResourceInfo[]` |
+| R → M | `resource:update` (invoke) | Perbarui resource yang outdated (opsi `force`) → `ResourceInfo[]` |
+| M → R | `resource:status` | Pesan progres pembaruan resource dari proses utama |
 
 ## 3. Signature Lengkap `window.api`
 
@@ -108,6 +113,23 @@ interface Window {
     onSystemStats: (
       cb: (data: { cpuPercent: number; ramUsedMb: number; ramTotalMb: number }) => void
     ) => () => void
+
+    // --- Pembaruan aplikasi & resource (gratis, repo publik) ---
+    checkForUpdate: () => Promise<{
+      current: string
+      latest: string | null
+      hasUpdate: boolean
+      url: string | null
+      notes: string | null
+    }>
+    openUpdatePage: (url: string) => Promise<boolean>
+    checkResources: () => Promise<
+      Array<{ id: string; label: string; current: string | null; expected: string | null; outdated: boolean }>
+    >
+    updateResources: (force?: boolean) => Promise<
+      Array<{ id: string; label: string; current: string | null; expected: string | null; outdated: boolean }>
+    >
+    onResourceStatus: (cb: (message: string) => void) => () => void
   }
 }
 ```
@@ -182,6 +204,31 @@ dan `error` (jika tersedia) (batch tetap melanjutkan file berikutnya).
 Memakai `webUtils.getPathForFile(file)` di preload untuk mendapatkan jalur
 absolut dari objek `File` yang di-drop renderer. Mengembalikan `''` jika file
 tidak punya jalur nyata.
+
+### 4.8 Pembaruan Aplikasi (`update:check` / `update:open`)
+
+- `checkForUpdate()` (invoke) → proses utama memanggil
+  `GET api.github.com/repos/dennsoe/rs-omniclip/releases/latest` (repo publik,
+  tanpa token; `User-Agent: RS-OmniClip`; timeout 15 dtk). Mengembalikan
+  `UpdateInfo { current, latest, hasUpdate, url, notes }`. Bila API gagal/404
+  (repo belum publik / belum ada rilis), `latest` = `null` & `hasUpdate` =
+  `false` (aplikasi tetap berjalan normal).
+- `openUpdatePage(url)` (invoke) → membuka halaman rilis GitHub di browser
+  default (`shell.openExternal`). Ini strategi **unduh manual macOS**: user
+  mengunduh dmg/zip lalu membukanya sendiri (gratis, tanpa Developer ID).
+
+### 4.9 Update Resource (`resource:check` / `resource:update` / `resource:status`)
+
+- `checkResources()` (invoke) → membaca `bin/versions.json` (versi terpasang,
+  dicatat saat startup via `recordInstalledVersions()`) dan membandingkannya
+  dengan `resources.json` dari repo (raw.githubusercontent). Mengembalikan
+  `ResourceInfo[] { id, label, current, expected, outdated }`.
+  - `ffmpeg` pin `6.1` — cocok via awalan (menangani `6.1-tessus`).
+  - `yt-dlp` = `latest` → diharapkan mengikuti rilis terbaru GitHub yt-dlp.
+- `updateResources(force?)` (invoke) → menghapus binary lama, me-reset cache
+  single-flight (`resetFfmpegCache` / `resetYtdlpCache`), mengunduh ulang yang
+  outdated, lalu mencatat ulang versi. Progres dikirim lewat event
+  `resource:status` (string pesan Bahasa Indonesia).
 
 ## 5. Aturan Penggunaan di Renderer
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion } from 'motion/react'
 import {
   Loader2,
   UploadCloud,
@@ -23,6 +23,11 @@ import {
   FolderOpen,
   ListVideo,
   Search,
+  Info,
+  RefreshCw,
+  ExternalLink,
+  BadgeCheck,
+  CircleAlert,
   type LucideIcon
 } from 'lucide-react'
 import {
@@ -40,7 +45,14 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
-import type { FileItem, PresetType, FileStatus, ScrapeItem } from '@lib/types'
+import type {
+  FileItem,
+  PresetType,
+  FileStatus,
+  ScrapeItem,
+  UpdateInfo,
+  ResourceInfo
+} from '@lib/types'
 import { useIsMobile } from '@hooks/use-mobile'
 import Toasts, { type ToastMessage, type ToastType } from '@components/Toasts'
 import ConfirmModal, { type ConfirmAction } from '@components/ConfirmModal'
@@ -68,8 +80,13 @@ export default function App(): React.ReactElement {
   const isMobile = useIsMobile()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const [activeMenu, setActiveMenu] = useState<'cleaner' | 'downloader'>('cleaner')
+  const [activeMenu, setActiveMenu] = useState<'cleaner' | 'downloader' | 'about'>('cleaner')
   const [downloaderMode, setDownloaderMode] = useState<'links' | 'scrape'>('links')
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
+  const [resources, setResources] = useState<ResourceInfo[] | null>(null)
+  const [resourceStatus, setResourceStatus] = useState<string | null>(null)
+  const [isUpdatingResources, setIsUpdatingResources] = useState(false)
   const [downloads, setDownloads] = useState<DownloadItem[]>([])
   const [linksText, setLinksText] = useState('')
   const [scrapeUrl, setScrapeUrl] = useState('')
@@ -126,6 +143,80 @@ export default function App(): React.ReactElement {
     () => (scrapeItems ?? []).filter((it) => scrapeSelected[it.url]).map((it) => it.url),
     [scrapeItems, scrapeSelected]
   )
+
+  // PERIKSA UPDATE APLIKASI (via GitHub Releases API, gratis, tanpa token)
+  const checkUpdate = useCallback(async (): Promise<void> => {
+    if (!window.api?.checkForUpdate) return
+    setIsCheckingUpdate(true)
+    try {
+      setUpdateInfo(await window.api.checkForUpdate())
+    } finally {
+      setIsCheckingUpdate(false)
+    }
+  }, [])
+
+  // Periksa update aplikasi sekali saat aplikasi dibuka (setState di callback .then).
+  useEffect(() => {
+    if (!window.api?.checkForUpdate) return
+    let active = true
+    window.api
+      .checkForUpdate()
+      .then((info) => {
+        if (active) setUpdateInfo(info)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // PERIKSA STATUS RESOURCE (ffmpeg / yt-dlp vs manifest repo)
+  const checkResources = useCallback(async (): Promise<void> => {
+    if (!window.api?.checkResources) return
+    try {
+      setResources(await window.api.checkResources())
+    } catch {
+      setResources(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!window.api?.checkResources) return
+    let active = true
+    window.api
+      .checkResources()
+      .then((list) => {
+        if (active) setResources(list)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // BUKA HALAMAN RILIS GITHUB (strategi unduh manual macOS — 100% gratis)
+  const handleOpenUpdate = (): void => {
+    if (window.api?.openUpdatePage && updateInfo?.url) {
+      void window.api.openUpdatePage(updateInfo.url)
+    }
+  }
+
+  // PERBARUI RESOURCE yang outdated (unduh ulang ffmpeg/yt-dlp)
+  const handleUpdateResources = async (): Promise<void> => {
+    if (!window.api?.updateResources || isUpdatingResources) return
+    setIsUpdatingResources(true)
+    setResourceStatus('Memeriksa status resource...')
+    const off = window.api.onResourceStatus((msg) => setResourceStatus(msg))
+    try {
+      setResources(await window.api.updateResources())
+      setResourceStatus('Resource berhasil diperbarui.')
+    } catch {
+      setResourceStatus('Gagal memperbarui resource. Periksa koneksi internet.')
+    } finally {
+      off()
+      setIsUpdatingResources(false)
+    }
+  }
 
   const addToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = Math.random().toString(36).substring(7)
@@ -339,8 +430,8 @@ export default function App(): React.ReactElement {
     // Klik & drag hanya aktif di halaman Pembersih (saat antrean kosong).
     // Di halaman Pengunduh, klik TIDAK boleh membuka dialog file — input URL
     // dan tombol harus tetap berfungsi normal.
-    noClick: activeMenu === 'downloader' || files.length > 0,
-    noDrag: activeMenu === 'downloader'
+    noClick: activeMenu !== 'cleaner' || files.length > 0,
+    noDrag: activeMenu !== 'cleaner'
   })
 
   const clearList = (): void => {
@@ -461,18 +552,15 @@ export default function App(): React.ReactElement {
         <ConfirmModal confirmAction={confirmAction} onClose={() => setConfirmAction(null)} onConfirm={handleConfirm} />
         <PreviewModal previewFile={previewFile} onClose={() => setPreviewFile(null)} />
 
-        {/* MOBILE OVERLAY */}
-        <AnimatePresence>
-          {isMobile && isSidebarOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsSidebarOpen(false)}
-              className="absolute inset-0 bg-black/40 dark:bg-black/60 z-30 backdrop-blur-sm"
-            />
-          )}
-        </AnimatePresence>
+        {/* MOBILE OVERLAY — tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
+        {isMobile && isSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="absolute inset-0 bg-black/40 dark:bg-black/60 z-30 backdrop-blur-sm"
+          />
+        )}
 
         {/* 1. LEFT SIDEBAR */}
         <motion.div
@@ -532,7 +620,7 @@ export default function App(): React.ReactElement {
                 <motion.button
                   key={item.id}
                   type="button"
-                  onClick={() => setActiveMenu(item.id as 'cleaner' | 'downloader')}
+                  onClick={() => setActiveMenu(item.id as 'cleaner' | 'downloader' | 'about')}
                   whileTap={{ scale: 0.98 }}
                   className={`relative w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-200 ${
                     isActive
@@ -583,27 +671,54 @@ export default function App(): React.ReactElement {
             >
               <span className="text-sm font-medium whitespace-nowrap">{isDarkMode ? 'Mode Terang' : 'Mode Gelap'}</span>
               <div className="relative w-5 h-5 shrink-0 flex items-center justify-center">
-                <AnimatePresence mode="wait" initial={false}>
-                  <motion.div
-                    key={isDarkMode ? 'dark' : 'light'}
-                    initial={{ y: -20, opacity: 0, rotate: -90 }}
-                    animate={{ y: 0, opacity: 1, rotate: 0 }}
-                    exit={{ y: 20, opacity: 0, rotate: 90 }}
-                    transition={{ duration: 0.3 }}
-                    className="absolute"
-                  >
-                    {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                  </motion.div>
-                </AnimatePresence>
+                <motion.div
+                  key={isDarkMode ? 'dark' : 'light'}
+                  initial={{ y: -20, opacity: 0, rotate: -90 }}
+                  animate={{ y: 0, opacity: 1, rotate: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="absolute"
+                >
+                  {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                </motion.div>
               </div>
             </button>
+            {/* Tentang & Update — dipindah ke bagian bawah sidebar (tempat Bersihkan Daftar) */}
             <button
-              onClick={clearList}
-              disabled={isProcessing || files.length === 0}
-              className="p-6 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2 border-t border-slate-100 dark:border-slate-800/50 whitespace-nowrap"
+              type="button"
+              onClick={() => {
+                setActiveMenu('about')
+                setIsSidebarOpen(false)
+              }}
+              className={`relative w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-t border-slate-100 dark:border-slate-800/50 ${
+                activeMenu === 'about'
+                  ? 'bg-blue-600/10 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+              }`}
             >
-              <Trash2 className="w-4 h-4 shrink-0" />
-              Bersihkan Daftar
+              <span
+                className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                  activeMenu === 'about'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                    : 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400'
+                }`}
+              >
+                <Info className="w-4.5 h-4.5" />
+              </span>
+              <span className="flex flex-col min-w-0">
+                <span className="font-semibold text-sm truncate">Tentang &amp; Update</span>
+                <span
+                  className={`text-[11px] truncate ${
+                    activeMenu === 'about'
+                      ? 'text-blue-500/90 dark:text-blue-300/90'
+                      : 'text-slate-400 dark:text-slate-500'
+                  }`}
+                >
+                  Versi, pembaruan &amp; resource
+                </span>
+              </span>
+              {activeMenu === 'about' && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+              )}
             </button>
           </div>
         </motion.div>
@@ -619,29 +734,25 @@ export default function App(): React.ReactElement {
         >
           <input {...getInputProps()} />
 
-          {/* DRAG ACTIVE OVERLAY */}
-          <AnimatePresence>
-            {isDragActive && (
+          {/* DRAG ACTIVE OVERLAY — tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
+          {isDragActive && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+              className="absolute inset-4 z-50 flex items-center justify-center bg-blue-500/5 dark:bg-blue-500/10 backdrop-blur-[2px] border-2 border-dashed border-blue-400 dark:border-blue-500 rounded-3xl pointer-events-none"
+            >
               <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
-                className="absolute inset-4 z-50 flex items-center justify-center bg-blue-500/5 dark:bg-blue-500/10 backdrop-blur-[2px] border-2 border-dashed border-blue-400 dark:border-blue-500 rounded-3xl pointer-events-none"
+                initial={{ y: 10, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                className="bg-white dark:bg-slate-800 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 border border-blue-100 dark:border-blue-900/50"
               >
-                <motion.div
-                  initial={{ y: 10, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 10, opacity: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="bg-white dark:bg-slate-800 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 border border-blue-100 dark:border-blue-900/50"
-                >
-                  <UploadCloud className="w-6 h-6 text-blue-500 animate-bounce" />
-                  <span className="font-semibold text-blue-600 dark:text-blue-400">Lepaskan file di sini...</span>
-                </motion.div>
+                <UploadCloud className="w-6 h-6 text-blue-500 animate-bounce" />
+                <span className="font-semibold text-blue-600 dark:text-blue-400">Lepaskan file di sini...</span>
               </motion.div>
-            )}
-          </AnimatePresence>
+            </motion.div>
+          )}
 
           {/* MOBILE MENU BUTTON — left-20 (80px) agar tidak menimpa traffic light macOS (berakhir ±68px) */}
           {isMobile && !isSidebarOpen && (
@@ -686,17 +797,15 @@ export default function App(): React.ReactElement {
 
               {/* 4. KONTEN UTAMA (state kosong ATAU antrean) */}
               <div className="flex-1 min-h-0 relative z-10 px-4 sm:px-6 md:px-8 pb-24">
-                <AnimatePresence mode="popLayout">
-                  {/* 4a. EMPTY STATE */}
-                  {files.length === 0 ? (
-                    <motion.div
-                      key="empty"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.3 }}
-                      className="h-full flex flex-col items-center justify-center pointer-events-none"
-                    >
+                {/* 4a. EMPTY STATE — tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
+                {files.length === 0 ? (
+                  <motion.div
+                    key="empty"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.3 }}
+                    className="h-full flex flex-col items-center justify-center pointer-events-none"
+                  >
                       <div className="p-6 bg-blue-50 dark:bg-slate-800/50 text-blue-500 rounded-full mb-6 transition-colors">
                         <UploadCloud className="w-12 h-12" />
                       </div>
@@ -708,19 +817,32 @@ export default function App(): React.ReactElement {
                       </p>
                     </motion.div>
                   ) : (
-                    /* 4b. QUEUE LIST */
-                    <motion.div
-                      key="queue"
-                      layout
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 20 }}
-                      transition={{ type: 'spring', bounce: 0.1, duration: 0.5 }}
+                  /* 4b. QUEUE LIST */
+                  <motion.div
+                    key="queue"
+                    layout
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ type: 'spring', bounce: 0.1, duration: 0.5 }}
                       className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl overflow-hidden flex flex-col h-full min-h-0 transition-colors"
                     >
                       {/* Filter Header */}
                       <div className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 p-3 flex flex-col sm:flex-row gap-3 sm:gap-0 justify-between sm:items-center transition-colors">
-                        <span className="text-sm font-medium text-slate-500 dark:text-slate-400 pl-2">Antrean Video</span>
+                        <div className="flex items-center gap-2 pl-2">
+                          <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Antrean Video</span>
+                          {files.length > 0 && !isProcessing && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                clearList()
+                              }}
+                              className="text-xs font-medium text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-500 hover:underline flex items-center gap-1 transition-colors"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Bersihkan
+                            </button>
+                          )}
+                        </div>
                         <div className="flex bg-slate-200/50 dark:bg-slate-900 p-1 rounded-lg gap-1 transition-colors overflow-x-auto no-scrollbar">
                           {[
                             { id: 'all', label: 'Semua' },
@@ -770,9 +892,8 @@ export default function App(): React.ReactElement {
                           </DndContext>
                         )}
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                  </motion.div>
+                )}
               </div>
 
               {/* 5. ACTION BUTTON */}
@@ -823,7 +944,7 @@ export default function App(): React.ReactElement {
                 )}
               </div>
             </motion.div>
-          ) : (
+          ) : activeMenu === 'downloader' ? (
             <motion.div
               key="downloader-page"
               initial={{ opacity: 0, y: 12 }}
@@ -1115,6 +1236,199 @@ export default function App(): React.ReactElement {
                   </div>
                 </div>
               )}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="about-page"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex-1 flex flex-col min-h-0 relative z-10 overflow-y-auto"
+            >
+              <div className="relative z-10 pt-16 md:pt-8 px-4 sm:px-6 md:px-8 pb-24">
+                <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 transition-colors mb-4">
+                  Tentang &amp; Update
+                </h2>
+
+                {/* KARTU VERSI APLIKASI */}
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 sm:p-5 flex flex-col gap-4 transition-colors mb-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
+                      <Info className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
+                        RS OmniClip{' '}
+                        <span className="text-blue-600 dark:text-blue-400">v{updateInfo?.current ?? '1.1.0'}</span>
+                      </h3>
+                      <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
+                        Versi, pembaruan &amp; resource — periksa rilis terbaru dari GitHub, gratis.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                    <div className="flex-1 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 px-4 py-3 transition-colors">
+                      <p className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
+                        Terpasang
+                      </p>
+                      <p className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-0.5">
+                        v{updateInfo?.current ?? '1.1.0'}
+                      </p>
+                    </div>
+                    <div className="flex-1 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 px-4 py-3 transition-colors">
+                      <p className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
+                        Terbaru
+                      </p>
+                      <p className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-0.5 flex items-center gap-2">
+                        {isCheckingUpdate ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                        ) : updateInfo?.latest ? (
+                          <>v{updateInfo.latest}</>
+                        ) : (
+                          '—'
+                        )}
+                        {updateInfo?.hasUpdate && (
+                          <span className="text-[10px] font-bold bg-blue-600 text-white rounded-full px-2 py-0.5">
+                            Update tersedia
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        void checkUpdate()
+                      }}
+                      disabled={isCheckingUpdate || !window.api?.checkForUpdate}
+                      className="flex-1 bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-full font-medium text-sm flex items-center justify-center gap-2 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                      Periksa Update
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleOpenUpdate()
+                      }}
+                      disabled={!updateInfo?.hasUpdate || !updateInfo?.url}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-full px-5 py-2 text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Unduh Versi Baru
+                    </button>
+                  </div>
+
+                  {updateInfo?.notes && (
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 px-4 py-3 transition-colors">
+                      <p className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase mb-2">
+                        Catatan Rilis
+                      </p>
+                      <pre className="whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300 font-sans leading-relaxed max-h-40 overflow-y-auto">
+                        {updateInfo.notes}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+
+                {/* KARTU RESOURCE MESIN */}
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 sm:p-5 flex flex-col gap-4 transition-colors">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
+                      <RefreshCw className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
+                        Resource Mesin
+                      </h3>
+                      <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
+                        FFmpeg &amp; yt-dlp — versi diharapkan dibandingkan dengan manifest repo.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    {(resources ?? []).map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex items-center gap-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 px-4 py-3 transition-colors"
+                      >
+                        <div
+                          className={`p-1.5 rounded-lg shrink-0 transition-colors ${
+                            r.outdated
+                              ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                              : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                          }`}
+                        >
+                          {r.outdated ? <CircleAlert className="w-4 h-4" /> : <BadgeCheck className="w-4 h-4" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{r.label}</p>
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                            Terpasang: {r.current ?? '—'} · Diharapkan: {r.expected ?? '—'}
+                          </p>
+                        </div>
+                        {r.outdated && (
+                          <span className="text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-full px-2 py-0.5 whitespace-nowrap">
+                            Perlu update
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {resourceStatus && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                      {isUpdatingResources && <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />}
+                      {resourceStatus}
+                    </p>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        void checkResources()
+                      }}
+                      disabled={!window.api?.checkResources}
+                      className="flex-1 bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-full font-medium text-sm flex items-center justify-center gap-2 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Periksa Resource
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        void handleUpdateResources()
+                      }}
+                      disabled={
+                        isUpdatingResources ||
+                        !window.api?.updateResources ||
+                        !resources?.some((r) => r.outdated)
+                      }
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-full px-5 py-2 text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                    >
+                      {isUpdatingResources ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                      Perbarui Resource
+                    </button>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}

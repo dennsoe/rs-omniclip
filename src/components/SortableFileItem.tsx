@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { motion } from 'motion/react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, FileVideo, Scissors, Trash2 } from 'lucide-react'
@@ -156,14 +156,13 @@ export default function SortableFileItem({
         </div>
       </div>
 
-      <AnimatePresence>
-        {isTrimming && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
+      {/* Tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
+      {isTrimming && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          className="overflow-hidden"
+        >
             <div className="px-14 pb-4 flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-slate-500">Mulai</span>
@@ -195,10 +194,9 @@ export default function SortableFileItem({
               >
                 {isTrimmingPending ? 'Memotong...' : 'Simpan'}
               </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </motion.div>
+      )}
 
       {isProcessing && file.status === 'processing' && (
         <motion.div

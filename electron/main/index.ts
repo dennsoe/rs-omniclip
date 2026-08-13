@@ -10,6 +10,14 @@ import {
 } from '@engine/processor'
 import { trimVideo, type TrimPayload } from '@engine/trimmer'
 import { startDownloadBatch, scrapeAccount, type DownloadProgress } from '@engine/downloader'
+import {
+  checkForUpdate,
+  getResourceStatus,
+  updateResources,
+  recordInstalledVersions,
+  type UpdateInfo,
+  type ResourceInfo
+} from '@engine/updater'
 import { getTrackedPids, sampleProcess } from '@engine/procmon'
 
 let mainWindow: BrowserWindow | null = null
@@ -289,6 +297,32 @@ function registerIpc(): void {
     if (typeof folderPath === 'string' && folderPath.trim()) {
       void shell.openPath(folderPath.trim())
     }
+  })
+
+  // --- Pembaruan aplikasi & resource (gratis, repo publik) ---
+  ipcMain.handle('update:check', (): Promise<UpdateInfo> => checkForUpdate())
+
+  ipcMain.handle('update:open', async (_event, url: string) => {
+    // Strategi macOS: buka halaman rilis GitHub — user mengunduh & membuka
+    // dmg/zip secara manual (100% gratis, tanpa Developer ID / notarisasi).
+    if (typeof url === 'string' && /^https?:\/\//.test(url)) {
+      await shell.openExternal(url)
+    }
+    return true
+  })
+
+  ipcMain.handle('resource:check', (): Promise<ResourceInfo[]> => getResourceStatus())
+
+  ipcMain.handle('resource:update', async (_event, force = false) => {
+    const onStatus = (message: string) => {
+      mainWindow?.webContents.send('resource:status', message)
+    }
+    return updateResources(onStatus, force === true)
+  })
+
+  // Catat versi resource saat aplikasi selesai menginisialisasi engine.
+  void recordInstalledVersions().catch(() => {
+    /* versi resource tidak wajib untuk fungsi inti */
   })
 }
 

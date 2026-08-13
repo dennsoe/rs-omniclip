@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'motion/react'
+import { motion } from 'motion/react'
 
 export interface ConfirmAction {
   type: 'clear' | 'remove'
@@ -13,24 +13,21 @@ export default function ConfirmModal({
   confirmAction: ConfirmAction | null
   onClose: () => void
   onConfirm: () => void
-}): React.ReactElement {
-  return (
-    <AnimatePresence>
-      {confirmAction && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm p-4 transition-colors"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ scale: 0.95 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0.95 }}
-            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden max-w-sm w-full relative shadow-2xl p-6 transition-colors"
-            onClick={(e) => e.stopPropagation()}
-          >
+}): React.ReactElement | null {
+  // Tanpa AnimatePresence: exit motion 12 macet di StrictMode (modal tetap di DOM).
+  return confirmAction ? (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm p-4 transition-colors"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95 }}
+        animate={{ scale: 1 }}
+        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden max-w-sm w-full relative shadow-2xl p-6 transition-colors"
+        onClick={(e) => e.stopPropagation()}
+      >
             <h3 className="text-xl font-bold mb-2 text-slate-800 dark:text-white">
               {confirmAction.type === 'clear' ? 'Hapus Semua?' : 'Hapus Video?'}
             </h3>
@@ -52,10 +49,8 @@ export default function ConfirmModal({
               >
                 Hapus
               </button>
-            </div>
-          </motion.div>
+          </div>
         </motion.div>
-      )}
-    </AnimatePresence>
-  )
+      </motion.div>
+  ) : null
 }
