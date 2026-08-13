@@ -126,3 +126,19 @@ node scripts/engine-smoke-test.mjs   # smoke test mesin (verifikasi preset FFmpe
 - Hasil unduhan: `~/Downloads/RS-OmniClip/Unduhan/`.
 - Folder `[CLEANED] - YYYY-MM-DD` dan `Unduhan` tidak pernah menimpa berkas asli.
 
+## Dokumentasi
+
+Dokumentasi lengkap tersedia di folder [`docs/`](./docs/README.md):
+
+| Dokumen | Isi |
+|---|---|
+| `docs/PRD.md` | Product Requirements Document (fitur, kebutuhan, user stories) |
+| `docs/TECHNICAL_SPEC.md` | Spesifikasi teknis & arsitektur |
+| `docs/IPC_CONTRACT.md` | Kontrak jembatan IPC `window.api` |
+| `docs/ENGINE_SPEC.md` | Spesifikasi mesin FFmpeg/yt-dlp + preset |
+| `docs/IMPLEMENTATION_ROADMAP.md` | Peta jalan fitur |
+| `docs/BUILD_AND_RELEASE.md` | Menjalankan, build, dan rilis macOS |
+| `docs/TESTING.md` | Strategi pengujian & smoke test |
+| `docs/CURRENT_STATE.md` | Kondisi terkini proyek |
+
+

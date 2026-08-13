@@ -1,0 +1,178 @@
+# Spesifikasi Mesin Backend — FFmpeg & yt-dlp
+
+Dokumen ini menjelaskan mesin backend Node.js yang berjalan di proses utama
+Electron. Kode: `electron/main/engine/`.
+
+## 1. Modul Engine
+
+| Modul | Tanggung jawab |
+|---|---|
+| `paths.ts` | Lokasi binary, folder output, folder unduhan |
+| `net.ts` | Helper unduhan HTTPS (redirect + timeout) |
+| `ffmpeg.ts` | Provisioning FFmpeg/FFprobe, probe, eksekusi dengan progress |
+| `processor.ts` | Preset pemrosesan batch |
+| `trimmer.ts` | Pemotongan lossless |
+| `downloader.ts` | Provisioning yt-dlp + unduhan universal |
+
+## 2. Lokasi Folder
+
+| Fungsi | Lokasi |
+|---|---|
+| `getEngineBinDir()` | `~/Library/Application Support/rs-omniclip/bin` (userData) |
+| `getOutputBaseDir()` | `~/Downloads/RS-OmniClip` |
+| `getDownloadDir()` | `~/Downloads/RS-OmniClip/Unduhan` |
+| `createOutputFolderForBatch(src)` | `<folder berkas sumber>/[CLEANED] - YYYY-MM-DD` |
+
+Semua binary (ffmpeg, ffprobe, yt-dlp) disimpan di `getEngineBinDir()`, bukan di
+folder proyek.
+
+## 3. Provisioning Binary FFmpeg
+
+Proses di `ensureFfmpeg()` (single-flight, dipanggil saat inisialisasi mesin):
+
+1. Cek keberadaan `ffmpeg` + `ffprobe` yang dapat dieksekusi di `binDir`.
+   Jika sudah ada → siap.
+2. Jika belum: coba unduh via **ffbinaries** (`ffbinaries.com`), batas waktu 90 detik.
+3. **Verifikasi hasil**: ffbinaries kadang selesai tanpa mengekstrak binary.
+   Jika `ffmpeg`/`ffprobe` tidak ditemukan setelah unduhan → lanjut ke fallback.
+4. **Fallback**: unduh langsung dari rilis GitHub
+   `ffbinaries/ffbinaries-prebuilt` v6.1 (build evermeet.cx, macos-64):
+   - `ffmpeg-6.1-macos-64.zip`
+   - `ffprobe-6.1-macos-64.zip`
+   Setiap zip berisi satu binary di akar arsip; diekstrak dengan `extract-zip`,
+   lalu di-`chmod 755`.
+
+Batas waktu unduhan: 90 detik per operasi (via `net.ts` `downloadFile`).
+Build macos-64 berjalan di arm64 melalui Rosetta 2.
+
+### Alasan Fallback
+
+- API `ffbinaries.com` dapat tidak terjangkau (mis. koneksi terbatas).
+- BtbN/FFmpeg-Builds **tidak menyediakan build macOS** (jangan dipakai).
+- evermeet.cx endpoint `ffprobe` mengembalikan zip ffmpeg (rusak) — gunakan
+  ffbinaries-prebuilt yang sudah berisi ffmpeg + ffprobe terpisah.
+
+## 4. FFprobe — `probe(filePath, ffprobePath)`
+
+Menjalankan:
+
+```
+ffprobe -v error -print_format json -show_format -show_streams <file>
+```
+
+Menghasilkan `{ duration, width, height, hasVideo, hasAudio }`. `duration`
+dipakai untuk menghitung persentase kemajuan dan bitrate kompresor WhatsApp.
+
+## 5. Eksekusi FFmpeg — `runFfmpeg(options)`
+
+- Spawn FFmpeg dengan `stdio: ['ignore','ignore','pipe']`.
+- Membaca stderr, mencocokkan `time=HH:MM:SS.xx` untuk menghitung persentase
+  terhadap `totalDuration`.
+- Kirim `onProgress(percent)` (dedupe jika persen sama).
+- Resolve saat kode keluar 0; reject dengan cuplikan stderr bila gagal.
+
+## 6. Preset Pemrosesan (`processor.ts`)
+
+`processBatch(files, preset, onProgress)` memproses file berurutan, non-destruktif,
+ke folder `[CLEANED] - YYYY-MM-DD`, nama file dipertahankan (ekstensi `.mp4`).
+Setiap preset menghasilkan `outputPath = <outputFolder>/<nama-asli>.mp4`.
+
+Semua preset memakai `-map_metadata -1` (hapus metadata) dan
+`-movflags +faststart` (siap streaming).
+
+### 6.1 `quick` — Bagikan Cepat (hapus metadata saja, lossless)
+
+```
+ffmpeg -y -i <in> -map_metadata -1 -c copy -movflags +faststart <out>
+```
+
+Remux tanpa re-encode — sangat cepat, kualitas tidak berubah.
+
+### 6.2 `standard` — Standar Bersih & Jernih
+
+Filter video:
+```
+scale='if(gt(iw,ih),1080,-2)':'if(gt(iw,ih),-2,1080)':flags=lanczos,
+unsharp=5:5:0.6:5:5:0.0
+```
+
+- Upscale sumbu panjang ke 1080p (landscape → lebar 1080; portrait → tinggi 1080),
+  tetap menjaga rasio aspek.
+- `unsharp` untuk penajaman AI-like.
+- Filter audio `afftdn=nr=12:nf=-30` (reduksi noise).
+- Encode: `libx264 -preset veryfast -crf 20 -pix_fmt yuv420p`, audio `aac 192k`.
+- **Fallback**: jika set utama gagal (mis. codec audio tidak kompatibel dengan
+  filter), otomatis mencoba ulang tanpa filter audio.
+
+### 6.3 `archive` — Arsip Kualitas Maks
+
+```
+libx264 -preset slow -crf 18 -pix_fmt yuv420p, audio aac 256k
+```
+
+Resolusi asli, kualitas terbaik.
+
+### 6.4 `whatsapp` — Kompresi WhatsApp
+
+Bitrate video dihitung agar ukuran akhir mendekati **target 16 MB**:
+
+```
+duration = probe.duration (default 60 jika tidak diketahui)
+totalBits      = 16 * 8 * 1024 * 1024
+audioBits      = 128 * 1024 * duration
+videoBits      = max(totalBits - audioBits, 256 * 1024 * duration)
+videoBitrate_k = round(videoBits / 1024 / duration)
+```
+
+Command:
+```
+libx264 -preset medium -b:v <vb>k -maxrate <vb*1.5>k -bufsize <vb*2>k
+-pix_fmt yuv420p, audio aac 128k
+```
+
+## 7. Pemotongan Lossless (`trimmer.ts`)
+
+- `parseTimeToSeconds(value)` mendukung `HH:MM:SS`, `MM:SS`, atau detik.
+- Validasi: format valid, `end > start`, berkas sumber ada.
+- Command:
+
+```
+ffmpeg -y -i <in> -ss <start> -to <end> -c copy -map_metadata -1 -movflags +faststart <out>
+```
+
+- `-ss` setelah `-i` + `-c copy` = potong akurat tanpa re-encode (decoding ke
+  titik mulai lalu salin stream).
+- Hasil: `<nama> - Potongan <start>-<end>.mp4` di folder `[CLEANED] - YYYY-MM-DD`.
+
+## 8. Pengunduh Universal (`downloader.ts`)
+
+### 8.1 Provisioning yt-dlp (`ensureYtdlp`)
+
+Prioritas lokasi binary:
+1. `binDir/yt-dlp` (lokal).
+2. Perintah sistem `yt-dlp` (via `which`).
+3. Unduh dari rilis resmi GitHub:
+   `https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos`,
+   disimpan sebagai `binDir/yt-dlp` lalu `chmod 755`.
+
+### 8.2 Unduhan (`startDownload`)
+
+```
+yt-dlp --newline --no-playlist --progress -o "<downloadDir>/%(title).80B [%(id)s].%(ext)s" <url>
+```
+
+- Parse baris `[download] NN%` dari stdout → event `download:progress`.
+- `--no-playlist` hanya mengambil satu video (bukan seluruh playlist).
+- Selesai (exit 0) → `success`; selain itu → `failed`.
+- Output ke `~/Downloads/RS-OmniClip/Unduhan/`.
+
+## 9. Batas Waktu & Keandalan
+
+| Operasi | Timeout |
+|---|---|
+| Unduhan ffbinaries | 90 detik |
+| Unduhan fallback GitHub / yt-dlp | 120 detik (default `downloadFile`) |
+| Eksekusi FFmpeg | tidak dibatasi (proses batch bisa lama) |
+
+Semua kegagalan per-file ditangkap dan dilaporkan sebagai `failed` tanpa
+menghentikan batch (kecuali mesin itu sendiri yang gagal).
