@@ -21,10 +21,11 @@ const path = require('node:path')
  * dibuat, sehingga artefak rilis berisi app yang sudah di-sign dengan benar.
  */
 exports.default = async function afterSign(context) {
-  // Hook ini khusus macOS — `codesign` hanya tersedia di darwin.
-  // Di Windows/Linux langsung lewati agar build multi-OS tidak gagal.
-  if (process.platform !== 'darwin') {
-    console.log('[afterSign] Bukan macOS; lewati penandatanganan adhoc.')
+  // Hook ini hanya untuk TARGET macOS — `codesign` hanya ada di darwin dan
+  // app berbentuk .app. Saat membangun untuk Windows/Linux (mis. build
+  // Windows dari macOS), lewati agar build tidak gagal mencari .app.
+  if (context.electronPlatformName !== 'darwin') {
+    console.log('[afterSign] Target bukan macOS; lewati penandatanganan adhoc.')
     return
   }
 

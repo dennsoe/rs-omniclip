@@ -122,21 +122,26 @@ rilis terbaru via API GitHub tanpa token.
 ## 5c. Packaging Windows (NSIS + portable)
 
 ```bash
-npm run build:win
+npm run build:win        # = electron-builder --win --x64
 ```
 
-Konfigurasi `build.win` di `package.json`:
+Konfigurasi di `package.json`:
 
-- Target: `nsis` (installer `.exe`) + `portable` (single-file `.exe`).
-- `artifactName`: `RS-OmniClip-<version>-<arch>.<ext>` (seragam dengan macOS).
-- Hook `afterSign` otomatis dilewati di Windows (guard `process.platform`),
-  jadi tidak perlu `codesign`.
+- `build.win.target`: `nsis` (installer `.exe`) + `portable` (single-file `.exe`).
+- `build.nsis.artifactName`: `RS-OmniClip-<version>-<arch>-setup.<ext>`
+  (installer).
+- `build.portable.artifactName`: `RS-OmniClip-<version>-<arch>-portable.<ext>`.
+- Hook `afterSign` otomatis dilewati bila target bukan macOS (guard
+  `electronPlatformName !== 'darwin'`), jadi tidak perlu `codesign`.
+- Arsitektur x64 ditetapkan via flag CLI `--x64` (properti `win.arch` TIDAK
+  valid di schema electron-builder).
 
 **Cara memproduksi `.exe`:**
 
 1. **Di mesin Windows** — `npm ci && npm run build:win` (paling andal).
-2. **Di macOS dengan wine** — `brew install wine` lalu `npm run build:win`
-   (electron-builder memakai wine untuk NSIS).
+2. **Di macOS dengan wine** — wine SUDAH terpasang di mesin dev (2026-08-13,
+   `brew install --cask wine-stable`); cukup `npm run build:win` (electron-
+   builder memakai wine untuk NSIS).
 3. **Otomatis via CI** — job `release-windows` (windows-latest) di
    `.github/workflows/release.yml` saat tag `v*` di-push; aktif setelah
    billing akun GitHub dibereskan.

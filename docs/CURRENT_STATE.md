@@ -36,12 +36,14 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-13**.
 
 - Target rilis: **macOS** (dmg + zip) dan **Windows** (NSIS installer `.exe`
   + portable `.exe`).
-- `package.json` kini punya konfigurasi `build.win` (target `nsis` +
-  `portable`, `artifactName` seragam dengan macOS) + skrip `npm run build:win`.
+- `package.json`: `build.win` (target `nsis` + `portable`), `nsis.artifactName`
+  `...-setup.${ext}`, `portable.artifactName` `...-portable.${ext}` (nama
+  terpisah agar tidak bentrok) + skrip `npm run build:win` (pakai `--x64`).
 - `.github/workflows/release.yml` kini multi-OS: job `release-mac`
   (macos-latest) + job `release-windows` (windows-latest).
-- `scripts/afterSign.js` di-guard `process.platform === 'darwin'` agar tidak
-  memanggil `codesign` (tidak ada di Windows) dan build Windows tidak gagal.
+- `scripts/afterSign.js` di-guard `context.electronPlatformName !== 'darwin'`
+  (cek platform TARGET, bukan host) — build Windows dari macOS tidak memanggil
+  `codesign` dan tidak gagal mencari `.app`.
 - Engine dibuat lintas-OS:
   - `procmon.ts`: `ps` di macOS/Linux, PowerShell `Get-Process` di Windows
     (System Monitor tetap bekerja).
@@ -50,8 +52,12 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-13**.
   - `ffmpeg.ts`: fallback arsip `win-64` (+ ekstensi `.exe`) di Windows;
     jalur utama ffbinaries sudah lintas-OS.
   - `paths.ts`/`net.ts`: sudah memakai API lintas-OS (`app.getPath`, `https`).
-- **Status artefak**: rilis v1.1.0 masih hanya macOS. File `.exe` Windows
-  belum diproduksi — lihat "Hal yang Belum Dikerjakan".
+- **Windows artifact BERHASIL diproduksi lokal (2026-08-13, wine terpasang)**:
+  `npm run build:win` (`--x64`) → `dist/RS-OmniClip-1.1.0-x64-setup.exe`
+  (NSIS installer) + `dist/RS-OmniClip-1.1.0-x64-portable.exe` (portable) +
+  `latest.yml` (manifest auto-update Windows). Tervalidasi `file`: PE32
+  Nullsoft Installer. Rilis GitHub v1.1.0 masih hanya macOS — artefak Windows
+  siap diunggah ke rilis berikutnya.
 
 ## Ringkasan
 
@@ -288,12 +294,12 @@ setelah konfirmasi, modal "Hapus Semua?" dan panel antrean tetap menumpuk.
   Release `v1.1.0` dibuat MANUAL (build lokal `electron-builder --mac` →
   `gh release create`). Workflow `.github/workflows/release.yml` (job mac +
   windows) tetap tersedia dan akan aktif otomatis bila billing dibereskan.
-- **Installer Windows (.exe) belum diproduksi**: konfigurasi & engine sudah
-  siap, tapi menghasilkan file NSIS `.exe` butuh salah satu: (a) CI (billing
-  dibuka), (b) `brew install wine` lalu `npm run build:win` di macOS, atau
-  (c) jalankan `npm run build:win` di mesin Windows.
-- **Belum diuji di Windows asli**: adaptasi engine Windows (procmon/downloader/
-  ffmpeg) perlu smoke test di mesin/VM Windows sebelum rilis resmi Windows.
+- **Artefak Windows sudah diproduksi lokal** (wine terpasang 2026-08-13,
+  `npm run build:win --x64` → setup + portable .exe, tervalidasi PE32), tapi
+  **belum diunggah ke GitHub Release** v1.1.0 (rilis saat ini hanya macOS);
+  upload bisa dilakukan ke rilis baru.
+- **Belum diuji di Windows asli**: engine Windows (procmon/downloader/ffmpeg)
+  perlu smoke test di mesin/VM Windows sebelum rilis resmi Windows.
 - Pengujian di Intel Mac.
 - Scrape akun privat (TikTok/IG) yang butuh cookie/login — saat ini hanya akun
   publik; akun privat menampilkan pesan error informatif.
