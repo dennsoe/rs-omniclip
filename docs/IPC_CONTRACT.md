@@ -27,7 +27,7 @@ dapat membersihkan listener saat unmount.
 | M → R | `download:progress` | Kemajuan unduhan |
 | R → M | `trim:start` | Memotong video (lossless) |
 | M → R | `trim:complete` | Hasil pemotongan |
-| M → R | `system:stats` | Statistik CPU/RAM nyata (interval ~1 detik) |
+| M → R | `system:stats` | Pemakaian CPU/RAM aplikasi ini (realtime, interval ~1,5 detik) |
 
 ## 3. Signature Lengkap `window.api`
 

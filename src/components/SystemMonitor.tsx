@@ -22,9 +22,12 @@ export default function SystemMonitor(): React.ReactElement {
 
   return (
     <div className="mx-4 mb-4 p-4 rounded-xl border border-slate-100 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col gap-3 transition-colors">
-      <div className="flex items-center gap-2 mb-1 text-slate-600 dark:text-slate-300">
-        <Activity className="w-4 h-4" />
-        <span className="text-xs font-semibold uppercase tracking-wider">System</span>
+      <div className="mb-1 text-slate-600 dark:text-slate-300">
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4" />
+          <span className="text-xs font-semibold uppercase tracking-wider">System</span>
+        </div>
+        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Pemakaian Aplikasi</p>
       </div>
 
       <div>

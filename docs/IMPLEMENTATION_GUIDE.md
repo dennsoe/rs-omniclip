@@ -77,9 +77,12 @@ Semua komunikasi renderer↔main lewat `window.api` (contextBridge). Channel yan
    `docs/ENGINE_SPEC.md`, `docs/PRD.md`.
 2. **Bug klik dialog file** — dropzone `noClick: activeMenu === 'downloader' ||
    files.length > 0`, `noDrag: activeMenu === 'downloader'`.
-3. **System Monitor data nyata** — emitter `system:stats` di main (`os.cpus`
-   delta + `os.totalmem/freemem`), `onSystemStats` di preload/global.d.ts,
-   `src/components/SystemMonitor.tsx` konsumsi data riil (tanpa simulasi).
+3. **System Monitor pemakaian aplikasi (realtime, mencakup pekerja)** — emitter
+   `system:stats` di main memakai `electron/main/engine/procmon.ts`: PID
+   aplikasi (via `app.getAppMetrics()`) + PID pekerja FFmpeg/yt-dlp (via
+   `trackProcess`), lalu diukur dari OS `ps` — CPU = selisih waktu CPU
+   kumulatif antar sampel, RAM = jumlah RSS. `onSystemStats` di
+   preload/global.d.ts; `SystemMonitor.tsx` konsumsi data riil.
 4. **Responsivitas super** — `h-dvh`, sidebar `overflow-y-auto`, `min-w-0`,
    teks/aksi responsif (`sm:`), jendela minimum 720x560, mobile drawer < 768px.
 

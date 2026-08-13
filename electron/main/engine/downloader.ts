@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import { execFile, spawn } from 'node:child_process'
 import { getEngineBinDir, getDownloadDir } from './paths'
 import { downloadFile } from './net'
+import { trackProcess, untrackProcess } from './procmon'
 
 export interface DownloadProgress {
   id: string
@@ -105,6 +106,8 @@ export async function startDownload(
     const args = ['--newline', '--no-playlist', '--progress', '-o', outputTemplate, url]
 
     const proc = spawn(ytdlp, args)
+    // Lacak PID agar System Monitor menyertakan beban CPU/RAM yt-dlp.
+    trackProcess(proc.pid ?? 0)
 
     proc.stdout.on('data', (chunk: Buffer) => {
       const percent = extractPercent(chunk.toString())
@@ -120,10 +123,12 @@ export async function startDownload(
     })
 
     proc.on('error', () => {
+      untrackProcess(proc.pid ?? 0)
       onProgress({ id, url, percent: 0, status: 'failed', error: 'Gagal menjalankan yt-dlp.' })
     })
 
     proc.on('close', (code) => {
+      untrackProcess(proc.pid ?? 0)
       if (code === 0) {
         onProgress({ id, url, percent: 100, status: 'success' })
       } else {

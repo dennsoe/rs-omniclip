@@ -10,48 +10,88 @@ import {
 } from '@engine/processor'
 import { trimVideo, type TrimPayload } from '@engine/trimmer'
 import { startDownload, type DownloadProgress } from '@engine/downloader'
+import { getTrackedPids, sampleProcess } from '@engine/procmon'
 
 let mainWindow: BrowserWindow | null = null
 let engineReady = false
 let engineInitializing: Promise<void> | null = null
 
-// --- Statistik sistem (System Monitor data nyata) ---
+// --- Statistik aplikasi (System Monitor): pemakaian CPU & RAM aplikasi ini ---
+// Mencakup proses Electron (main/renderer/GPU) + pekerja anak (FFmpeg/yt-dlp),
+// diukur dari data nyata OS (`ps`) agar realtime dan mencerminkan pemrosesan.
 let statsTimer: NodeJS.Timeout | null = null
-let lastCpuTimes: { idle: number; total: number } | null = null
+let statsInFlight = false
+let prevCpuSamples = new Map<number, number>() // pid -> waktu CPU kumulatif (ms)
+let prevSampleTime = 0
 
-function computeCpuPercent(): number {
-  const cpus = os.cpus()
-  let idle = 0
+/** Kumpulkan PID aplikasi (Electron) + PID pekerja (FFmpeg/yt-dlp). */
+function collectProcessPids(): number[] {
+  const pids = new Set<number>()
+  for (const metric of app.getAppMetrics()) {
+    if (metric.pid > 0) pids.add(metric.pid)
+  }
+  for (const pid of getTrackedPids()) pids.add(pid)
+  return [...pids]
+}
+
+/**
+ * CPU (%) yang dipakai aplikasi ini, dihitung dari selisih waktu CPU
+ * kumulatif setiap proses antar sampel (realtime, bukan rata-rata seumur hidup).
+ */
+async function computeAppCpuPercent(nowMs: number): Promise<number> {
+  const pids = collectProcessPids()
+  const current = new Map<number, number>()
+  await Promise.all(
+    pids.map(async (pid) => {
+      const sample = await sampleProcess(pid)
+      if (sample) current.set(pid, sample.cpuTimeMs)
+    })
+  )
+
+  const elapsedSec = (nowMs - prevSampleTime) / 1000
   let total = 0
-  for (const cpu of cpus) {
-    const times = cpu.times as Record<string, number>
-    for (const key of Object.keys(times)) {
-      total += times[key]
+  if (prevSampleTime > 0 && elapsedSec > 0) {
+    for (const [pid, cpuMs] of current) {
+      const prev = prevCpuSamples.get(pid)
+      if (prev !== undefined) {
+        const diffMs = Math.max(0, cpuMs - prev)
+        total += (diffMs / 1000 / elapsedSec) * 100
+      }
     }
-    idle += times.idle
   }
-  const now = { idle, total }
-  if (!lastCpuTimes) {
-    lastCpuTimes = now
-    return 0
-  }
-  const idleDiff = now.idle - lastCpuTimes.idle
-  const totalDiff = now.total - lastCpuTimes.total
-  lastCpuTimes = now
-  if (totalDiff <= 0) return 0
-  return Math.min(100, Math.max(0, Math.round((1 - idleDiff / totalDiff) * 100)))
+  prevCpuSamples = current
+  prevSampleTime = nowMs
+  return Math.min(100, Math.max(0, Math.round(total)))
+}
+
+/** RAM (MB) yang dipakai aplikasi ini (jumlah RSS seluruh proses). */
+async function computeAppRamUsedMb(): Promise<number> {
+  const pids = collectProcessPids()
+  const samples = await Promise.all(pids.map((pid) => sampleProcess(pid)))
+  let totalBytes = 0
+  for (const s of samples) if (s) totalBytes += s.rssBytes
+  return Math.round(totalBytes / 1024 / 1024)
 }
 
 function startSystemStats(): void {
   if (statsTimer) return
-  statsTimer = setInterval(() => {
-    const totalMem = os.totalmem()
-    const usedMem = totalMem - os.freemem()
-    emit('system:stats', {
-      cpu: computeCpuPercent(),
-      ramUsedMb: Math.round(usedMem / 1024 / 1024),
-      ramTotalMb: Math.round(totalMem / 1024 / 1024)
-    })
+  statsTimer = setInterval(async () => {
+    if (statsInFlight) return
+    statsInFlight = true
+    try {
+      const now = Date.now()
+      const [cpu, ramUsedMb] = await Promise.all([
+        computeAppCpuPercent(now),
+        computeAppRamUsedMb()
+      ])
+      emit('system:stats', {
+        cpu,
+        ramUsedMb,
+        ramTotalMb: Math.round(os.totalmem() / 1024 / 1024)
+      })
+    } finally {
+      statsInFlight = false
+    }
   }, 1500)
 }
 

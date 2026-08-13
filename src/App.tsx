@@ -9,6 +9,7 @@ import {
   Monitor,
   Tv,
   Archive,
+  Clapperboard,
   PlayCircle,
   Trash2,
   Sun,
@@ -411,44 +412,104 @@ export default function App(): React.ReactElement {
             isMobile ? 'absolute inset-y-0 left-0 z-40' : 'relative z-20'
           }`}
         >
-          <div className="flex items-center justify-between p-6 pb-2">
-            <h1 className="text-xs font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
-              RS OMNICLIP
-            </h1>
+          {/* Brand header — pt-12 agar tidak menabrak traffic light macOS (x16-68, y16-28) */}
+          <div className="flex items-center justify-between pt-12 px-5 pb-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25 shrink-0">
+                <Clapperboard className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex flex-col leading-tight min-w-0">
+                <span className="font-bold text-sm tracking-wide text-slate-800 dark:text-slate-100 truncate">
+                  RS OMNICLIP
+                </span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                  Video Processing Studio
+                </span>
+              </div>
+            </div>
             {isMobile && (
               <button
                 onClick={() => setIsSidebarOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0"
               >
                 <XCircle className="w-5 h-5" />
               </button>
             )}
           </div>
 
-          <div className="px-4 space-y-1 mb-6">
+          {/* Label seksi menu */}
+          <div className="px-3 mb-2">
+            <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase px-2">
+              Menu
+            </span>
+          </div>
+
+          {/* Menu navigasi (redesain: chip ikon + judul + deskripsi, aktif gradien) */}
+          <nav className="px-3 space-y-1 mb-6">
             <button
               onClick={() => setActiveMenu('cleaner')}
               className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
                 activeMenu === 'cleaner'
-                  ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+                  ? 'bg-linear-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50'
               }`}
             >
-              <Wand2 className="w-5 h-5 shrink-0" />
-              Pembersih Video
+              <span
+                className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                  activeMenu === 'cleaner'
+                    ? 'bg-white/15'
+                    : 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400'
+                }`}
+              >
+                <Wand2 className="w-4.5 h-4.5" />
+              </span>
+              <span className="flex flex-col min-w-0">
+                <span className="font-semibold text-sm truncate">Pembersih Video</span>
+                <span
+                  className={`text-[11px] truncate ${
+                    activeMenu === 'cleaner' ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'
+                  }`}
+                >
+                  Bersihkan, tingkatkan &amp; potong
+                </span>
+              </span>
+              {activeMenu === 'cleaner' && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/90 shrink-0" />
+              )}
             </button>
+
             <button
               onClick={() => setActiveMenu('downloader')}
               className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
                 activeMenu === 'downloader'
-                  ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+                  ? 'bg-linear-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50'
               }`}
             >
-              <DownloadCloud className="w-5 h-5 shrink-0" />
-              Pengunduh Video
+              <span
+                className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                  activeMenu === 'downloader'
+                    ? 'bg-white/15'
+                    : 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400'
+                }`}
+              >
+                <DownloadCloud className="w-4.5 h-4.5" />
+              </span>
+              <span className="flex flex-col min-w-0">
+                <span className="font-semibold text-sm truncate">Pengunduh Video</span>
+                <span
+                  className={`text-[11px] truncate ${
+                    activeMenu === 'downloader' ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'
+                  }`}
+                >
+                  Unduh video dari berbagai platform
+                </span>
+              </span>
+              {activeMenu === 'downloader' && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/90 shrink-0" />
+              )}
             </button>
-          </div>
+          </nav>
 
           <div className="mt-auto flex flex-col">
             <SystemMonitor />
@@ -519,9 +580,9 @@ export default function App(): React.ReactElement {
             )}
           </AnimatePresence>
 
-          {/* MOBILE MENU BUTTON */}
+          {/* MOBILE MENU BUTTON — left-20 (80px) agar tidak menimpa traffic light macOS (berakhir ±68px) */}
           {isMobile && !isSidebarOpen && (
-            <div className="absolute top-4 left-4 z-10">
+            <div className="absolute top-4 left-20 z-10">
               <button
                 onClick={(e) => {
                   e.stopPropagation()

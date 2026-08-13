@@ -78,8 +78,8 @@ data yang dikirim ke server.
 - **RF-16** Saat aplikasi dibuka, sistem menginisialisasi mesin (FFmpeg) dan
   menampilkan layar "Menyiapkan Mesin Video..." sampai siap.
 - **RF-17** Jika binary belum ada, sistem mengunduh otomatis (butuh internet).
-- **RF-18** Sistem menampilkan monitor System (CPU/RAM **nyata** dari proses
-  utama, channel `system:stats`) di sidebar.
+- **RF-18** Sistem menampilkan monitor System — **pemakaian CPU/RAM aplikasi
+  ini** secara realtime (channel `system:stats`) di sidebar.
 
 ## 6. Kebutuhan Non-Fungsional
 
@@ -114,8 +114,8 @@ data yang dikirim ke server.
 - Watermark teks **dihapus** karena build FFmpeg (evermeet 6.1) tidak punya
   filter `drawtext`; pengembalian fitur tercatat di roadmap (butuh build lain
   atau overlay gambar). Subtitle AI juga di roadmap.
-- Monitor System (CPU/RAM) menampilkan data **nyata** dari proses utama
-  (channel `system:stats`), bukan simulasi.
+- Monitor System (CPU/RAM) menampilkan **pemakaian aplikasi ini** secara
+  realtime (channel `system:stats`, dari `app.getAppMetrics()`).
 - Target WhatsApp 16 MB (batas umum berbagi video WA).
 
 ## 9. Definisi Selesai (DoD)
