@@ -14,7 +14,8 @@ Aplikasi berfungsi end-to-end dan telah di-push ke GitHub.
 - Repo: `https://github.com/dennsoe/rs-omniclip`
 - Branch: `main`
 - Commit: `47d3720` (inisialisasi), `c7d9a6c` (dokumentasi), `6133f9e`
-  (perbaikan audit B1–B15). Perombakan preset/monitor/responsivitas belum di-commit.
+  (audit B1–B15), lalu **PR #1 merged** — merge commit `fe530b5`
+  (perombakan preset/monitor/responsivitas + fix kunci retry yt-dlp).
 - Jumlah file ter-track: 55
 
 ## Status Fitur

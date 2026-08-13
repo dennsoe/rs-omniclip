@@ -66,7 +66,7 @@ Semua komunikasi renderer↔main lewat `window.api` (contextBridge). Channel yan
   toast akurat (B6), fallback metadata (B7), ETA/progress/error/validasi/UX/CSP (B8–B15).
 - Verifikasi saat itu: typecheck/lint/build PASS, smoke test 9/9.
 
-### 5.2 SELESAI — Perombakan fitur & UI (2026-08-13, belum di-commit)
+### 5.2 SELESAI — Perombakan fitur & UI (2026-08-13, commit `9450177` → PR #1 merged `fe530b5`)
 1. **Preset diperjelas** — `metadata` (hapus metadata, remux lossless + fallback
    encode), `hd` (720p), `fullhd` (1080p), `uhd` (4K), `archive` (CRF 18),
    `whatsapp` (target 16 MB). Default `fullhd`. Sinkron: `src/lib/types.ts`,
