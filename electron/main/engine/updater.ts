@@ -237,7 +237,8 @@ function removeBinariesFor(ids: string[]): void {
   try {
     for (const entry of fs.readdirSync(binDir)) {
       const isFfmpeg = /^(ffmpeg|ffprobe)/.test(entry)
-      const isYtdlp = entry === 'yt-dlp'
+      // Nama binary yt-dlp lintas-OS: `yt-dlp` (macOS/Linux) / `yt-dlp.exe` (Windows).
+      const isYtdlp = entry === 'yt-dlp' || entry === 'yt-dlp.exe'
       const shouldDelete =
         (ids.includes('ffmpeg') && isFfmpeg) || (ids.includes('yt-dlp') && isYtdlp)
       if (shouldDelete) fs.rmSync(path.join(binDir, entry), { force: true })

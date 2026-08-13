@@ -5,6 +5,9 @@
 - Node.js 18+ (direkomendasikan 20+; dikembangkan di Node 24).
 - npm (v9+).
 - macOS untuk merilis paket `.dmg`/`.zip` (aplikasi target macOS).
+- Windows untuk merilis installer `.exe` (NSIS), atau macOS + `wine`
+  (`brew install wine`) untuk build lintas-OS, atau pakai CI (job
+  `release-windows` di `.github/workflows/release.yml`).
 - Koneksi internet pada **pertama kali dijalankan** untuk mengunduh binary
   FFmpeg dan yt-dlp.
 
@@ -35,6 +38,7 @@ Electron-Vite menggunakan port **5173** untuk dev server renderer
 | `npm run typecheck` | Gabungan node + web |
 | `npm run lint` | ESLint seluruh proyek |
 | `npm run build:mac` | Build + paket macOS (`electron-builder --mac`) |
+| `npm run build:win` | Build + paket Windows NSIS/portable (`electron-builder --win`) |
 | `node scripts/engine-smoke-test.mjs` | Smoke test mesin (headless) |
 
 ## 4. Build Produksi
@@ -103,16 +107,51 @@ git tag v1.1.0
 git push origin v1.1.0
 ```
 
-Workflow (`release.yml`) menjalankan: `npm ci` → `npm run typecheck` →
-`npm run build` → `npx electron-builder --mac --publish always`, lalu
-mengunggah `dmg` + `zip` + `latest-mac.yml` ke GitHub Release (memakai
-`GITHUB_TOKEN` bawaan; `CSC_IDENTITY_AUTO_DISCOVERY=false` untuk melewati
-signing karena aplikasi gratis tanpa Developer ID).
+Workflow (`release.yml`) kini **multi-OS** dan menjalankan DUA job paralel:
+- `release-mac` (macos-latest): `npm ci` → typecheck → build →
+  `electron-builder --mac --publish always` → unggah `dmg` + `zip`.
+- `release-windows` (windows-latest): `npm ci` → typecheck → build →
+  `electron-builder --win --publish always` → unggah installer NSIS + portable.
+
+Semua memakai `GITHUB_TOKEN` bawaan; `CSC_IDENTITY_AUTO_DISCOVERY=false`
+(macOS) untuk melewati signing karena aplikasi gratis tanpa Developer ID.
 
 **Syarat**: repositori harus **public** agar aplikasi terpasang bisa memeriksa
 rilis terbaru via API GitHub tanpa token.
 
-## 5c. Mekanisme Pembaruan Aplikasi (Gratis)
+## 5c. Packaging Windows (NSIS + portable)
+
+```bash
+npm run build:win
+```
+
+Konfigurasi `build.win` di `package.json`:
+
+- Target: `nsis` (installer `.exe`) + `portable` (single-file `.exe`).
+- `artifactName`: `RS-OmniClip-<version>-<arch>.<ext>` (seragam dengan macOS).
+- Hook `afterSign` otomatis dilewati di Windows (guard `process.platform`),
+  jadi tidak perlu `codesign`.
+
+**Cara memproduksi `.exe`:**
+
+1. **Di mesin Windows** — `npm ci && npm run build:win` (paling andal).
+2. **Di macOS dengan wine** — `brew install wine` lalu `npm run build:win`
+   (electron-builder memakai wine untuk NSIS).
+3. **Otomatis via CI** — job `release-windows` (windows-latest) di
+   `.github/workflows/release.yml` saat tag `v*` di-push; aktif setelah
+   billing akun GitHub dibereskan.
+
+**Catatan Windows:**
+
+- Aplikasi gratis tanpa sertifikat kode → Windows SmartScreen mungkin
+  menampilkan "More info → Run anyway" pada instalasi pertama.
+- Engine lintas-OS: yt-dlp diunduh sebagai `yt-dlp.exe`, pencari perintah
+  `where`, `procmon` memakai PowerShell, fallback FFmpeg memakai arsip
+  `win-64`.
+- Folder binary: `%APPDATA%/rs-omniclip/bin/`; hasil unduhan di folder
+  Downloads pengguna.
+
+## 5d. Mekanisme Pembaruan Aplikasi (Gratis)
 
 - Versi lokal dibaca dari `app.getVersion()` (package.json, saat ini **1.1.0**).
 - Aplikasi memeriksa `releases/latest` GitHub → bila lebih baru tampil badge

@@ -14,7 +14,8 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "lint": "eslint .",
-    "build:mac": "npm run build && electron-builder --mac"
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:win": "npm run build && electron-builder --win"
   },
   "dependencies": {
     "extract-zip": "^2.0.1",
@@ -62,6 +63,10 @@
     "mac": {
       "category": "public.app-category.video",
       "target": ["dmg", "zip"],
+      "artifactName": "RS-OmniClip-${version}-${arch}.${ext}"
+    },
+    "win": {
+      "target": ["nsis", "portable"],
       "artifactName": "RS-OmniClip-${version}-${arch}.${ext}"
     },
     "afterSign": "scripts/afterSign.js",
