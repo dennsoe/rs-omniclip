@@ -25,6 +25,11 @@ desktop **Electron-Vite** dengan backend Node.js asli. Kode lama tersimpan di
    dan perbarui resource mesin (FFmpeg/yt-dlp) via manifest `resources.json`.
    Rilis otomatis via GitHub Actions saat tag `v*` di-push.
 
+**Dukungan Platform**: **macOS** (dmg + zip) dan **Windows** (NSIS installer +
+portable `.exe`). Engine (FFmpeg/yt-dlp/System Monitor) lintas-OS; rilis
+Windows diproduksi via `npm run build:win` (butuh wine di macOS, mesin
+Windows, atau CI).
+
 ## Prinsip Kunci
 
 - **NON-DESTRUKTIF**: Aplikasi **tidak pernah menimpa berkas asli**. Hasil disalin ke
@@ -63,7 +68,7 @@ rs-omni/
 │   └── types/global.d.ts       # Deklarasi window.api (kontrak IPC)
 ├── scripts/engine-smoke-test.mjs  # Smoke test mesin (headless)
 ├── resources.json              # Manifest resource mesin (ffmpeg/yt-dlp)
-├── .github/workflows/release.yml # CI rilis macOS (tag v*)
+├── .github/workflows/release.yml # CI rilis macOS + Windows (tag v*)
 ├── _archive_nextjs/            # Arsip ekspor Next.js lama
 └── out/                        # Hasil build electron-vite
 ```

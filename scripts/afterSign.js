@@ -21,6 +21,13 @@ const path = require('node:path')
  * dibuat, sehingga artefak rilis berisi app yang sudah di-sign dengan benar.
  */
 exports.default = async function afterSign(context) {
+  // Hook ini khusus macOS — `codesign` hanya tersedia di darwin.
+  // Di Windows/Linux langsung lewati agar build multi-OS tidak gagal.
+  if (process.platform !== 'darwin') {
+    console.log('[afterSign] Bukan macOS; lewati penandatanganan adhoc.')
+    return
+  }
+
   const { appOutDir, packager } = context
   const appName = packager.appInfo.productFilename
   const appPath = path.join(appOutDir, `${appName}.app`)

@@ -23,17 +23,23 @@ export function getTrackedPids(): number[] {
 }
 
 export interface ProcessSample {
-  /** Waktu CPU kumulatif proses dalam milidetik (dari `ps time=`). */
+  /** Waktu CPU kumulatif proses dalam milidetik. */
   cpuTimeMs: number
-  /** Resident set size dalam byte (dari `ps rss=`, satuan kB di macOS). */
+  /** Resident set size dalam byte (dari `ps rss=` di Unix / WorkingSet di Windows). */
   rssBytes: number
 }
 
 /**
- * Membaca waktu CPU kumulatif + RSS sebuah proses via `ps` (macOS).
+ * Membaca waktu CPU kumulatif + RSS sebuah proses (lintas-OS).
+ * - macOS/Linux: `ps -p <pid> -o time=,rss=`
+ * - Windows: PowerShell `Get-Process` (CPU dalam detik, WorkingSet64 dalam byte)
  * Mengembalikan null bila proses tidak ada / error.
  */
 export function sampleProcess(pid: number): Promise<ProcessSample | null> {
+  return process.platform === 'win32' ? sampleProcessWindows(pid) : sampleProcessUnix(pid)
+}
+
+function sampleProcessUnix(pid: number): Promise<ProcessSample | null> {
   return new Promise((resolve) => {
     execFile(
       'ps',
@@ -58,8 +64,48 @@ export function sampleProcess(pid: number): Promise<ProcessSample | null> {
 }
 
 /**
+ * Implementasi Windows via PowerShell:
+ *   Get-Process -Id <pid> | Select-Object CPU,WorkingSet64 | ConvertTo-Csv
+ * Output: baris header diikuti baris data (`"<cpu_detik>","<working_set_byte>"`).
+ */
+function sampleProcessWindows(pid: number): Promise<ProcessSample | null> {
+  return new Promise((resolve) => {
+    const script = [
+      'Get-Process -Id ' + String(pid) + ' -ErrorAction SilentlyContinue',
+      '| Select-Object CPU,WorkingSet64',
+      '| ConvertTo-Csv -NoTypeInformation'
+    ].join(' ')
+    execFile(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { timeout: 2000, windowsHide: true },
+      (err, stdout) => {
+        if (err) {
+          resolve(null)
+          return
+        }
+        const lines = stdout.trim().split(/\r?\n/).filter((l) => l.trim().length > 0)
+        // Baris 0 = header, baris 1 = data.
+        if (lines.length < 2) {
+          resolve(null)
+          return
+        }
+        const cells = lines[1].split(',').map((s) => s.replace(/^"|"$/g, '').trim())
+        const cpuSec = Number.parseFloat(cells[0] ?? '')
+        const workingSet = Number.parseFloat(cells[1] ?? '')
+        if (!Number.isFinite(cpuSec) || !Number.isFinite(workingSet)) {
+          resolve(null)
+          return
+        }
+        resolve({ cpuTimeMs: Math.round(cpuSec * 1000), rssBytes: Math.round(workingSet) })
+      }
+    )
+  })
+}
+
+/**
  * Mengubah format waktu kumulatif `ps` menjadi milidetik.
- * Format macOS: `M:SS.cc` (2 bagian) atau `H:MM:SS.cc` (3 bagian).
+ * Format Unix: `M:SS.cc` (2 bagian) atau `H:MM:SS.cc` (3 bagian).
  */
 function parsePsTimeToMs(text: string): number | null {
   if (!text) return null

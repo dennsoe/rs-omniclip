@@ -32,6 +32,27 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-13**.
   Open. Terverifikasi: app hasil build berjalan; app dalam DMG baru lolos
   `codesign --verify --deep --strict` (exit 0).
 
+## Dukungan Multi-OS — macOS & Windows (2026-08-13)
+
+- Target rilis: **macOS** (dmg + zip) dan **Windows** (NSIS installer `.exe`
+  + portable `.exe`).
+- `package.json` kini punya konfigurasi `build.win` (target `nsis` +
+  `portable`, `artifactName` seragam dengan macOS) + skrip `npm run build:win`.
+- `.github/workflows/release.yml` kini multi-OS: job `release-mac`
+  (macos-latest) + job `release-windows` (windows-latest).
+- `scripts/afterSign.js` di-guard `process.platform === 'darwin'` agar tidak
+  memanggil `codesign` (tidak ada di Windows) dan build Windows tidak gagal.
+- Engine dibuat lintas-OS:
+  - `procmon.ts`: `ps` di macOS/Linux, PowerShell `Get-Process` di Windows
+    (System Monitor tetap bekerja).
+  - `downloader.ts`: binary `yt-dlp.exe` + URL rilis Windows + pencari `where`
+    (bukan `which`); `chmod` dilewati di Windows.
+  - `ffmpeg.ts`: fallback arsip `win-64` (+ ekstensi `.exe`) di Windows;
+    jalur utama ffbinaries sudah lintas-OS.
+  - `paths.ts`/`net.ts`: sudah memakai API lintas-OS (`app.getPath`, `https`).
+- **Status artefak**: rilis v1.1.0 masih hanya macOS. File `.exe` Windows
+  belum diproduksi — lihat "Hal yang Belum Dikerjakan".
+
 ## Ringkasan
 
 RS OmniClip telah dimigrasi penuh dari ekspor Next.js ke arsitektur desktop
@@ -263,10 +284,16 @@ setelah konfirmasi, modal "Hapus Semua?" dan panel antrean tetap menumpuk.
 - Developer ID + notarisasi Apple (berbayar ~$99/thn) untuk distribusi mulus
   tanpa langkah `xattr -cr` / klik kanan → Open.
 - **CI GitHub Actions tidak berjalan** (2026-08-13): akun GitHub terkunci
-  billing ("account is locked due to a billing issue" — runner macOS berbayar).
+  billing ("account is locked due to a billing issue" — runner berbayar).
   Release `v1.1.0` dibuat MANUAL (build lokal `electron-builder --mac` →
-  `gh release create`). Workflow `.github/workflows/release.yml` tetap tersedia
-  dan akan aktif otomatis bila billing akun dibereskan.
+  `gh release create`). Workflow `.github/workflows/release.yml` (job mac +
+  windows) tetap tersedia dan akan aktif otomatis bila billing dibereskan.
+- **Installer Windows (.exe) belum diproduksi**: konfigurasi & engine sudah
+  siap, tapi menghasilkan file NSIS `.exe` butuh salah satu: (a) CI (billing
+  dibuka), (b) `brew install wine` lalu `npm run build:win` di macOS, atau
+  (c) jalankan `npm run build:win` di mesin Windows.
+- **Belum diuji di Windows asli**: adaptasi engine Windows (procmon/downloader/
+  ffmpeg) perlu smoke test di mesin/VM Windows sebelum rilis resmi Windows.
 - Pengujian di Intel Mac.
 - Scrape akun privat (TikTok/IG) yang butuh cookie/login — saat ini hanya akun
   publik; akun privat menampilkan pesan error informatif.

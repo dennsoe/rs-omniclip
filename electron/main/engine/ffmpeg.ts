@@ -120,27 +120,35 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * Sumber cadangan: mengunduh build macos-64 resmi dari rilis GitHub
- * ffbinaries/ffbinaries-prebuilt (dibuat dari evermeet.cx) tanpa
- * bergantung pada API ffbinaries.com. Setiap zip berisi satu binary
- * (ffmpeg / ffprobe) di akar arsip.
+ * Sumber cadangan: mengunduh build resmi dari rilis GitHub
+ * ffbinaries/ffbinaries-prebuilt (macOS dari evermeet.cx, Windows/Linux
+ * dari build resmi ffmpeg) tanpa bergantung pada API ffbinaries.com.
+ * Setiap zip berisi satu binary (ffmpeg / ffprobe) di akar arsip.
+ * Nama arsip & binary menyesuaikan platform (Windows memakai .exe).
  */
 async function downloadFfmpegFallback(binDir: string): Promise<void> {
   const releaseBase = 'https://github.com/ffbinaries/ffbinaries-prebuilt/releases/download/v6.1'
+  // Tag arsip ffbinaries-prebuilt: macos-64, win-64, linux-64.
+  const platformTag =
+    process.platform === 'win32' ? 'win-64' : process.platform === 'darwin' ? 'macos-64' : 'linux-64'
+  const ext = process.platform === 'win32' ? '.exe' : ''
   const components = [
-    { name: 'ffmpeg', url: `${releaseBase}/ffmpeg-6.1-macos-64.zip` },
-    { name: 'ffprobe', url: `${releaseBase}/ffprobe-6.1-macos-64.zip` }
+    { name: `ffmpeg${ext}`, url: `${releaseBase}/ffmpeg-6.1-${platformTag}.zip` },
+    { name: `ffprobe${ext}`, url: `${releaseBase}/ffprobe-6.1-${platformTag}.zip` }
   ]
 
   for (const comp of components) {
-    const zipPath = path.join(binDir, `${comp.name}-6.1-macos-64.zip`)
+    const zipPath = path.join(binDir, `${comp.name}-6.1-${platformTag}.zip`)
     const extractDir = path.join(binDir, `.ffb-tmp-${comp.name}`)
     try {
       await downloadFile(comp.url, zipPath, FFMPEG_DOWNLOAD_TIMEOUT_MS)
       await fs.promises.mkdir(extractDir, { recursive: true })
       await extract(zipPath, { dir: extractDir })
       await fs.promises.rename(path.join(extractDir, comp.name), path.join(binDir, comp.name))
-      await fs.promises.chmod(path.join(binDir, comp.name), 0o755)
+      // `chmod` hanya relevan di Unix; di Windows tidak diperlukan.
+      if (process.platform !== 'win32') {
+        await fs.promises.chmod(path.join(binDir, comp.name), 0o755)
+      }
     } finally {
       await fs.promises.rm(zipPath, { force: true })
       await fs.promises.rm(extractDir, { recursive: true, force: true })

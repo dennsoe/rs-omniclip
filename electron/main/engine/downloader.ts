@@ -14,8 +14,14 @@ export interface DownloadProgress {
   error?: string
 }
 
-/** URL rilis resmi yt-dlp untuk macOS (universal binary). */
-const YTDLP_DOWNLOAD_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos'
+/** Nama binary yt-dlp sesuai platform (Windows memakai ekstensi .exe). */
+const YTDLP_BIN_NAME = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+
+/** URL rilis resmi yt-dlp sesuai platform (macOS universal / Windows .exe). */
+const YTDLP_DOWNLOAD_URL =
+  process.platform === 'win32'
+    ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+    : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos'
 
 let ytdlpPromise: Promise<string | null> | null = null
 
@@ -53,12 +59,12 @@ async function doEnsureYtdlp(onStatus?: (message: string) => void): Promise<stri
   const binDir = getEngineBinDir()
   await fs.promises.mkdir(binDir, { recursive: true })
 
-  const localPath = path.join(binDir, 'yt-dlp')
+  const localPath = path.join(binDir, YTDLP_BIN_NAME)
   if (await isFile(localPath)) {
     return localPath
   }
 
-  const systemPath = await findSystemCommand('yt-dlp')
+  const systemPath = await findSystemCommand(YTDLP_BIN_NAME)
   if (systemPath) {
     onStatus?.('Menggunakan yt-dlp dari sistem.')
     return systemPath
@@ -67,7 +73,10 @@ async function doEnsureYtdlp(onStatus?: (message: string) => void): Promise<stri
   onStatus?.('Mengunduh yt-dlp untuk pertama kali (butuh koneksi internet)...')
   try {
     await downloadFile(YTDLP_DOWNLOAD_URL, localPath)
-    await fs.promises.chmod(localPath, 0o755)
+    // `chmod` hanya relevan di Unix; di Windows tidak diperlukan.
+    if (process.platform !== 'win32') {
+      await fs.promises.chmod(localPath, 0o755)
+    }
     onStatus?.('yt-dlp siap digunakan.')
     return localPath
   } catch {
@@ -268,14 +277,20 @@ async function isFile(p: string): Promise<boolean> {
 }
 
 function findSystemCommand(command: string): Promise<string | null> {
+  // Pencari perintah lintas-OS: `which` di macOS/Linux, `where` di Windows.
+  const finder = process.platform === 'win32' ? 'where' : 'which'
   return new Promise((resolve) => {
-    execFile('which', [command], (err, stdout) => {
+    execFile(finder, [command], { timeout: 2000, windowsHide: true }, (err, stdout) => {
       if (err) {
         resolve(null)
         return
       }
-      const found = stdout.trim()
-      resolve(found ? found : null)
+      // `where` dapat mengembalikan beberapa baris; pakai baris pertama.
+      const first = stdout
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .find((s) => s.length > 0)
+      resolve(first ?? null)
     })
   })
 }
