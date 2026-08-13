@@ -39,7 +39,23 @@ Aplikasi berfungsi end-to-end dan telah di-push ke GitHub.
 | `npm run lint` | PASS |
 | `npm run build` | PASS (main, preload, renderer) |
 | `get_errors` (seluruh workspace) | No errors found |
-| Smoke test mesin | 8/8 PASS |
+| Smoke test mesin | 9/9 PASS (termasuk fallback encode quick) |
+
+## Audit Forensik & Perbaikan (2026-08-13)
+
+Audit menyeluruh seluruh codebase menemukan dan memperbaiki 15 isu (B1–B15):
+
+- **Tinggi**: kunci retry `ensureFfmpeg` (B1) & `ensureYtdlp` (B2) — hasil gagal
+tidak lagi di-cache, aplikasi bisa mencoba lagi tanpa restart.
+- **Sedang**: anti-timpa hasil output (B3), timeout membatalkan koneksi (B4),
+guard payload IPC (B5), toast hasil akurat dengan jumlah berhasil/gagal (B6),
+fallback re-encode untuk preset `quick` (B7).
+- **Rendah**: ETA akurat via progressRef (B8), progres indikatif saat durasi
+tidak diketahui (B9), guard pemrosesan non-desktop (B10), pesan error
+ditampilkan per file & per unduhan (B11, B12), validasi rentang waktu (B13),
+UX panel trim (B14), dokumentasi CSP (B15).
+
+Detail lengkap: `docs/ENGINE_SPEC.md` dan `docs/IPC_CONTRACT.md`.
 
 ## Status Runtime
 

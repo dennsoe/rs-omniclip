@@ -49,6 +49,7 @@ interface DownloadItem {
   url: string
   percent: number
   status: 'downloading' | 'success' | 'failed'
+  error?: string
 }
 
 export default function App(): React.ReactElement {
@@ -84,6 +85,7 @@ export default function App(): React.ReactElement {
   const filesRef = useRef<FileItem[]>([])
   const batchStartRef = useRef(0)
   const totalBytesRef = useRef(0)
+  const progressRef = useRef<Record<string, number>>({})
 
   useEffect(() => {
     filesRef.current = files
@@ -128,18 +130,25 @@ export default function App(): React.ReactElement {
     if (!window.api?.onProcessingProgress) return
 
     const offProgress = window.api.onProcessingProgress((data) => {
+      progressRef.current[data.id] = data.percent
+
       setFiles((prev) =>
         prev.map((f) => {
           if (f.id !== data.id) return f
           if (data.status === 'success') return { ...f, status: 'success', progress: 100 }
-          if (data.status === 'failed') return { ...f, status: 'failed', progress: data.percent }
+          if (data.status === 'failed')
+            return { ...f, status: 'failed', progress: data.percent, errorMessage: data.error }
           return { ...f, status: 'processing', progress: data.percent }
         })
       )
 
-      // Perkiraan ETA berdasarkan kecepatan riil.
+      // Perkiraan ETA berdasarkan kemajuan terbaru (progressRef, bukan state yang tertinggal).
       const current = filesRef.current
-      const processedBytes = current.reduce((acc, f) => acc + (f.progress / 100) * f.size, 0)
+      let processedBytes = 0
+      for (const f of current) {
+        const pct = progressRef.current[f.id] ?? f.progress
+        processedBytes += (pct / 100) * f.size
+      }
       const elapsed = (Date.now() - batchStartRef.current) / 1000
       if (elapsed > 1 && totalBytesRef.current > 0) {
         const speed = processedBytes / elapsed
@@ -151,9 +160,18 @@ export default function App(): React.ReactElement {
     const offComplete = window.api.onProcessingComplete((data) => {
       setIsProcessing(false)
       setEtaSeconds(null)
+      const all = filesRef.current
+      const failedCount = all.filter((f) => f.status === 'failed').length
+      const successCount = all.filter((f) => f.status === 'success').length
       if (data.outputFolder) {
         setOutputFolder(data.outputFolder)
-        addToast('Semua video berhasil diproses!', 'success')
+        if (failedCount > 0 && successCount === 0) {
+          addToast('Semua video gagal diproses.', 'error')
+        } else if (failedCount > 0) {
+          addToast(`Pemrosesan selesai: ${successCount} berhasil, ${failedCount} gagal.`, 'success')
+        } else {
+          addToast('Semua video berhasil diproses!', 'success')
+        }
       } else {
         addToast('Terjadi kesalahan saat memproses batch.', 'error')
       }
@@ -163,11 +181,11 @@ export default function App(): React.ReactElement {
       setDownloads((prev) =>
         prev.map((d) => {
           if (d.id === data.id) {
-            return { ...d, percent: data.percent, status: data.status }
+            return { ...d, percent: data.percent, status: data.status, error: data.error }
           }
           // Cadangan: cocokkan via URL bila id berbeda.
           if (data.url && d.url === data.url && d.status === 'downloading') {
-            return { ...d, percent: data.percent, status: data.status }
+            return { ...d, percent: data.percent, status: data.status, error: data.error }
           }
           return d
         })
@@ -289,16 +307,20 @@ export default function App(): React.ReactElement {
 
   const startProcessing = (): void => {
     if (files.length === 0 || isProcessing) return
+    if (!window.api?.startProcessing) {
+      addToast('Pemrosesan hanya tersedia di aplikasi desktop.', 'error')
+      return
+    }
+
     setIsProcessing(true)
     setEtaSeconds(null)
     setOutputFolder(null)
 
+    progressRef.current = {}
     batchStartRef.current = Date.now()
     totalBytesRef.current = files.reduce((acc, f) => acc + f.size, 0)
 
-    if (window.api?.startProcessing) {
-      window.api.startProcessing({ files, preset })
-    }
+    window.api.startProcessing({ files, preset })
   }
 
   const formatTime = (seconds: number): string => {
@@ -720,7 +742,7 @@ export default function App(): React.ReactElement {
                   )}
                 </button>
 
-                {outputFolder && !isProcessing && (
+                {outputFolder && !isProcessing && files.some((f) => f.status === 'success') && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -785,6 +807,11 @@ export default function App(): React.ReactElement {
                           </div>
                           <div className="flex flex-col overflow-hidden">
                             <span className="truncate font-medium text-slate-700 dark:text-slate-200">{dl.url}</span>
+                            {dl.status === 'failed' && dl.error && (
+                              <span className="truncate text-xs text-rose-500 dark:text-rose-400 mt-0.5" title={dl.error}>
+                                {dl.error}
+                              </span>
+                            )}
                           </div>
                         </div>
 

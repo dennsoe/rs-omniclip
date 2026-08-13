@@ -12,7 +12,12 @@ declare global {
       onAppReady: (cb: (isReady: boolean) => void) => () => void
       startProcessing: (payload: { files: FileItem[]; preset: PresetType }) => void
       onProcessingProgress: (
-        cb: (data: { id: string; percent: number; status: 'processing' | 'success' | 'failed' }) => void
+        cb: (data: {
+          id: string
+          percent: number
+          status: 'processing' | 'success' | 'failed'
+          error?: string
+        }) => void
       ) => () => void
       onProcessingComplete: (cb: (data: { outputFolder: string }) => void) => () => void
       openFolder: (folderPath: string) => void
@@ -23,6 +28,7 @@ declare global {
           url: string
           percent: number
           status: 'downloading' | 'success' | 'failed'
+          error?: string
         }) => void
       ) => () => void
 

@@ -117,6 +117,6 @@ data yang dikirim ke server.
 ## 9. Definisi Selesai (DoD)
 
 - Kode lolos `npm run typecheck`, `npm run lint`, dan `npm run build`.
-- Smoke test mesin (`scripts/engine-smoke-test.mjs`) lolos 8/8.
+- Smoke test mesin (`scripts/engine-smoke-test.mjs`) lolos 9/9.
 - UI memakai Bahasa Indonesia dan tanpa emoji.
 - Tidak ada error editor di seluruh workspace.

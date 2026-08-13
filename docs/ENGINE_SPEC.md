@@ -45,6 +45,11 @@ Proses di `ensureFfmpeg()` (single-flight, dipanggil saat inisialisasi mesin):
 Batas waktu unduhan: 90 detik per operasi (via `net.ts` `downloadFile`).
 Build macos-64 berjalan di arm64 melalui Rosetta 2.
 
+**Retry setelah gagal**: `ensureFfmpeg()` (dan `ensureYtdlp()`) TIDAK
+menyimpan hasil yang gagal. Jika unduhan gagal, percobaan berikutnya
+(`checkEngine` / unduhan berikutnya) akan mencoba lagi — tidak terkunci
+permanen tanpa restart.
+
 ### Alasan Fallback
 
 - API `ffbinaries.com` dapat tidak terjangkau (mis. koneksi terbatas).
@@ -68,6 +73,8 @@ dipakai untuk menghitung persentase kemajuan dan bitrate kompresor WhatsApp.
 - Spawn FFmpeg dengan `stdio: ['ignore','ignore','pipe']`.
 - Membaca stderr, mencocokkan `time=HH:MM:SS.xx` untuk menghitung persentase
   terhadap `totalDuration`.
+- Jika `totalDuration` tidak diketahui (0), mengirim progres indikatif
+  (maks 90%) agar UI tidak membeku di 0%; 100% dikirim saat selesai.
 - Kirim `onProgress(percent)` (dedupe jika persen sama).
 - Resolve saat kode keluar 0; reject dengan cuplikan stderr bila gagal.
 
@@ -77,16 +84,28 @@ dipakai untuk menghitung persentase kemajuan dan bitrate kompresor WhatsApp.
 ke folder `[CLEANED] - YYYY-MM-DD`, nama file dipertahankan (ekstensi `.mp4`).
 Setiap preset menghasilkan `outputPath = <outputFolder>/<nama-asli>.mp4`.
 
+**Anti-timpa hasil**: jika nama output sudah ada di folder (mis. diproses ulang
+hari yang sama), engine otomatis menambahkan akhiran `(n)` — hasil lama tidak
+pernah ditimpa, berkas asli dan hasil sebelumnya tetap aman.
+
 Semua preset memakai `-map_metadata -1` (hapus metadata) dan
 `-movflags +faststart` (siap streaming).
 
 ### 6.1 `quick` — Bagikan Cepat (hapus metadata saja, lossless)
 
+Set utama (remux lossless):
 ```
 ffmpeg -y -i <in> -map_metadata -1 -c copy -movflags +faststart <out>
 ```
 
 Remux tanpa re-encode — sangat cepat, kualitas tidak berubah.
+
+**Fallback**: jika codec tidak dapat diremux ke `.mp4` (mis. audio PCM, ProRes,
+HEVC dengan parameter tertentu), engine otomatis mencoba ulang dengan encode
+minimal agar preset tetap berhasil (metadata tetap dihapus):
+```
+libx264 -preset veryfast -crf 23 -pix_fmt yuv420p, audio aac 128k
+```
 
 ### 6.2 `standard` — Standar Bersih & Jernih
 
@@ -132,8 +151,9 @@ libx264 -preset medium -b:v <vb>k -maxrate <vb*1.5>k -bufsize <vb*2>k
 
 ## 7. Pemotongan Lossless (`trimmer.ts`)
 
-- `parseTimeToSeconds(value)` mendukung `HH:MM:SS`, `MM:SS`, atau detik.
-- Validasi: format valid, `end > start`, berkas sumber ada.
+- `parseTimeToSeconds(value)` mendukung `HH:MM:SS`, `MM:SS`, atau detik,
+  dengan validasi rentang: menit/detik maks 59, nilai negatif ditolak.
+- Validasi: format valid, `end > start`, berkas sumber ada, payload lengkap.
 - Command:
 
 ```
@@ -143,6 +163,7 @@ ffmpeg -y -i <in> -ss <start> -to <end> -c copy -map_metadata -1 -movflags +fast
 - `-ss` setelah `-i` + `-c copy` = potong akurat tanpa re-encode (decoding ke
   titik mulai lalu salin stream).
 - Hasil: `<nama> - Potongan <start>-<end>.mp4` di folder `[CLEANED] - YYYY-MM-DD`.
+- Nama hasil dibuat unik (akhiran `(n)`) agar tidak menimpa potongan sebelumnya.
 
 ## 8. Pengunduh Universal (`downloader.ts`)
 
@@ -163,7 +184,8 @@ yt-dlp --newline --no-playlist --progress -o "<downloadDir>/%(title).80B [%(id)s
 
 - Parse baris `[download] NN%` dari stdout → event `download:progress`.
 - `--no-playlist` hanya mengambil satu video (bukan seluruh playlist).
-- Selesai (exit 0) → `success`; selain itu → `failed`.
+- Selesai (exit 0) → `success`; selain itu → `failed` dengan pesan `error`
+  (cuplikan stderr yt-dlp) yang ditampilkan di UI.
 - Output ke `~/Downloads/RS-OmniClip/Unduhan/`.
 
 ## 9. Batas Waktu & Keandalan
@@ -173,6 +195,9 @@ yt-dlp --newline --no-playlist --progress -o "<downloadDir>/%(title).80B [%(id)s
 | Unduhan ffbinaries | 90 detik |
 | Unduhan fallback GitHub / yt-dlp | 120 detik (default `downloadFile`) |
 | Eksekusi FFmpeg | tidak dibatasi (proses batch bisa lama) |
+
+Saat timeout, koneksi HTTP **dibatalkan** (`req.destroy()`) dan file parsial
+dihapus — tidak ada operasi yang menggantung di background.
 
 Semua kegagalan per-file ditangkap dan dilaporkan sebagai `failed` tanpa
 menghentikan batch (kecuali mesin itu sendiri yang gagal).

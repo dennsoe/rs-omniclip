@@ -26,6 +26,7 @@ export default function SortableFileItem({
   onToast
 }: SortableFileItemProps): React.ReactElement {
   const [isTrimming, setIsTrimming] = useState(false)
+  const [isTrimmingPending, setIsTrimmingPending] = useState(false)
   const [startTime, setStartTime] = useState('00:00:00')
   const [endTime, setEndTime] = useState('00:00:00')
 
@@ -46,10 +47,12 @@ export default function SortableFileItem({
     if (!window.api?.onTrimComplete) return
     const off = window.api.onTrimComplete((data) => {
       if (data.id !== file.id) return
+      setIsTrimmingPending(false)
       if (data.success) {
         setIsTrimming(false)
         onToast('Pemotongan selesai. Hasil tersimpan di folder [CLEANED].', 'success')
       } else {
+        // Panel tetap terbuka agar pengguna bisa memperbaiki waktu.
         onToast(data.error ?? 'Pemotongan video gagal.', 'error')
       }
     })
@@ -57,6 +60,7 @@ export default function SortableFileItem({
   }, [file.id, onToast])
 
   const handleSaveTrim = (): void => {
+    if (isTrimmingPending) return
     if (!startTime.trim() || !endTime.trim()) {
       onToast('Isi waktu mulai dan selesai terlebih dahulu.', 'error')
       return
@@ -65,8 +69,8 @@ export default function SortableFileItem({
       onToast('Fitur pemotongan hanya tersedia di aplikasi desktop.', 'error')
       return
     }
+    setIsTrimmingPending(true)
     window.api.trimVideo({ id: file.id, path: file.path, start: startTime, end: endTime })
-    setIsTrimming(false)
   }
 
   return (
@@ -109,6 +113,11 @@ export default function SortableFileItem({
                 {file.name}
               </span>
               <span className="text-xs text-slate-400 dark:text-slate-500">{formatSize(file.size)}</span>
+              {file.errorMessage && file.status === 'failed' && (
+                <span className="truncate text-xs text-rose-500 dark:text-rose-400 mt-0.5" title={file.errorMessage}>
+                  {file.errorMessage}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -120,11 +129,12 @@ export default function SortableFileItem({
                 e.stopPropagation()
                 setIsTrimming((v) => !v)
               }}
+              disabled={isTrimmingPending}
               className={`p-2 rounded-lg transition-colors cursor-pointer ${
                 isTrimming
                   ? 'text-blue-600 bg-blue-50 dark:bg-blue-500/10'
                   : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10'
-              }`}
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
               title="Potong video"
             >
               <Scissors className="w-4 h-4" />
@@ -180,9 +190,10 @@ export default function SortableFileItem({
                   e.stopPropagation()
                   handleSaveTrim()
                 }}
-                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium transition-colors"
+                disabled={isTrimmingPending}
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Simpan
+                {isTrimmingPending ? 'Memotong...' : 'Simpan'}
               </button>
             </div>
           </motion.div>

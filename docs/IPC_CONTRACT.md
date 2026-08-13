@@ -115,9 +115,10 @@ Catatan: `file` (objek `File`) tidak dikirim ke proses utama — hanya
 | `id` | string | id file (sama dengan `FileItem.id`) |
 | `percent` | number | 0–100 (dihitung dari `time=` stderr FFmpeg ÷ durasi) |
 | `status` | 'processing' \| 'success' \| 'failed' | status saat ini |
+| `error` | string? | pesan kegagalan (hanya saat `status: 'failed'`) |
 
 `success` dikirim dengan `percent: 100`; `failed` dikirim dengan `percent: 100`
-(batch tetap melanjutkan file berikutnya).
+dan `error` (jika tersedia) (batch tetap melanjutkan file berikutnya).
 
 ### 4.3 Selesai Processing (`processing:complete`)
 
@@ -131,7 +132,7 @@ Catatan: `file` (objek `File`) tidak dikirim ke proses utama — hanya
   mengirim id-nya sendiri; engine memakainya untuk event progress sehingga
   pencocokan baris antrean konsisten.
 - `download:progress` membawa `{ id, url, percent, status }` dengan status
-  `'downloading' | 'success' | 'failed'`.
+  `'downloading' | 'success' | 'failed'`, plus `error` (opsional) saat gagal.
 
 ### 4.5 Pemotongan (`trim:start` / `trim:complete`)
 

@@ -26,12 +26,13 @@ Skrip ini (headless) memverifikasi:
 3. `probe` mengembalikan durasi + resolusi yang benar.
 4. **Setiap preset** berhasil menghasilkan output yang valid:
    - `quick` (hapus metadata, lossless)
+   - `quick-fallback` (encode minimal untuk codec tak kompatibel remux)
    - `standard` (1080p + penajaman + denoise) — **memverifikasi lebar >= 1080**
    - `archive` (CRF 18)
    - `whatsapp` (kompresi target ukuran)
 5. Pemotongan lossless 1s–3s (stream copy) berhasil.
 
-Keluaran sukses: `Total: 8 PASS, 0 FAIL`.
+Keluaran sukses: `Total: 9 PASS, 0 FAIL`.
 
 ### Catatan untuk pengembang
 

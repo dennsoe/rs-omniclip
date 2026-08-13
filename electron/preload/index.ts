@@ -6,6 +6,8 @@ interface ProcessingProgressData {
   id: string
   percent: number
   status: 'processing' | 'success' | 'failed'
+  /** Pesan kegagalan opsional (hanya saat status 'failed'). */
+  error?: string
 }
 
 interface ProcessingCompleteData {
@@ -17,6 +19,8 @@ interface DownloadProgressData {
   url: string
   percent: number
   status: 'downloading' | 'success' | 'failed'
+  /** Pesan kegagalan opsional (hanya saat status 'failed'). */
+  error?: string
 }
 
 interface TrimCompleteData {

@@ -33,10 +33,16 @@ let binariesPromise: Promise<FfmpegBinaries> | null = null
 /**
  * Memastikan binary ffmpeg + ffprobe tersedia (single-flight).
  * Mengunduh otomatis via ffbinaries saat pertama kali dijalankan.
+ * Jika gagal, promise tidak di-cache sehingga percobaan berikutnya
+ * dapat mencoba lagi (tidak terkunci permanen).
  */
 export function ensureFfmpeg(onStatus?: (message: string) => void): Promise<FfmpegBinaries> {
   if (!binariesPromise) {
-    binariesPromise = doEnsureFfmpeg(onStatus)
+    binariesPromise = doEnsureFfmpeg(onStatus).catch((err) => {
+      // Jangan simpan promise yang gagal: izinkan inisialisasi ulang.
+      binariesPromise = null
+      throw err
+    })
   }
   return binariesPromise
 }
@@ -208,6 +214,14 @@ export function runFfmpeg(options: RunFfmpegOptions): Promise<void> {
         if (percent !== lastPercent) {
           lastPercent = percent
           options.onProgress(percent)
+        }
+      } else if (!options.totalDuration || options.totalDuration <= 0) {
+        // Durasi tidak diketahui: beri progres indikatif (maks 90%) agar UI
+        // tidak membeku di 0%; 100% dikirim saat proses selesai.
+        const next = Math.min(90, (lastPercent < 0 ? 0 : lastPercent) + 1)
+        if (next !== lastPercent) {
+          lastPercent = next
+          options.onProgress(next)
         }
       }
     })

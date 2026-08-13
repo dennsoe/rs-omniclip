@@ -116,6 +116,17 @@ async function main() {
     await tryPreset('quick (hapus metadata, lossless)', ffmpeg, args, ffprobe, out)
   }
 
+  // quick-fallback: encode minimal (dipakai bila codec tak bisa diremux ke mp4)
+  {
+    const out = path.join(outDir, 'quick-fallback.mp4')
+    const args = [
+      ...common,
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out
+    ]
+    await tryPreset('quick-fallback (encode minimal)', ffmpeg, args, ffprobe, out)
+  }
+
   // standard: upscale 1080p + unsharp + afftdn
   {
     const out = path.join(outDir, 'standard.mp4')

@@ -1,4 +1,5 @@
 import path from 'node:path'
+import fs from 'node:fs'
 import { ensureFfmpeg, probe, runFfmpeg, type ProbeResult } from './ffmpeg'
 import { createOutputFolderForBatch } from './paths'
 
@@ -14,6 +15,8 @@ export interface ProcessProgress {
   id: string
   percent: number
   status: 'processing' | 'success' | 'failed'
+  /** Pesan kegagalan opsional (diisi hanya saat status 'failed'). */
+  error?: string
 }
 
 /** Target ukuran file WhatsApp dalam MB (batas umum berbagi video WA). */
@@ -39,7 +42,7 @@ export async function processBatch(
   const outputFolder = createOutputFolderForBatch(files[0].path)
 
   for (const file of files) {
-    const outputPath = path.join(outputFolder, `${stripExtension(file.name)}.mp4`)
+    const outputPath = uniqueOutputPath(outputFolder, stripExtension(file.name))
     try {
       const info = await probe(file.path, ffprobe)
       const argSets = buildArgSets(preset, file.path, outputPath, info)
@@ -68,12 +71,33 @@ export async function processBatch(
       if (processed) {
         onProgress({ id: file.id, percent: 100, status: 'success' })
       }
-    } catch {
-      onProgress({ id: file.id, percent: 100, status: 'failed' })
+    } catch (err) {
+      onProgress({
+        id: file.id,
+        percent: 100,
+        status: 'failed',
+        error: err instanceof Error ? err.message : 'Gagal memproses video.'
+      })
     }
   }
 
   return outputFolder
+}
+
+/**
+ * Menghasilkan jalur output yang TIDAK menimpa berkas yang sudah ada.
+ * Jika nama sudah dipakai (mis. diproses ulang di hari yang sama), tambahkan
+ * akhiran "(n)" — menjaga prinsip non-destruktif untuk SEMUA hasil, bukan
+ * hanya berkas sumber.
+ */
+function uniqueOutputPath(outputFolder: string, baseName: string): string {
+  let candidate = path.join(outputFolder, `${baseName}.mp4`)
+  let counter = 1
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(outputFolder, `${baseName} (${counter}).mp4`)
+    counter++
+  }
+  return candidate
 }
 
 function stripExtension(name: string): string {
@@ -96,7 +120,30 @@ function buildArgSets(
   switch (preset) {
     case 'quick': {
       // Hanya menghapus metadata - remux lossless, tanpa re-encode.
-      return [[...common, '-c', 'copy', '-movflags', '+faststart', output]]
+      return [
+        [...common, '-c', 'copy', '-movflags', '+faststart', output],
+        // Fallback: jika codec tidak dapat diremux ke .mp4 (mis. audio PCM,
+        // ProRes, HEVC dengan parameter tertentu), encode ulang minimal agar
+        // preset "Bagikan Cepat" tetap berhasil. Metadata tetap dihapus.
+        [
+          ...common,
+          '-c:v',
+          'libx264',
+          '-preset',
+          'veryfast',
+          '-crf',
+          '23',
+          '-pix_fmt',
+          'yuv420p',
+          '-c:a',
+          'aac',
+          '-b:a',
+          '128k',
+          '-movflags',
+          '+faststart',
+          output
+        ]
+      ]
     }
 
     case 'standard': {

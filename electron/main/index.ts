@@ -95,11 +95,25 @@ async function initEngine(): Promise<void> {
 }
 
 async function handleProcessing(payload: { files: ProcessFileInput[]; preset: PresetType }): Promise<void> {
-  if (!payload || !Array.isArray(payload.files) || payload.files.length === 0) {
+  if (
+    !payload ||
+    !Array.isArray(payload.files) ||
+    payload.files.length === 0
+  ) {
     return
   }
+
+  // Saring file dengan jalur valid agar engine tidak menerima data cacat.
+  const validFiles = payload.files.filter(
+    (f) => f && typeof f.path === 'string' && f.path.trim() !== ''
+  )
+  if (validFiles.length === 0) {
+    emit('processing:complete', { outputFolder: '' })
+    return
+  }
+
   try {
-    const outputFolder = await processBatch(payload.files, payload.preset, (p: ProcessProgress) => {
+    const outputFolder = await processBatch(validFiles, payload.preset, (p: ProcessProgress) => {
       emit('processing:progress', p)
     })
     emit('processing:complete', { outputFolder })
@@ -110,12 +124,24 @@ async function handleProcessing(payload: { files: ProcessFileInput[]; preset: Pr
 }
 
 function handleDownload(payload: { url: string; id?: string }): void {
+  if (!payload || typeof payload.url !== 'string') {
+    return
+  }
   void startDownload(payload, (p: DownloadProgress) => {
     emit('download:progress', p)
   })
 }
 
 function handleTrim(payload: TrimPayload): void {
+  if (
+    !payload ||
+    typeof payload.id !== 'string' ||
+    typeof payload.path !== 'string' ||
+    typeof payload.start !== 'string' ||
+    typeof payload.end !== 'string'
+  ) {
+    return
+  }
   void trimVideo(payload).then((data) => emit('trim:complete', data))
 }
 

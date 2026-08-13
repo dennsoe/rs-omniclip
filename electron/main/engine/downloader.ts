@@ -9,6 +9,8 @@ export interface DownloadProgress {
   url: string
   percent: number
   status: 'downloading' | 'success' | 'failed'
+  /** Pesan kegagalan opsional (diisi hanya saat status 'failed'). */
+  error?: string
 }
 
 /** URL rilis resmi yt-dlp untuk macOS (universal binary). */
@@ -19,10 +21,17 @@ let ytdlpPromise: Promise<string | null> | null = null
 /**
  * Memastikan binary yt-dlp tersedia (single-flight).
  * Prioritas: folder binary lokal -> perintah sistem -> unduh dari GitHub.
+ * Hasil gagal (null) tidak di-cache agar unduhan dapat dicoba ulang.
  */
 export function ensureYtdlp(onStatus?: (message: string) => void): Promise<string | null> {
   if (!ytdlpPromise) {
-    ytdlpPromise = doEnsureYtdlp(onStatus)
+    ytdlpPromise = doEnsureYtdlp(onStatus).then((binPath) => {
+      // Jangan simpan hasil gagal (null): izinkan unduhan ulang nanti.
+      if (!binPath) {
+        ytdlpPromise = null
+      }
+      return binPath
+    })
   }
   return ytdlpPromise
 }
@@ -62,18 +71,24 @@ export async function startDownload(
   payload: { url: string; id?: string },
   onProgress: (p: DownloadProgress) => void
 ): Promise<void> {
-  const url = (payload.url ?? '').trim()
-  const id = payload.id ?? generateId()
+  const url = payload && typeof payload.url === 'string' ? payload.url.trim() : ''
+  const id = payload?.id ?? generateId()
 
   if (!url) {
-    onProgress({ id, url, percent: 0, status: 'failed' })
+    onProgress({ id, url, percent: 0, status: 'failed', error: 'URL tidak valid.' })
     return
   }
 
   try {
     const ytdlp = await ensureYtdlp()
     if (!ytdlp) {
-      onProgress({ id, url, percent: 0, status: 'failed' })
+      onProgress({
+        id,
+        url,
+        percent: 0,
+        status: 'failed',
+        error: 'yt-dlp tidak tersedia. Periksa koneksi internet lalu coba lagi.'
+      })
       return
     }
 
@@ -91,24 +106,42 @@ export async function startDownload(
       }
     })
 
-    proc.stderr.on('data', () => {
-      // Pesan error/diagnostik yt-dlp, tidak ditampilkan langsung.
+    let stderrTail = ''
+    proc.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString()
+      if (stderrTail.length < 4000) stderrTail += text
     })
 
     proc.on('error', () => {
-      onProgress({ id, url, percent: 0, status: 'failed' })
+      onProgress({ id, url, percent: 0, status: 'failed', error: 'Gagal menjalankan yt-dlp.' })
     })
 
     proc.on('close', (code) => {
       if (code === 0) {
         onProgress({ id, url, percent: 100, status: 'success' })
       } else {
-        onProgress({ id, url, percent: 0, status: 'failed' })
+        onProgress({ id, url, percent: 0, status: 'failed', error: lastLines(stderrTail) })
       }
     })
-  } catch {
-    onProgress({ id, url, percent: 0, status: 'failed' })
+  } catch (err) {
+    onProgress({
+      id,
+      url,
+      percent: 0,
+      status: 'failed',
+      error: err instanceof Error ? err.message : 'Unduhan gagal.'
+    })
   }
+}
+
+/** Mengambil beberapa baris terakhir dari teks untuk pesan error yang ringkas. */
+function lastLines(text: string, count = 3): string {
+  const lines = text
+    .trim()
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  return lines.slice(-count).join(' ') || 'Unduhan gagal.'
 }
 
 function extractPercent(line: string): number | null {
