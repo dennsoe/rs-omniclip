@@ -63,6 +63,11 @@ Konfigurasi packaging ada di field `build` pada `package.json`:
 - Output: folder `dist/`
 - `publish`: `{ provider: "github", owner: "dennsoe", repo: "rs-omniclip" }`
   (untuk `electron-builder --publish` mengunggah ke GitHub Release)
+- `afterSign`: `scripts/afterSign.js` — menandatangani ulang bundle secara
+  **adhoc** (urutan dalam-ke-luar: dylib → framework → helper .app → app)
+  agar signature valid. Mencegah bug macOS 26+
+  "internal error in Code Signing subsystem" / "-10810" pada app Electron
+  yang tidak di-sign.
 
 ### Catatan rilis
 
@@ -70,6 +75,19 @@ Konfigurasi packaging ada di field `build` pada `package.json`:
   (`cscLink` / `notarize` di electron-builder). Lihat Roadmap Fase 4.
 - Binary FFmpeg/yt-dlp TIDAK dibundel ke dalam `.app`; diunduh otomatis ke
   userData saat pertama kali aplikasi dijalankan.
+
+### Gatekeeper (macOS) — panduan pengguna
+
+Aplikasi TIDAK ditandatangani Developer ID (gratis). Saat pertama diunduh
+via browser, macOS menambah atribut *quarantine* dan bisa memblokir. Solusi:
+
+1. Klik kanan `RS OmniClip.app` → **Open** → **Open** (sekali saja).
+2. Atau `xattr -cr "/Applications/RS OmniClip.app"` lalu buka kembali.
+
+Signing yang sudah benar (setelah `scripts/afterSign.js`) memastikan error
+"damaged"/"internal error" tidak muncul lagi — cukup workaround quarantine
+standar di atas. Distribusi mulus penuh butuh Developer ID + notarisasi
+(berbayar).
 
 ## 5b. Rilis Otomatis (GitHub Actions — gratis)
 
@@ -130,3 +148,5 @@ rm -rf ~/Library/"Application Support"/rs-omniclip
 | Unduhan video gagal | yt-dlp belum siap / URL tidak didukung | Cek internet; pastikan URL valid |
 | Port 5173 terpakai | Proses dev lain | Hentikan proses lain lalu `npm run dev` |
 | Error editor di `electron.vite.config.ts` | tsserver belum pakai TS workspace | Pastikan `.vscode/settings.json` ada (`typescript.tsdk`) lalu reload window |
+| "RS OmniClip is damaged and can't be opened" | App diunduh browser (quarantine) | `xattr -cr "/Applications/RS OmniClip.app"` atau klik kanan → Open |
+| `spctl`/launch error "internal error in Code Signing subsystem" | Signature adhoc tidak konsisten | Build ulang (afterSign) atau sign ulang adhoc seluruh bundle |
