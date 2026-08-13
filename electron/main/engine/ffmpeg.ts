@@ -31,6 +31,11 @@ export interface RunFfmpegOptions {
 
 let binariesPromise: Promise<FfmpegBinaries> | null = null
 
+/** Mereset cache promise agar panggilan berikutnya memprovisoning ulang. */
+export function resetFfmpegCache(): void {
+  binariesPromise = null
+}
+
 /**
  * Memastikan binary ffmpeg + ffprobe tersedia (single-flight).
  * Mengunduh otomatis via ffbinaries saat pertama kali dijalankan.

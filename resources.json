@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "note": "Manifest resource RS OmniClip. App membandingkan versi terpasang (bin/versions.json di userData) dengan daftar ini. Untuk versi 'latest', diharapkan = rilis terbaru proyek terkait (yt-dlp).",
+  "resources": [
+    {
+      "id": "ffmpeg",
+      "label": "FFmpeg",
+      "version": "6.1"
+    },
+    {
+      "id": "yt-dlp",
+      "label": "yt-dlp",
+      "version": "latest"
+    }
+  ]
+}

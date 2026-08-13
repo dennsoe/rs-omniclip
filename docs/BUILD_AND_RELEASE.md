@@ -61,6 +61,8 @@ Konfigurasi packaging ada di field `build` pada `package.json`:
 - Target: `dmg` + `zip`
 - `artifactName`: `RS-OmniClip-<version>-<arch>.<ext>`
 - Output: folder `dist/`
+- `publish`: `{ provider: "github", owner: "dennsoe", repo: "rs-omniclip" }`
+  (untuk `electron-builder --publish` mengunggah ke GitHub Release)
 
 ### Catatan rilis
 
@@ -68,6 +70,40 @@ Konfigurasi packaging ada di field `build` pada `package.json`:
   (`cscLink` / `notarize` di electron-builder). Lihat Roadmap Fase 4.
 - Binary FFmpeg/yt-dlp TIDAK dibundel ke dalam `.app`; diunduh otomatis ke
   userData saat pertama kali aplikasi dijalankan.
+
+## 5b. Rilis Otomatis (GitHub Actions — gratis)
+
+Repositori berisi `.github/workflows/release.yml` yang otomatis membangun &
+mengunggah rilis macOS ketika tag `v*` di-push:
+
+```bash
+npm version 1.1.0 --no-git-tag-version   # (opsional) naikkan versi
+npm run typecheck && npm run lint && npm run build   # verifikasi lokal
+git add -A && git commit -m "chore: rilis v1.1.0"
+git push origin main
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+Workflow (`release.yml`) menjalankan: `npm ci` → `npm run typecheck` →
+`npm run build` → `npx electron-builder --mac --publish always`, lalu
+mengunggah `dmg` + `zip` + `latest-mac.yml` ke GitHub Release (memakai
+`GITHUB_TOKEN` bawaan; `CSC_IDENTITY_AUTO_DISCOVERY=false` untuk melewati
+signing karena aplikasi gratis tanpa Developer ID).
+
+**Syarat**: repositori harus **public** agar aplikasi terpasang bisa memeriksa
+rilis terbaru via API GitHub tanpa token.
+
+## 5c. Mekanisme Pembaruan Aplikasi (Gratis)
+
+- Versi lokal dibaca dari `app.getVersion()` (package.json, saat ini **1.1.0**).
+- Aplikasi memeriksa `releases/latest` GitHub → bila lebih baru tampil badge
+  "Update tersedia" + tombol "Unduh Versi Baru" (membuka halaman rilis;
+  user mengunduh & membuka dmg/zip sendiri — strategi macOS manual, gratis).
+- Update resource (FFmpeg/yt-dlp) via `resources.json` di repo; halaman
+  "Tentang & Update" menampilkan status dan tombol "Perbarui Resource".
+- Modul: `electron/main/engine/updater.ts`; channel IPC: `update:check`,
+  `update:open`, `resource:check`, `resource:update`, event `resource:status`.
 
 ## 6. Lokasi Data Runtime
 

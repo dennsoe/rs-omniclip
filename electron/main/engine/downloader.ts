@@ -24,6 +24,11 @@ let ytdlpPromise: Promise<string | null> | null = null
  * Prioritas: folder binary lokal -> perintah sistem -> unduh dari GitHub.
  * Hasil gagal (null) tidak di-cache agar unduhan dapat dicoba ulang.
  */
+/** Mereset cache promise agar panggilan berikutnya memprovisioning ulang. */
+export function resetYtdlpCache(): void {
+  ytdlpPromise = null
+}
+
 export function ensureYtdlp(onStatus?: (message: string) => void): Promise<string | null> {
   if (!ytdlpPromise) {
     ytdlpPromise = doEnsureYtdlp(onStatus)

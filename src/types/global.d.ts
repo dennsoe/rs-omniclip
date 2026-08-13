@@ -1,4 +1,4 @@
-import type { FileItem, PresetType, ScrapeItem } from '@lib/types'
+import type { FileItem, PresetType, ScrapeItem, UpdateInfo, ResourceInfo } from '@lib/types'
 
 /**
  * Kontrak jembatan IPC (window.api) antara renderer React dan backend Node.js.
@@ -51,6 +51,13 @@ declare global {
       onTrimComplete: (
         cb: (data: { id: string; success: boolean; path?: string; error?: string }) => void
       ) => () => void
+
+      // --- Pembaruan aplikasi & resource (gratis, repo publik) ---
+      checkForUpdate: () => Promise<UpdateInfo>
+      openUpdatePage: (url: string) => Promise<boolean>
+      checkResources: () => Promise<ResourceInfo[]>
+      updateResources: (force?: boolean) => Promise<ResourceInfo[]>
+      onResourceStatus: (cb: (message: string) => void) => () => void
     }
   }
 }

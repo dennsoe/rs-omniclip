@@ -33,3 +33,26 @@ export interface ScrapeItem {
   /** URL langsung video (siap diunduh). */
   url: string
 }
+
+/** Info versi aplikasi (lokal vs rilis terbaru dari GitHub). */
+export interface UpdateInfo {
+  /** Versi lokal dari package.json. */
+  current: string
+  /** Versi rilis terbaru; null bila tidak dapat diambil. */
+  latest: string | null
+  /** true bila tersedia versi baru yang lebih tinggi. */
+  hasUpdate: boolean
+  /** URL halaman rilis GitHub untuk unduhan manual. */
+  url: string | null
+  /** Catatan rilis / changelog (markdown). */
+  notes: string | null
+}
+
+/** Status satu resource engine (ffmpeg / yt-dlp). */
+export interface ResourceInfo {
+  id: string
+  label: string
+  current: string | null
+  expected: string | null
+  outdated: boolean
+}
