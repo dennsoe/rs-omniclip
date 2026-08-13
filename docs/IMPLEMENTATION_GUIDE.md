@@ -69,10 +69,12 @@ Semua komunikasi renderer↔main lewat `window.api` (contextBridge). Channel yan
 ### 5.2 SELESAI — Perombakan fitur & UI (2026-08-13, commit `9450177` → PR #1 merged `fe530b5`)
 1. **Preset diperjelas** — `metadata` (hapus metadata, remux lossless + fallback
    encode), `hd` (720p), `fullhd` (1080p), `uhd` (4K), `archive` (CRF 18),
-   `whatsapp` (target 16 MB). Default `fullhd`. Sinkron: `src/lib/types.ts`,
-   `src/App.tsx`, `electron/main/engine/processor.ts` (`buildEnhance` +
-   `default: throw`), `scripts/engine-smoke-test.mjs`, `docs/ENGINE_SPEC.md`,
-   `docs/PRD.md`.
+   `whatsapp` (target 16 MB). Default `fullhd`. Ditampilkan di **halaman Pembersih
+   Video** (komponen `src/components/PresetSelector.tsx`), bukan sidebar —
+   pilihan aktif selalu terlihat. Sinkron: `src/lib/types.ts`, `src/App.tsx`,
+   `src/components/PresetSelector.tsx`, `electron/main/engine/processor.ts`
+   (`buildEnhance` + `default: throw`), `scripts/engine-smoke-test.mjs`,
+   `docs/ENGINE_SPEC.md`, `docs/PRD.md`.
 2. **Bug klik dialog file** — dropzone `noClick: activeMenu === 'downloader' ||
    files.length > 0`, `noDrag: activeMenu === 'downloader'`.
 3. **System Monitor data nyata** — emitter `system:stats` di main (`os.cpus`

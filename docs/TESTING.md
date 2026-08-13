@@ -92,6 +92,8 @@ Dan pastikan panel Problems di VS Code tidak menunjukkan error
 
 ### 4.6 Perombakan UX (dropzone, preset, monitor, responsivitas)
 - [ ] Klik preset / tombol lain di halaman mana pun TIDAK membuka dialog file.
+- [ ] Preset tampil di halaman Pembersih Video (bukan sidebar), tetap terlihat
+  saat antrean kosong & terisi.
 - [ ] Pilih tiap preset baru (metadata/hd/fullhd/uhd/archive/whatsapp) → proses.
 - [ ] Monitor sidebar menampilkan CPU/RAM yang berubah-ubah (bukan statis).
 - [ ] Resize jendela ke 720x560 → layout tidak rusak; sidebar mobile jadi drawer.

@@ -49,9 +49,10 @@ data yang dikirim ke server.
 - **RF-1** Pengguna dapat menambah satu atau banyak video `.mp4` / `.mov`
   (drag-and-drop atau pemilih file).
 - **RF-2** Pengguna dapat mengurutkan antrean dengan drag-and-drop.
-- **RF-3** Pengguna dapat memilih salah satu prasetel: Hapus Metadata (`metadata`),
-  HD 720p (`hd`), Full HD 1080p (`fullhd`), UHD 4K (`uhd`),
-  Arsip Kualitas Maks (`archive`), Kompresi WhatsApp (`whatsapp`).
+- **RF-3** Pengguna dapat memilih salah satu prasetel dari halaman Pembersih
+  Video (bukan sidebar): Hapus Metadata (`metadata`), HD 720p (`hd`),
+  Full HD 1080p (`fullhd`), UHD 4K (`uhd`), Arsip Kualitas Maks (`archive`),
+  Kompresi WhatsApp (`whatsapp`).
 - **RF-4** (dihapus) Kontrol mati (subtitle/watermark) tidak lagi ada di sidebar;
   keduanya dipindah ke roadmap (lihat `IMPLEMENTATION_ROADMAP.md`).
 - **RF-5** Pengguna dapat memfilter antrean: Semua / Menunggu / Selesai / Gagal.
