@@ -1,0 +1,6 @@
+{
+  "name": "Video Auto-Cleaner & Enhancer",
+  "description": "Video metadata cleaner and enhancer built according to project docs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

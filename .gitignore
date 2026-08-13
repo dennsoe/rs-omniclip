@@ -1,0 +1,17 @@
+# Node
+node_modules/
+out/
+dist/
+
+# Binary placeholder proyek (engine mengunduh binary ke folder userData)
+bin/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Env
+.env*
+!.env.example
