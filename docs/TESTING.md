@@ -89,13 +89,15 @@ Dan pastikan panel Problems di VS Code tidak menunjukkan error
 - [ ] Semua teks Bahasa Indonesia, tanpa emoji.
 - [ ] Toggle Mode Gelap/Terang.
 - [ ] Sidebar (mobile) & layout tidak rusak.
+- [ ] Traffic light macOS (minimize/max/close) tidak tertutup konten sidebar/brand;
+  tombol menu mobile berada di kanan traffic light.
 
 ### 4.6 Perombakan UX (dropzone, preset, monitor, responsivitas)
 - [ ] Klik preset / tombol lain di halaman mana pun TIDAK membuka dialog file.
 - [ ] Preset tampil di halaman Pembersih Video (bukan sidebar), tetap terlihat
   saat antrean kosong & terisi.
 - [ ] Pilih tiap preset baru (metadata/hd/fullhd/uhd/archive/whatsapp) → proses.
-- [ ] Monitor sidebar menampilkan CPU/RAM yang berubah-ubah (bukan statis).
+- [ ] Monitor sidebar menampilkan pemakaian CPU/RAM APLIKASI ini (bukan seluruh sistem), berubah realtime.
 - [ ] Resize jendela ke 720x560 → layout tidak rusak; sidebar mobile jadi drawer.
 - [ ] Tidak ada kontrol mati (subtitle/watermark) di sidebar.
 

@@ -29,7 +29,7 @@ Legenda status: `[x]` selesai, `[ ]` belum.
   bergantung pada ffbinaries.com.
 - [x] Timeout pada semua unduhan binary.
 - [x] Fallback preset `hd`/`fullhd`/`uhd` tanpa filter audio.
-- [x] Monitor System nyata (CPU/RAM via `os.cpus` delta di proses utama,
+- [x] Monitor System pemakaian aplikasi (CPU/RAM via `app.getAppMetrics()`,
   channel `system:stats`) — menggantikan simulasi.
 - [ ] Multi-inti / antrean paralel (opsional, saat ini berurutan).
 - [ ] Resume batch dari file yang gagal (tombol "Proses ulang yang gagal").

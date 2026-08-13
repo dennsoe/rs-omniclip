@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import { execFile, spawn } from 'node:child_process'
 import { getEngineBinDir } from './paths'
 import { downloadFile } from './net'
+import { trackProcess, untrackProcess } from './procmon'
 
 export interface FfmpegBinaries {
   ffmpeg: string
@@ -200,6 +201,8 @@ export function probe(filePath: string, ffprobePath: string): Promise<ProbeResul
 export function runFfmpeg(options: RunFfmpegOptions): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn(options.ffmpegPath, options.args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    // Lacak PID agar System Monitor menyertakan beban CPU/RAM FFmpeg.
+    trackProcess(proc.pid ?? 0)
     let stderr = ''
     let lastPercent = -1
 
@@ -227,10 +230,12 @@ export function runFfmpeg(options: RunFfmpegOptions): Promise<void> {
     })
 
     proc.on('error', (err) => {
+      untrackProcess(proc.pid ?? 0)
       reject(new Error(`Gagal menjalankan ffmpeg: ${err.message}`))
     })
 
     proc.on('close', (code) => {
+      untrackProcess(proc.pid ?? 0)
       if (code === 0) {
         options.onProgress?.(100)
         resolve()

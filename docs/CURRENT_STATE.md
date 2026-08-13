@@ -30,7 +30,7 @@ Aplikasi berfungsi end-to-end dan telah di-push ke GitHub.
 | Kompresor WhatsApp (`whatsapp`) | Selesai & terverifikasi |
 | Pengunduh Universal (yt-dlp) | Selesai (provisioning + progress) |
 | Pemotong Inline (lossless) | Selesai & terverifikasi |
-| Monitor System (CPU/RAM) | Selesai — data nyata dari proses utama (`system:stats`) |
+| Monitor System (CPU/RAM) | Selesai — pemakaian aplikasi nyata & realtime (`system:stats`, via `procmon` + `ps`, termasuk FFmpeg/yt-dlp) |
 | Watermark teks (`drawtext`) | DIHAPUS — build FFmpeg evermeet TIDAK punya filter `drawtext` |
 | Subtitle Otomatis (AI) | Diarsipkan ke roadmap (belum dikerjakan) |
 
@@ -67,11 +67,16 @@ Detail lengkap: `docs/ENGINE_SPEC.md` dan `docs/IPC_CONTRACT.md`.
 - **Preset dipindah ke halaman Pembersih Video** — kartu prasetel kini tampil di
   area utama (komponen `src/components/PresetSelector.tsx`), bukan di sidebar;
   pilihan aktif selalu terlihat (antrean kosong maupun terisi).
+- **Sidebar di-redesain premium** — brand header (emblem gradien + subtitle),
+  label "Menu", item navigasi dengan chip ikon + deskripsi (aktif = gradien biru
+  + indikator). Padding atas `pt-12` + tombol menu mobile `left-20` agar tidak
+  menabrak tombol minimize/max/close (traffic light macOS).
 - **Bug klik membuka dialog file** (dropzone menangkap semua klik di halaman
   download/prasetel) diperbaiki dengan `noClick`/`noDrag` bersyarat.
 - **Pengaturan tambahan yang tidak berfungsi** dihapus dari sidebar; Monitor
-  System kini menampilkan **CPU/RAM nyata** dari proses utama (`system:stats`),
-  bukan simulasi.
+  System kini menampilkan **pemakaian CPU/RAM aplikasi ini** secara nyata &
+  realtime (`procmon` + `ps`, termasuk proses pekerja FFmpeg/yt-dlp), bukan
+  seluruh sistem.
 - **Watermark dihapus** — build FFmpeg terpasang (evermeet 6.1) tidak
   mendukung filter `drawtext` (diverifikasi: "No such filter: 'drawtext'").
 - **Responsivitas super**: `h-dvh`, sidebar scroll, `min-w-0`, ukuran responsif;
