@@ -157,6 +157,25 @@ RS OmniClip memakai mekanisme pembaruan **tanpa biaya** (repo publik + GitHub):
   (`.github/workflows/release.yml`) → `electron-builder --mac --publish always`
   mengunggah dmg + zip + `latest-mac.yml` ke GitHub Release.
 
+## Troubleshooting macOS (Gatekeeper)
+
+Aplikasi **tidak ditandatangani Developer ID** (gratis, tanpa akun developer
+berbayar). Build otomatis menandatangani ulang bundle secara adhoc
+(`scripts/afterSign.js`) sehingga signature valid. Namun saat pertama kali
+diunduh dari browser, macOS menambahkan atribut *quarantine* dan bisa
+memblokir. Jika muncul pesan seperti *"is damaged and can't be opened"* atau
+*"unidentified developer"*, lakukan salah satu:
+
+1. **Klik kanan** pada `RS OmniClip.app` → **Open** → pilih **Open** (sekali).
+2. Atau hapus atribut quarantine di Terminal:
+   ```bash
+   xattr -cr "/Applications/RS OmniClip.app"
+   ```
+   lalu buka aplikasi seperti biasa.
+
+> Distribusi sepenuhnya mulus (tanpa langkah di atas) membutuhkan Developer ID
+> + notarisasi Apple (berbayar ~$99/tahun).
+
 ## Catatan Keluaran
 
 - Hasil batch: `[CLEANED] - YYYY-MM-DD/` di folder berkas sumber pertama.

@@ -12,6 +12,25 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-13**.
   - Dibuat manual (CI terkunci billing — lihat "Hal yang Belum Dikerjakan").
   - API `releases/latest` mengembalikan `v1.1.0` (tombol "Periksa Update" di
     aplikasi kini berfungsi; saat versi aplikasi sudah sama → status terbaru).
+  - **Artefak di-re-upload (2026-08-13)** dengan app yang di-sign ulang adhoc
+    menyeluruh (`scripts/afterSign.js`) — memperbaiki bug Gatekeeper macOS
+    "internal error in Code Signing subsystem" / "-10810" (lihat seksi
+    "Perbaikan Gatekeeper macOS" di bawah).
+
+## Perbaikan Gatekeeper macOS (2026-08-13)
+
+- Gejala: app hasil download menampilkan "RS OmniClip is damaged and can't be
+  opened". Akar: (1) atribut `com.apple.quarantine` dari unduhan browser +
+  app tidak Developer-ID signed; (2) build tanpa signing membuat binary
+  Electron Framework `linker-signed` + bundle tidak ter-seal → `spctl` =
+  "internal error in Code Signing subsystem" → launch `-10810`.
+- Fix di build: `scripts/afterSign.js` (hook electron-builder) menandatangani
+  ulang SELURUH bundle secara adhoc dengan urutan dalam-ke-luar (dylib →
+  framework → helper .app → app) + verifikasi. `codesign --deep` TIDAK cukup
+  (tidak rekursif penuh).
+- Fix pengguna: `xattr -cr "/Applications/RS OmniClip.app"` atau klik kanan →
+  Open. Terverifikasi: app hasil build berjalan; app dalam DMG baru lolos
+  `codesign --verify --deep --strict` (exit 0).
 
 ## Ringkasan
 
@@ -241,7 +260,8 @@ setelah konfirmasi, modal "Hapus Semua?" dan panel antrean tetap menumpuk.
 - **Auto-update in-app (electron-updater)**: belum dipasang. Strategi saat ini
   adalah unduh manual via halaman rilis (gratis). Bila ingin instalasi otomatis
   di masa depan, butuh Developer ID + notarisasi (berbayar ~$99/thn).
-- Signing/notarisasi (untuk menghindari peringatan Gatekeeper saat membuka dmg).
+- Developer ID + notarisasi Apple (berbayar ~$99/thn) untuk distribusi mulus
+  tanpa langkah `xattr -cr` / klik kanan → Open.
 - **CI GitHub Actions tidak berjalan** (2026-08-13): akun GitHub terkunci
   billing ("account is locked due to a billing issue" — runner macOS berbayar).
   Release `v1.1.0` dibuat MANUAL (build lokal `electron-builder --mac` →
