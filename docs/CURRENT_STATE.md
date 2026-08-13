@@ -3,6 +3,20 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-13**.
 
+## Status Rilis v1.2.0 (2026-08-13) — MULTI-OS
+
+- **Release `v1.2.0` LIVE** (macOS + Windows):
+  https://github.com/dennsoe/rs-omniclip/releases/tag/v1.2.0
+  - macOS: `RS-OmniClip-1.2.0-arm64.dmg` (94 MB) + `.zip` (91 MB).
+  - Windows: `RS-OmniClip-1.2.0-x64-setup.exe` (NSIS installer, 79 MB) +
+    `RS-OmniClip-1.2.0-x64-portable.exe` (portable, 79 MB) + `latest.yml`.
+  - API `releases/latest` kini mengembalikan `v1.2.0` → tombol "Periksa Update"
+    di aplikasi menunjukkan update tersedia dari v1.1.0.
+  - Dibuat manual lokal (CI terkunci billing): build macOS + Windows dari mesin
+    dev (wine terpasang), lalu `gh release create` + unggah artefak.
+- **PR #9 merged** `df1e5dc` (dukungan multi-OS Windows) & **PR #10 merged**
+  `4406dfa` (fix build Windows: afterSign target-guard + `--x64` + nama artefak).
+
 ## Status Rilis (2026-08-13)
 
 - Repo **PUBLIC**: `https://github.com/dennsoe/rs-omniclip`.
@@ -52,12 +66,10 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-13**.
   - `ffmpeg.ts`: fallback arsip `win-64` (+ ekstensi `.exe`) di Windows;
     jalur utama ffbinaries sudah lintas-OS.
   - `paths.ts`/`net.ts`: sudah memakai API lintas-OS (`app.getPath`, `https`).
-- **Windows artifact BERHASIL diproduksi lokal (2026-08-13, wine terpasang)**:
-  `npm run build:win` (`--x64`) → `dist/RS-OmniClip-1.1.0-x64-setup.exe`
-  (NSIS installer) + `dist/RS-OmniClip-1.1.0-x64-portable.exe` (portable) +
-  `latest.yml` (manifest auto-update Windows). Tervalidasi `file`: PE32
-  Nullsoft Installer. Rilis GitHub v1.1.0 masih hanya macOS — artefak Windows
-  siap diunggah ke rilis berikutnya.
+- **Windows artifact DIPRODUKSI & DIUNGGAH (2026-08-13)**: `npm run build:win`
+  (`--x64`) → `dist/RS-OmniClip-1.2.0-x64-setup.exe` (NSIS) +
+  `...-portable.exe` (portable) + `latest.yml`. Tervalidasi `file`: PE32
+  Nullsoft Installer. Sudah diunggah ke release **v1.2.0**.
 
 ## Ringkasan
 
@@ -294,10 +306,9 @@ setelah konfirmasi, modal "Hapus Semua?" dan panel antrean tetap menumpuk.
   Release `v1.1.0` dibuat MANUAL (build lokal `electron-builder --mac` →
   `gh release create`). Workflow `.github/workflows/release.yml` (job mac +
   windows) tetap tersedia dan akan aktif otomatis bila billing dibereskan.
-- **Artefak Windows sudah diproduksi lokal** (wine terpasang 2026-08-13,
-  `npm run build:win --x64` → setup + portable .exe, tervalidasi PE32), tapi
-  **belum diunggah ke GitHub Release** v1.1.0 (rilis saat ini hanya macOS);
-  upload bisa dilakukan ke rilis baru.
+- **Artefak Windows sudah diproduksi & DIUNGGAH ke release v1.2.0** (wine
+  terpasang 2026-08-13, `npm run build:win --x64` → setup + portable .exe,
+  tervalidasi PE32). Rilis v1.1.0 tetap hanya macOS (historis).
 - **Belum diuji di Windows asli**: engine Windows (procmon/downloader/ffmpeg)
   perlu smoke test di mesin/VM Windows sebelum rilis resmi Windows.
 - Pengujian di Intel Mac.

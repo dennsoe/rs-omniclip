@@ -1,6 +1,6 @@
 {
   "name": "rs-omniclip",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "RS OmniClip - Super App desktop untuk pemrosesan massal video pendek: pembersih metadata, peningkat video, pengunduh universal, pemotong, watermark, dan kompresor WhatsApp.",
   "main": "./out/main/index.js",
   "author": "RS STUDIO",
