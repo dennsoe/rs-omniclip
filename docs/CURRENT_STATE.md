@@ -64,6 +64,9 @@ Detail lengkap: `docs/ENGINE_SPEC.md` dan `docs/IPC_CONTRACT.md`.
 
 - **Preset diperjelas** → `metadata`, `hd` (720p), `fullhd` (1080p), `uhd` (4K),
   `archive`, `whatsapp`. Default `fullhd`. Semua terverifikasi via smoke test 11/11.
+- **Preset dipindah ke halaman Pembersih Video** — kartu prasetel kini tampil di
+  area utama (komponen `src/components/PresetSelector.tsx`), bukan di sidebar;
+  pilihan aktif selalu terlihat (antrean kosong maupun terisi).
 - **Bug klik membuka dialog file** (dropzone menangkap semua klik di halaman
   download/prasetel) diperbaiki dengan `noClick`/`noDrag` bersyarat.
 - **Pengaturan tambahan yang tidak berfungsi** dihapus dari sidebar; Monitor

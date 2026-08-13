@@ -19,7 +19,8 @@ import {
   Link as LinkIcon,
   MessageCircle,
   XCircle,
-  FolderOpen
+  FolderOpen,
+  type LucideIcon
 } from 'lucide-react'
 import {
   DndContext,
@@ -43,6 +44,7 @@ import ConfirmModal, { type ConfirmAction } from '@components/ConfirmModal'
 import PreviewModal from '@components/PreviewModal'
 import SystemMonitor from '@components/SystemMonitor'
 import SortableFileItem from '@components/SortableFileItem'
+import PresetSelector from '@components/PresetSelector'
 
 interface DownloadItem {
   id: string
@@ -364,7 +366,7 @@ export default function App(): React.ReactElement {
     id: PresetType
     title: string
     desc: string
-    icon: typeof Monitor
+    icon: LucideIcon
   }> = [
     { id: 'metadata', title: 'Hapus Metadata', desc: 'Bersihkan metadata/GPS, kualitas asli.', icon: Eraser },
     { id: 'hd', title: 'HD 720p', desc: 'Tingkatkan ke HD 720p + penajaman + audio.', icon: MonitorUp },
@@ -447,43 +449,6 @@ export default function App(): React.ReactElement {
               Pengunduh Video
             </button>
           </div>
-
-          {activeMenu === 'cleaner' && (
-            <>
-              <div className="px-6 pb-2">
-                <h1 className="text-xs font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
-                  PRASETEL
-                </h1>
-              </div>
-              <div className="p-4 pt-0 space-y-2">
-                {presetsList.map((p) => {
-                  const Icon = p.icon
-                  const isActive = preset === p.id
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => !isProcessing && setPreset(p.id)}
-                      disabled={isProcessing}
-                      className={`w-full text-left flex items-center gap-3 p-3 rounded-xl transition-all ${
-                        isActive
-                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50'
-                      } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />
-                      <div className="flex flex-col overflow-hidden">
-                        <span className="font-semibold text-sm truncate">{p.title}</span>
-                        <span className={`text-xs truncate ${isActive ? 'text-blue-100' : 'text-slate-400 dark:text-slate-500'}`}>
-                          {p.desc}
-                        </span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-
-            </>
-          )}
 
           <div className="mt-auto flex flex-col">
             <SystemMonitor />
@@ -571,93 +536,114 @@ export default function App(): React.ReactElement {
 
           {activeMenu === 'cleaner' ? (
             <>
-              <AnimatePresence mode="popLayout">
-                {/* 3. EMPTY STATE */}
-                {files.length === 0 ? (
-                  <motion.div
-                    key="empty"
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.3 }}
-                    className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
-                  >
-                    <div className="p-6 bg-blue-50 dark:bg-slate-800/50 text-blue-500 rounded-full mb-6 transition-colors">
-                      <UploadCloud className="w-12 h-12" />
-                    </div>
-                    <h2 className="text-xl sm:text-2xl font-semibold text-slate-800 dark:text-slate-100 transition-colors text-center px-4">
-                      Tarik &amp; Lepas Video ke RS OmniClip
-                    </h2>
-                    <p className="text-slate-500 dark:text-slate-400 mt-2 transition-colors">
-                      Atau klik untuk menelusuri file .mp4, .mov
-                    </p>
-                  </motion.div>
-                ) : (
-                  /* 4. QUEUE LIST */
-                  <motion.div
-                    key="queue"
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 20 }}
-                    transition={{ type: 'spring', bounce: 0.1, duration: 0.5 }}
-                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl m-4 mt-16 md:m-8 overflow-hidden flex flex-col min-h-0 max-h-[calc(100dvh-150px)] relative z-10 transition-colors"
-                  >
-                    {/* Filter Header */}
-                    <div className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 p-3 flex flex-col sm:flex-row gap-3 sm:gap-0 justify-between sm:items-center transition-colors">
-                      <span className="text-sm font-medium text-slate-500 dark:text-slate-400 pl-2">Antrean Video</span>
-                      <div className="flex bg-slate-200/50 dark:bg-slate-900 p-1 rounded-lg gap-1 transition-colors overflow-x-auto no-scrollbar">
-                        {[
-                          { id: 'all', label: 'Semua' },
-                          { id: 'pending', label: 'Menunggu' },
-                          { id: 'success', label: 'Selesai' },
-                          { id: 'failed', label: 'Gagal' }
-                        ].map((f) => (
-                          <button
-                            key={f.id}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setFilter(f.id as 'all' | 'pending' | 'success' | 'failed')
-                            }}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                              filter === f.id
-                                ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
-                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800'
-                            }`}
-                          >
-                            {f.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+              {/* 3. PRASETEL — berada di halaman Pembersih Video (bukan sidebar) */}
+              <div className="relative z-10 pt-16 md:pt-8 px-4 sm:px-6 md:px-8 pb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 transition-colors">
+                    Pilih Prasetel
+                  </h2>
+                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                    {presetsList.find((p) => p.id === preset)?.title ?? ''}
+                  </span>
+                </div>
+                <PresetSelector
+                  presets={presetsList}
+                  value={preset}
+                  onChange={setPreset}
+                  disabled={isProcessing}
+                />
+              </div>
 
-                    <div className="overflow-y-auto flex-grow p-0">
-                      {filteredFiles.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500 dark:text-slate-400">
-                          Tidak ada video dengan status ini.
+              {/* 4. KONTEN UTAMA (state kosong ATAU antrean) */}
+              <div className="flex-1 min-h-0 relative z-10 px-4 sm:px-6 md:px-8 pb-24">
+                <AnimatePresence mode="popLayout">
+                  {/* 4a. EMPTY STATE */}
+                  {files.length === 0 ? (
+                    <motion.div
+                      key="empty"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.3 }}
+                      className="h-full flex flex-col items-center justify-center pointer-events-none"
+                    >
+                      <div className="p-6 bg-blue-50 dark:bg-slate-800/50 text-blue-500 rounded-full mb-6 transition-colors">
+                        <UploadCloud className="w-12 h-12" />
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-semibold text-slate-800 dark:text-slate-100 transition-colors text-center px-4">
+                        Tarik &amp; Lepas Video ke RS OmniClip
+                      </h2>
+                      <p className="text-slate-500 dark:text-slate-400 mt-2 transition-colors">
+                        Atau klik untuk menelusuri file .mp4, .mov
+                      </p>
+                    </motion.div>
+                  ) : (
+                    /* 4b. QUEUE LIST */
+                    <motion.div
+                      key="queue"
+                      layout
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 20 }}
+                      transition={{ type: 'spring', bounce: 0.1, duration: 0.5 }}
+                      className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl overflow-hidden flex flex-col h-full min-h-0 transition-colors"
+                    >
+                      {/* Filter Header */}
+                      <div className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 p-3 flex flex-col sm:flex-row gap-3 sm:gap-0 justify-between sm:items-center transition-colors">
+                        <span className="text-sm font-medium text-slate-500 dark:text-slate-400 pl-2">Antrean Video</span>
+                        <div className="flex bg-slate-200/50 dark:bg-slate-900 p-1 rounded-lg gap-1 transition-colors overflow-x-auto no-scrollbar">
+                          {[
+                            { id: 'all', label: 'Semua' },
+                            { id: 'pending', label: 'Menunggu' },
+                            { id: 'success', label: 'Selesai' },
+                            { id: 'failed', label: 'Gagal' }
+                          ].map((f) => (
+                            <button
+                              key={f.id}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setFilter(f.id as 'all' | 'pending' | 'success' | 'failed')
+                              }}
+                              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                                filter === f.id
+                                  ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
+                                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              {f.label}
+                            </button>
+                          ))}
                         </div>
-                      ) : (
-                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                          <SortableContext items={filteredFiles.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-                            {filteredFiles.map((file) => (
-                              <SortableFileItem
-                                key={file.id}
-                                file={file}
-                                isProcessing={isProcessing}
-                                isFiltered={filter !== 'all'}
-                                onRemove={removeFile}
-                                formatSize={formatSize}
-                                onPreview={setPreviewFile}
-                                onToast={addToast}
-                              />
-                            ))}
-                          </SortableContext>
-                        </DndContext>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                      </div>
+
+                      <div className="overflow-y-auto flex-grow p-0">
+                        {filteredFiles.length === 0 ? (
+                          <div className="p-8 text-center text-slate-500 dark:text-slate-400">
+                            Tidak ada video dengan status ini.
+                          </div>
+                        ) : (
+                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                            <SortableContext items={filteredFiles.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                              {filteredFiles.map((file) => (
+                                <SortableFileItem
+                                  key={file.id}
+                                  file={file}
+                                  isProcessing={isProcessing}
+                                  isFiltered={filter !== 'all'}
+                                  onRemove={removeFile}
+                                  formatSize={formatSize}
+                                  onPreview={setPreviewFile}
+                                  onToast={addToast}
+                                />
+                              ))}
+                            </SortableContext>
+                          </DndContext>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
               {/* 5. ACTION BUTTON */}
               <div
