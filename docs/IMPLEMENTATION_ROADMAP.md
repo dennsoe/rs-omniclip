@@ -18,6 +18,8 @@ Legenda status: `[x]` selesai, `[ ]` belum.
   (dirombak pada Fase 2b).
 - [x] Folder output non-destruktif `[CLEANED] - YYYY-MM-DD`.
 - [x] Pengunduh universal via yt-dlp (provisioning + progress).
+- [x] Pengunduh multi-link (batch berurutan) + ambil daftar akun/halaman
+  (scrape `--flat-playlist`) dengan pilihan checkbox — Fase 2b.
 - [x] Pemotongan lossless inline.
 - [x] Smoke test mesin (8/8 lolos).
 - [x] Dokumentasi lengkap di `docs/`.

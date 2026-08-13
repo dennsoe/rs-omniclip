@@ -13,9 +13,12 @@ desktop **Electron-Vite** dengan backend Node.js asli. Kode lama tersimpan di
 
 1. **Pembersih Metadata Massal** — Menghapus EXIF/GPS via FFmpeg (remux lossless).
 2. **Peningkat Video & Normalisasi Audio** — Upscale 1080p (sumbu panjang) + penajaman AI-like (`unsharp`) + reduksi noise audio (`afftdn`).
-3. **Pengunduh Video Universal** — via `yt-dlp` (YouTube, TikTok, Instagram, dll).
+3. **Pengunduh Video Universal** — unduh banyak link sekaligus (batch) atau ambil
+   daftar video dari satu akun/halaman lalu pilih yang ingin diunduh, via `yt-dlp`
+   (YouTube, TikTok, Instagram, dll).
 4. **Pemotong Video Inline** — Potong lossless (stream copy) tanpa re-encode.
-5. **Watermark & Auto-Caption** — Pengaturan tambahan pada sidebar (UI).
+5. **Watermark & Auto-Caption** — Di roadmap (build FFmpeg saat ini tidak
+   mendukung filter `drawtext`).
 6. **Kompresor WhatsApp** — Target ukuran file otomatis (~16 MB) untuk berbagi via WhatsApp.
 
 ## Prinsip Kunci

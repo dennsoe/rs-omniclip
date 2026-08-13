@@ -22,3 +22,14 @@ export interface ProcessingPayload {
   files: FileItem[]
   preset: PresetType
 }
+
+/** Satu item video hasil scrape akun/halaman (yt-dlp --flat-playlist). */
+export interface ScrapeItem {
+  index: number
+  /** Id video sesuai extractor (mis. id TikTok / videoId YouTube). */
+  id: string
+  /** Judul video. */
+  title: string
+  /** URL langsung video (siap diunduh). */
+  url: string
+}

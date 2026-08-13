@@ -76,8 +76,8 @@ const api = {
     ipcRenderer.send('folder:open', folderPath)
   },
 
-  startDownload: (payload: { url: string; id?: string }): void => {
-    ipcRenderer.send('download:start', payload)
+  startDownloadBatch: (urls: string[]): void => {
+    ipcRenderer.send('download:start', { urls })
   },
 
   onDownloadProgress: (cb: (data: DownloadProgressData) => void): Unsubscribe => {
@@ -85,6 +85,45 @@ const api = {
     ipcRenderer.on('download:progress', listener)
     return () => {
       ipcRenderer.removeListener('download:progress', listener)
+    }
+  },
+
+  onDownloadComplete: (cb: (data: { total: number; success: number; failed: number }) => void): Unsubscribe => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { total: number; success: number; failed: number }
+    ): void => cb(data)
+    ipcRenderer.on('download:complete', listener)
+    return () => {
+      ipcRenderer.removeListener('download:complete', listener)
+    }
+  },
+
+  /** Mengambil daftar video dari satu akun/halaman (via yt-dlp flat-playlist). */
+  scrapeAccount: (payload: { id: string; url: string }): void => {
+    ipcRenderer.send('scrape:start', payload)
+  },
+
+  onScrapeComplete: (
+    cb: (data: {
+      id: string
+      items: Array<{ index: number; id: string; title: string; url: string }>
+      truncated?: boolean
+      error?: string
+    }) => void
+  ): Unsubscribe => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: {
+        id: string
+        items: Array<{ index: number; id: string; title: string; url: string }>
+        truncated?: boolean
+        error?: string
+      }
+    ): void => cb(data)
+    ipcRenderer.on('scrape:complete', listener)
+    return () => {
+      ipcRenderer.removeListener('scrape:complete', listener)
     }
   },
 

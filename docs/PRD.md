@@ -66,12 +66,23 @@ data yang dikirim ke server.
 - **RF-11** NON-DESTRUKTIF: berkas asli tidak pernah diubah/ditimpa.
 - **RF-12** Pengguna dapat memotong video inline per item (mulai–selesai) secara lossless.
 
-### 5.2 Pengunduh (Halaman "Pengunduh Video")
+### 5.2 Pengunduh (Halaman "Unduh Video")
 
-- **RF-13** Pengguna menempelkan URL video lalu menekan "Unduh".
+- **RF-13** Halaman pengunduh memakai **toggle dua mode**: "Banyak Link" dan
+  "Akun / Halaman"; hanya satu mode tampil per waktu.
+- **RF-13a** Mode "Banyak Link": pengguna menempelkan **banyak URL** (satu per
+  baris) lalu menekan "Unduh Semua (N)"; sistem memproses seluruh URL secara
+  berurutan.
 - **RF-14** Sistem menampilkan antrean unduhan dengan persentase dan status
-  (Mengunduh / Selesai / Gagal).
+  (Mengunduh / Selesai / Gagal) per URL, plus ringkasan akhir
+  (total / sukses / gagal).
 - **RF-15** Hasil unduhan disimpan ke `~/Downloads/RS-OmniClip/Unduhan/`.
+- **RF-15a** Mode "Akun / Halaman": pengguna memasukkan tautan **akun/halaman**
+  (YouTube channel/@user, TikTok @user, Instagram username, dll) lalu "Ambil
+  Daftar"; sistem menampilkan daftar video (judul + tautan) tanpa mengunduh.
+- **RF-15b** Pengguna dapat memilih video tertentu (checkbox), "Pilih Semua",
+  atau "Kosongkan Pilihan", lalu "Unduh Terpilih (N)" untuk mengunduh
+  video pilihan lewat antrean batch.
 
 ### 5.3 Mesin & Status
 

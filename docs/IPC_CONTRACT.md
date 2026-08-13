@@ -23,8 +23,11 @@ dapat membersihkan listener saat unmount.
 | M → R | `processing:progress` | Kemajuan per file |
 | M → R | `processing:complete` | Selesai batch (folder output) |
 | R → M | `folder:open` | Membuka folder di Finder |
-| R → M | `download:start` | Memulai unduhan URL |
-| M → R | `download:progress` | Kemajuan unduhan |
+| R → M | `download:start` | Memulai unduhan batch (banyak URL) |
+| M → R | `download:progress` | Kemajuan per URL |
+| M → R | `download:complete` | Ringkasan akhir batch `{ total, success, failed }` |
+| R → M | `scrape:start` | Ambil daftar video dari satu akun/halaman |
+| M → R | `scrape:complete` | Hasil daftar video `{ id, items, truncated?, error? }` |
 | R → M | `trim:start` | Memotong video (lossless) |
 | M → R | `trim:complete` | Hasil pemotongan |
 | M → R | `system:stats` | Pemakaian CPU/RAM aplikasi ini (realtime, interval ~1,5 detik) |
@@ -58,7 +61,7 @@ interface Window {
 
     openFolder: (folderPath: string) => void
 
-    startDownload: (payload: { url: string; id?: string }) => void
+    startDownloadBatch: (urls: string[]) => void
 
     onDownloadProgress: (
       cb: (data: {
@@ -66,6 +69,22 @@ interface Window {
         url: string
         percent: number
         status: 'downloading' | 'success' | 'failed'
+        error?: string
+      }) => void
+    ) => () => void
+
+    onDownloadComplete: (
+      cb: (data: { total: number; success: number; failed: number }) => void
+    ) => () => void
+
+    scrapeAccount: (payload: { id: string; url: string }) => void
+
+    onScrapeComplete: (
+      cb: (data: {
+        id: string
+        items: Array<{ index: number; id: string; title: string; url: string }>
+        truncated?: boolean
+        error?: string
       }) => void
     ) => () => void
 
@@ -131,15 +150,26 @@ dan `error` (jika tersedia) (batch tetap melanjutkan file berikutnya).
 |---|---|---|
 | `outputFolder` | string | Folder `[CLEANED] - YYYY-MM-DD`. String kosong jika gagal total (mis. mesin belum siap). |
 
-### 4.4 Unduhan (`download:start` / `download:progress`)
+### 4.4 Unduhan Batch (`download:start` / `download:progress` / `download:complete`)
 
-- `startDownload` menerima `{ url, id? }`. `id` opsional agar renderer bisa
-  mengirim id-nya sendiri; engine memakainya untuk event progress sehingga
-  pencocokan baris antrean konsisten.
+- `startDownloadBatch(urls)` mengirim `{ urls }` ke channel `download:start`.
+  Engine memproses URL **berurutan**; `id` setiap progress = URL-nya.
 - `download:progress` membawa `{ id, url, percent, status }` dengan status
   `'downloading' | 'success' | 'failed'`, plus `error` (opsional) saat gagal.
+- `download:complete` membawa ringkasan akhir `{ total, success, failed }`
+  agar UI bisa menampilkan toast kesimpulan (bukan toast per URL).
 
-### 4.5 Pemotongan (`trim:start` / `trim:complete`)
+### 4.5 Ambil Daftar Akun (`scrape:start` / `scrape:complete`)
+
+- `scrapeAccount({ id, url })` — `url` = tautan akun/halaman (YouTube channel/
+  @user, TikTok @user, Instagram username, dll).
+- `scrape:complete` membawa `{ id, items, truncated?, error? }`:
+  - `items`: `ScrapeItem[]` `{ index, id, title, url }` (url = tautan langsung
+    video, siap dikirim ke `startDownloadBatch`).
+  - `truncated: true` bila daftar dipotong di batas 500 item.
+  - `error` diisi bila gagal (mis. akun privat, tidak ada video).
+
+### 4.6 Pemotongan (`trim:start` / `trim:complete`)
 
 - `start` / `end` format waktu: `HH:MM:SS`, `MM:SS`, atau detik.
 - `trim:complete` membawa `{ id, success, path?, error? }`:
@@ -147,7 +177,7 @@ dan `error` (jika tersedia) (batch tetap melanjutkan file berikutnya).
   - `success: false` → `error` = pesan kegagalan (format waktu, waktu tidak
     valid, berkas tidak ditemukan, error FFmpeg).
 
-### 4.6 `getPathForFile`
+### 4.7 `getPathForFile`
 
 Memakai `webUtils.getPathForFile(file)` di preload untuk mendapatkan jalur
 absolut dari objek `File` yang di-drop renderer. Mengembalikan `''` jika file
