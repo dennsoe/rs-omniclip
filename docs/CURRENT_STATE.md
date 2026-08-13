@@ -3,6 +3,16 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-13**.
 
+## Status Rilis (2026-08-13)
+
+- Repo **PUBLIC**: `https://github.com/dennsoe/rs-omniclip`.
+- **PR #6 merged** — merge commit `7626859` (mekanisme pembaruan gratis).
+- **Release `v1.1.0` LIVE**: https://github.com/dennsoe/rs-omniclip/releases/tag/v1.1.0
+  - Artefak: `RS-OmniClip-1.1.0-arm64.dmg` (95 MB) + `.zip` (92 MB), Apple Silicon.
+  - Dibuat manual (CI terkunci billing — lihat "Hal yang Belum Dikerjakan").
+  - API `releases/latest` mengembalikan `v1.1.0` (tombol "Periksa Update" di
+    aplikasi kini berfungsi; saat versi aplikasi sudah sama → status terbaru).
+
 ## Ringkasan
 
 RS OmniClip telah dimigrasi penuh dari ekspor Next.js ke arsitektur desktop
@@ -232,9 +242,11 @@ setelah konfirmasi, modal "Hapus Semua?" dan panel antrean tetap menumpuk.
   adalah unduh manual via halaman rilis (gratis). Bila ingin instalasi otomatis
   di masa depan, butuh Developer ID + notarisasi (berbayar ~$99/thn).
 - Signing/notarisasi (untuk menghindari peringatan Gatekeeper saat membuka dmg).
-- Repo harus diubah ke **public** + release `v1.1.0` pertama agar tombol update
-  & CI berfungsi penuh (saat ini repo masih privat → API latest 404, ditangani
-  graceful dengan pesan versi terbaru "—").
+- **CI GitHub Actions tidak berjalan** (2026-08-13): akun GitHub terkunci
+  billing ("account is locked due to a billing issue" — runner macOS berbayar).
+  Release `v1.1.0` dibuat MANUAL (build lokal `electron-builder --mac` →
+  `gh release create`). Workflow `.github/workflows/release.yml` tetap tersedia
+  dan akan aktif otomatis bila billing akun dibereskan.
 - Pengujian di Intel Mac.
 - Scrape akun privat (TikTok/IG) yang butuh cookie/login — saat ini hanya akun
   publik; akun privat menampilkan pesan error informatif.
