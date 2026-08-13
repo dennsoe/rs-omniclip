@@ -1,4 +1,4 @@
-export type PresetType = 'quick' | 'standard' | 'archive' | 'whatsapp'
+export type PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'whatsapp'
 export type FileStatus = 'pending' | 'processing' | 'success' | 'failed'
 
 export interface FileItem {

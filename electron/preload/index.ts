@@ -105,6 +105,18 @@ const api = {
     return () => {
       ipcRenderer.removeListener('trim:complete', listener)
     }
+  },
+
+  /** Statistik sistem nyata (CPU & RAM) dari proses utama. */
+  onSystemStats: (cb: (data: { cpu: number; ramUsedMb: number; ramTotalMb: number }) => void): Unsubscribe => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { cpu: number; ramUsedMb: number; ramTotalMb: number }
+    ): void => cb(data)
+    ipcRenderer.on('system:stats', listener)
+    return () => {
+      ipcRenderer.removeListener('system:stats', listener)
+    }
   }
 }
 

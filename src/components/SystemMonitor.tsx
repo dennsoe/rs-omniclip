@@ -1,24 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Activity } from 'lucide-react'
 
-export default function SystemMonitor({ isProcessing }: { isProcessing: boolean }): React.ReactElement {
-  const [cpu, setCpu] = useState(2)
-  const [ram, setRam] = useState(400)
+export default function SystemMonitor(): React.ReactElement {
+  const [cpu, setCpu] = useState(0)
+  const [ramUsedMb, setRamUsedMb] = useState(0)
+  const [ramTotalMb, setRamTotalMb] = useState(0)
 
+  // Statistik sistem NYATA dari proses utama (bukan simulasi).
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (isProcessing) {
-        setCpu(Math.floor(Math.random() * 40) + 55) // 55% - 94%
-        setRam(Math.floor(Math.random() * 200) + 800) // +800MB - 999MB
-      } else {
-        setCpu(Math.floor(Math.random() * 5) + 2) // 2% - 6%
-        setRam(Math.floor(Math.random() * 50) + 400) // +400MB - 449MB
-      }
-    }, 1500)
-    return () => clearInterval(interval)
-  }, [isProcessing])
+    if (!window.api?.onSystemStats) return
+    const off = window.api.onSystemStats((data) => {
+      setCpu(data.cpu)
+      setRamUsedMb(data.ramUsedMb)
+      setRamTotalMb(data.ramTotalMb)
+    })
+    return off
+  }, [])
 
-  const ramDisplay = (2.4 + ram / 1000).toFixed(1)
+  const ramPercent = ramTotalMb > 0 ? Math.min(100, Math.round((ramUsedMb / ramTotalMb) * 100)) : 0
+  const ramDisplay = (ramUsedMb / 1024).toFixed(1)
 
   return (
     <div className="mx-4 mb-4 p-4 rounded-xl border border-slate-100 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/50 flex flex-col gap-3 transition-colors">
@@ -50,7 +50,7 @@ export default function SystemMonitor({ isProcessing }: { isProcessing: boolean 
         <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
           <div
             className="h-full bg-emerald-500 transition-all duration-1000 rounded-full"
-            style={{ width: `${Math.min((parseFloat(ramDisplay) / 8) * 100, 100)}%` }}
+            style={{ width: `${ramPercent}%` }}
           />
         </div>
       </div>

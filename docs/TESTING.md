@@ -25,14 +25,16 @@ Skrip ini (headless) memverifikasi:
 2. Pembuatan video uji (5 detik, 640x360, audio) berhasil.
 3. `probe` mengembalikan durasi + resolusi yang benar.
 4. **Setiap preset** berhasil menghasilkan output yang valid:
-   - `quick` (hapus metadata, lossless)
-   - `quick-fallback` (encode minimal untuk codec tak kompatibel remux)
-   - `standard` (1080p + penajaman + denoise) — **memverifikasi lebar >= 1080**
+   - `metadata` (hapus metadata, lossless remux)
+   - `metadata-fallback` (encode minimal untuk codec tak kompatibel remux)
+   - `hd` (upscale 720p) — **memverifikasi lebar/tinggi >= 720**
+   - `fullhd` (upscale 1080p) — **memverifikasi >= 1080**
+   - `uhd` (upscale 4K) — **memverifikasi >= 2160**
    - `archive` (CRF 18)
    - `whatsapp` (kompresi target ukuran)
 5. Pemotongan lossless 1s–3s (stream copy) berhasil.
 
-Keluaran sukses: `Total: 9 PASS, 0 FAIL`.
+Keluaran sukses: `Total: 11 PASS, 0 FAIL`.
 
 ### Catatan untuk pengembang
 
@@ -87,6 +89,13 @@ Dan pastikan panel Problems di VS Code tidak menunjukkan error
 - [ ] Semua teks Bahasa Indonesia, tanpa emoji.
 - [ ] Toggle Mode Gelap/Terang.
 - [ ] Sidebar (mobile) & layout tidak rusak.
+
+### 4.6 Perombakan UX (dropzone, preset, monitor, responsivitas)
+- [ ] Klik preset / tombol lain di halaman mana pun TIDAK membuka dialog file.
+- [ ] Pilih tiap preset baru (metadata/hd/fullhd/uhd/archive/whatsapp) → proses.
+- [ ] Monitor sidebar menampilkan CPU/RAM yang berubah-ubah (bukan statis).
+- [ ] Resize jendela ke 720x560 → layout tidak rusak; sidebar mobile jadi drawer.
+- [ ] Tidak ada kontrol mati (subtitle/watermark) di sidebar.
 
 ## 5. Lingkungan Uji
 

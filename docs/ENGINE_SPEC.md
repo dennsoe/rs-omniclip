@@ -91,7 +91,7 @@ pernah ditimpa, berkas asli dan hasil sebelumnya tetap aman.
 Semua preset memakai `-map_metadata -1` (hapus metadata) dan
 `-movflags +faststart` (siap streaming).
 
-### 6.1 `quick` — Bagikan Cepat (hapus metadata saja, lossless)
+### 6.1 `metadata` — Hapus Metadata (lossless)
 
 Set utama (remux lossless):
 ```
@@ -107,16 +107,18 @@ minimal agar preset tetap berhasil (metadata tetap dihapus):
 libx264 -preset veryfast -crf 23 -pix_fmt yuv420p, audio aac 128k
 ```
 
-### 6.2 `standard` — Standar Bersih & Jernih
+### 6.2 `hd` (720p), `fullhd` (1080p), `uhd` (4K) — Peningkat Video
+
+`buildEnhance(common, target, output)` dengan `target` = 720 / 1080 / 2160.
 
 Filter video:
 ```
-scale='if(gt(iw,ih),1080,-2)':'if(gt(iw,ih),-2,1080)':flags=lanczos,
+scale='if(gt(iw,ih),<target>,-2)':'if(gt(iw,ih),-2,<target>)':flags=lanczos,
 unsharp=5:5:0.6:5:5:0.0
 ```
 
-- Upscale sumbu panjang ke 1080p (landscape → lebar 1080; portrait → tinggi 1080),
-  tetap menjaga rasio aspek.
+- Upscale sumbu panjang ke target (landscape → lebar target; portrait → tinggi
+  target), menjaga rasio aspek.
 - `unsharp` untuk penajaman AI-like.
 - Filter audio `afftdn=nr=12:nf=-30` (reduksi noise).
 - Encode: `libx264 -preset veryfast -crf 20 -pix_fmt yuv420p`, audio `aac 192k`.
@@ -148,6 +150,15 @@ Command:
 libx264 -preset medium -b:v <vb>k -maxrate <vb*1.5>k -bufsize <vb*2>k
 -pix_fmt yuv420p, audio aac 128k
 ```
+
+### 6.5 Catatan Watermark (`drawtext`) — TIDAK TERSEDIA
+
+Fitur watermark teks **dihapus**. Build FFmpeg yang diprovisikan
+(evermeet/ffbinaries-prebuilt 6.1, macos-64) **tidak menyertakan filter
+`drawtext`** — diverifikasi: `[AVFilterGraph] No such filter: 'drawtext'`.
+Setiap encode yang memakai `drawtext` pasti gagal. Untuk menghidupkan kembali
+fitur ini, dibutuhkan build FFmpeg lain yang menyertakan `drawtext` atau
+pendekatan overlay gambar logo (lihat roadmap).
 
 ## 7. Pemotongan Lossless (`trimmer.ts`)
 

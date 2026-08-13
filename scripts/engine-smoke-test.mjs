@@ -109,36 +109,64 @@ async function main() {
   console.log('\n[3] Menguji preset...')
   const common = ['-y', '-i', testVideo, '-map_metadata', '-1']
 
-  // quick: hapus metadata, remux lossless
+  // metadata: hapus metadata, remux lossless
   {
-    const out = path.join(outDir, 'quick.mp4')
+    const out = path.join(outDir, 'metadata.mp4')
     const args = [...common, '-c', 'copy', '-movflags', '+faststart', out]
-    await tryPreset('quick (hapus metadata, lossless)', ffmpeg, args, ffprobe, out)
+    await tryPreset('metadata (hapus metadata, lossless)', ffmpeg, args, ffprobe, out)
   }
 
-  // quick-fallback: encode minimal (dipakai bila codec tak bisa diremux ke mp4)
+  // metadata-fallback: encode minimal (codec tak bisa diremux ke mp4)
   {
-    const out = path.join(outDir, 'quick-fallback.mp4')
+    const out = path.join(outDir, 'metadata-fallback.mp4')
     const args = [
       ...common,
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out
     ]
-    await tryPreset('quick-fallback (encode minimal)', ffmpeg, args, ffprobe, out)
+    await tryPreset('metadata-fallback (encode minimal)', ffmpeg, args, ffprobe, out)
   }
 
-  // standard: upscale 1080p + unsharp + afftdn
+  // hd: upscale 720p
   {
-    const out = path.join(outDir, 'standard.mp4')
-    const scaleFilter = "scale='if(gt(iw,ih),1080,-2)':'if(gt(iw,ih),-2,1080)':flags=lanczos"
+    const out = path.join(outDir, 'hd.mp4')
+    const vf = "scale='if(gt(iw,ih),720,-2)':'if(gt(iw,ih),-2,720)':flags=lanczos,unsharp=5:5:0.6:5:5:0.0"
     const args = [
       ...common,
-      '-vf', `${scaleFilter},unsharp=5:5:0.6:5:5:0.0`,
+      '-vf', vf,
       '-af', 'afftdn=nr=12:nf=-30',
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out
     ]
-    await tryPreset('standard (1080p + penajaman + denoise)', ffmpeg, args, ffprobe, out, true)
+    await tryPreset('hd (upscale 720p)', ffmpeg, args, ffprobe, out, true, 720)
+  }
+
+  // fullhd: upscale 1080p
+  {
+    const out = path.join(outDir, 'fullhd.mp4')
+    const vf = "scale='if(gt(iw,ih),1080,-2)':'if(gt(iw,ih),-2,1080)':flags=lanczos,unsharp=5:5:0.6:5:5:0.0"
+    const args = [
+      ...common,
+      '-vf', vf,
+      '-af', 'afftdn=nr=12:nf=-30',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out
+    ]
+    await tryPreset('fullhd (upscale 1080p)', ffmpeg, args, ffprobe, out, true, 1080)
+  }
+
+  // uhd: upscale 4K (2160p)
+  {
+    const out = path.join(outDir, 'uhd.mp4')
+    const vf = "scale='if(gt(iw,ih),2160,-2)':'if(gt(iw,ih),-2,2160)':flags=lanczos,unsharp=5:5:0.6:5:5:0.0"
+    const args = [
+      ...common,
+      '-vf', vf,
+      '-af', 'afftdn=nr=12:nf=-30',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out
+    ]
+    await tryPreset('uhd (upscale 4K)', ffmpeg, args, ffprobe, out, true, 2160)
   }
 
   // archive: CRF 18, resolusi asli
@@ -183,12 +211,14 @@ async function main() {
   console.log('Semua pengujian lulus. Mesin siap digunakan.\n')
 }
 
-async function tryPreset(label, ffmpeg, args, ffprobe, out, checkUpscale = false) {
+async function tryPreset(label, ffmpeg, args, ffprobe, out, checkUpscale = false, minWidth = 1080) {
   try {
     await run(ffmpeg, args)
     if (!fs.existsSync(out) || fs.statSync(out).size === 0) throw new Error('Output kosong / tidak ada')
     const info = await probeJson(ffprobe, out)
-    if (checkUpscale && info.width < 1080) throw new Error(`Upscale gagal: lebar ${info.width}`)
+    if (checkUpscale && info.width < minWidth) {
+      throw new Error(`Upscale gagal: lebar ${info.width} (min ${minWidth})`)
+    }
     ok(label)
   } catch (err) {
     fail(label, err)
