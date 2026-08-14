@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import { motion } from 'motion/react'
-import { Trash2, XCircle } from 'lucide-react'
+import { Trash2, XCircle, RotateCcw } from 'lucide-react'
 
 export interface ConfirmAction {
-  type: 'clear' | 'remove'
+  type: 'clear' | 'remove' | 'reset'
   id?: string
 }
 
@@ -42,15 +42,31 @@ export default function ConfirmModal({
       >
         {/* Header — ikon badge + judul + subjudul + tombol tutup */}
         <div className="flex items-center gap-2.5 px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-700/60">
-          <div className="p-2 bg-rose-50 dark:bg-rose-500/10 text-rose-500 dark:text-rose-400 rounded-lg shrink-0 transition-colors">
-            <Trash2 className="w-4 h-4" />
+          <div
+            className={`p-2 rounded-lg shrink-0 transition-colors ${
+              confirmAction.type === 'reset'
+                ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                : 'bg-rose-50 dark:bg-rose-500/10 text-rose-500 dark:text-rose-400'
+            }`}
+          >
+            {confirmAction.type === 'reset' ? (
+              <RotateCcw className="w-4 h-4" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-tight">
-              {confirmAction.type === 'clear' ? 'Hapus Semua?' : 'Hapus Video?'}
+              {confirmAction.type === 'reset'
+                ? 'Reset Semua Preferensi?'
+                : confirmAction.type === 'clear'
+                  ? 'Hapus Semua?'
+                  : 'Hapus Video?'}
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Tindakan ini tidak dapat dibatalkan.
+              {confirmAction.type === 'reset'
+                ? 'Mengembalikan ke pengaturan default.'
+                : 'Tindakan ini tidak dapat dibatalkan.'}
             </p>
           </div>
           <button
@@ -66,9 +82,11 @@ export default function ConfirmModal({
         {/* Body */}
         <div className="px-5 py-4">
           <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-            {confirmAction.type === 'clear'
-              ? 'Apakah Anda yakin ingin menghapus semua video dari antrean?'
-              : 'Apakah Anda yakin ingin menghapus video ini dari antrean?'}
+            {confirmAction.type === 'reset'
+              ? 'Mode gelap, prasetel, dan pengaturan unduhan akan kembali ke nilai awal.'
+              : confirmAction.type === 'clear'
+                ? 'Apakah Anda yakin ingin menghapus semua video dari antrean?'
+                : 'Apakah Anda yakin ingin menghapus video ini dari antrean?'}
           </p>
         </div>
 
@@ -84,10 +102,22 @@ export default function ConfirmModal({
           <button
             type="button"
             onClick={onConfirm}
-            className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 rounded-full font-semibold text-sm shadow-lg shadow-rose-500/25 transition-all active:scale-95"
+            className={`inline-flex items-center gap-2 text-white px-5 py-2 rounded-full font-semibold text-sm transition-all active:scale-95 ${
+              confirmAction.type === 'reset'
+                ? 'bg-amber-500 hover:bg-amber-600 shadow-lg shadow-amber-500/25'
+                : 'bg-rose-600 hover:bg-rose-700 shadow-lg shadow-rose-500/25'
+            }`}
           >
-            <Trash2 className="w-4 h-4" />
-            {confirmAction.type === 'clear' ? 'Hapus Semua' : 'Hapus'}
+            {confirmAction.type === 'reset' ? (
+              <RotateCcw className="w-4 h-4" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
+            {confirmAction.type === 'reset'
+              ? 'Reset'
+              : confirmAction.type === 'clear'
+                ? 'Hapus Semua'
+                : 'Hapus'}
           </button>
         </div>
       </motion.div>

@@ -25,6 +25,7 @@ import {
   Search,
   Info,
   RefreshCw,
+  RotateCcw,
   ExternalLink,
   BadgeCheck,
   CircleAlert,
@@ -56,6 +57,8 @@ import type {
   DownloadProgress
 } from '@lib/types'
 import { useIsMobile } from '@hooks/use-mobile'
+import { usePersistentState } from '@hooks/use-persistent-state'
+import { PREF_KEYS, PREF_DEFAULTS, resetAllPreferences } from '@lib/preferences'
 import Toasts, { type ToastMessage, type ToastType } from '@components/Toasts'
 import ConfirmModal, { type ConfirmAction } from '@components/ConfirmModal'
 import PreviewModal from '@components/PreviewModal'
@@ -109,8 +112,14 @@ export default function App(): React.ReactElement {
   const isMobile = useIsMobile()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const [activeMenu, setActiveMenu] = useState<'cleaner' | 'downloader' | 'about'>('cleaner')
-  const [downloaderMode, setDownloaderMode] = useState<'links' | 'scrape'>('links')
+  const [activeMenu, setActiveMenu] = usePersistentState<'cleaner' | 'downloader' | 'about'>(
+    PREF_KEYS.activeMenu,
+    PREF_DEFAULTS.activeMenu
+  )
+  const [downloaderMode, setDownloaderMode] = usePersistentState<'links' | 'scrape'>(
+    PREF_KEYS.downloaderMode,
+    PREF_DEFAULTS.downloaderMode
+  )
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
   const [resources, setResources] = useState<ResourceInfo[] | null>(null)
@@ -128,22 +137,34 @@ export default function App(): React.ReactElement {
   const [isScraping, setIsScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState<string | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
-  // Pengaturan unduhan (kualitas, cookies browser, paralel).
-  const [downloadMaxHeight, setDownloadMaxHeight] = useState<number>(0)
-  const [downloadCookiesBrowser, setDownloadCookiesBrowser] = useState<string>('')
-  const [downloadDouyinCookie, setDownloadDouyinCookie] = useState<string>('')
-  const [downloadParallel, setDownloadParallel] = useState(false)
+  // Pengaturan unduhan (kualitas, cookies browser, paralel) — dipersist ke localStorage.
+  const [downloadMaxHeight, setDownloadMaxHeight] = usePersistentState<number>(
+    PREF_KEYS.downloadMaxHeight,
+    PREF_DEFAULTS.downloadMaxHeight
+  )
+  const [downloadCookiesBrowser, setDownloadCookiesBrowser] = usePersistentState<string>(
+    PREF_KEYS.downloadCookiesBrowser,
+    PREF_DEFAULTS.downloadCookiesBrowser
+  )
+  const [downloadDouyinCookie, setDownloadDouyinCookie] = usePersistentState<string>(
+    PREF_KEYS.downloadDouyinCookie,
+    PREF_DEFAULTS.downloadDouyinCookie
+  )
+  const [downloadParallel, setDownloadParallel] = usePersistentState<boolean>(
+    PREF_KEYS.downloadParallel,
+    PREF_DEFAULTS.downloadParallel
+  )
   // Modal pengaturan unduhan (dibuka dari tombol gear di header halaman Pengunduh).
   const [isDownloadSettingsOpen, setIsDownloadSettingsOpen] = useState(false)
 
   const [files, setFiles] = useState<FileItem[]>([])
-  const [preset, setPreset] = useState<PresetType>('fullhd')
+  const [preset, setPreset] = usePersistentState<PresetType>(PREF_KEYS.preset, PREF_DEFAULTS.preset)
   const [isProcessing, setIsProcessing] = useState(false)
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
-  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [isDarkMode, setIsDarkMode] = usePersistentState<boolean>(PREF_KEYS.darkMode, PREF_DEFAULTS.darkMode)
   const [filter, setFilter] = useState<'all' | 'pending' | 'success' | 'failed'>('all')
   const [outputFolder, setOutputFolder] = useState<string | null>(null)
 
@@ -552,6 +573,18 @@ export default function App(): React.ReactElement {
     } else if (confirmAction.type === 'remove' && confirmAction.id) {
       setFiles((prev) => prev.filter((f) => f.id !== confirmAction.id))
       addToast('Video dihapus dari antrean', 'info')
+    } else if (confirmAction.type === 'reset') {
+      // Reset semua preferensi ke default (setelah konfirmasi modal).
+      resetAllPreferences()
+      setActiveMenu(PREF_DEFAULTS.activeMenu)
+      setDownloaderMode(PREF_DEFAULTS.downloaderMode)
+      setDownloadMaxHeight(PREF_DEFAULTS.downloadMaxHeight)
+      setDownloadCookiesBrowser(PREF_DEFAULTS.downloadCookiesBrowser)
+      setDownloadDouyinCookie(PREF_DEFAULTS.downloadDouyinCookie)
+      setDownloadParallel(PREF_DEFAULTS.downloadParallel)
+      setPreset(PREF_DEFAULTS.preset)
+      setIsDarkMode(PREF_DEFAULTS.darkMode)
+      addToast('Semua preferensi direset ke default.', 'info')
     }
     setConfirmAction(null)
   }
@@ -1623,6 +1656,35 @@ export default function App(): React.ReactElement {
                       Perbarui Resource
                     </button>
                   </div>
+                </div>
+
+                {/* KARTU PREFERENSI & PENYIMPANAN — reset semua preferensi ke default */}
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 sm:p-5 flex flex-col gap-4 transition-colors">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
+                      <RotateCcw className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
+                        Preferensi &amp; Penyimpanan
+                      </h3>
+                      <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
+                        Mode gelap, prasetel &amp; pengaturan unduhan tersimpan otomatis di perangkat Anda.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setConfirmAction({ type: 'reset' })
+                    }}
+                    className="self-start inline-flex items-center gap-2 bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400 px-4 py-2 rounded-full font-medium text-sm shadow-sm hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all active:scale-95"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Reset Semua Preferensi
+                  </button>
                 </div>
               </div>
             </motion.div>

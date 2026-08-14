@@ -45,6 +45,12 @@ siap disalin ke **detail release GitHub** (mis. `gh release create v1.3.4
     sempit (tanpa overflow horizontal).
   - Toast tidak lagi meluber keluar layar pada viewport sangat kecil.
   - Sidebar dibatasi lebarnya (maks 80vw) dan lompatan lebarnya diperkecil.
+- **Penyimpanan lokal (localStorage)** — pengaturan kini tersimpan otomatis di
+  perangkat saat app ditutup &amp; dibuka lagi:
+  - Mode gelap, prasetel terpilih, pengaturan unduhan (kualitas, cookies browser,
+    cookie Douyin, unduh paralel), halaman terakhir &amp; mode tautan/akun.
+  - Tombol **Reset Semua Preferensi** (di halaman Tentang &amp; Update) mengembalikan
+    semuanya ke default.
 
 ### Unduhan
 - **macOS (Apple Silicon)**: `RS-OmniClip-1.3.4-arm64.dmg` / `.zip` — jika
@@ -63,3 +69,4 @@ siap disalin ke **detail release GitHub** (mis. `gh release create v1.3.4
 | 2026-08-14 | UI | Pengaturan Unduhan dipindah ke modal popup + tombol gear + badge indikator | `src/App.tsx`, `src/components/DownloadSettingsModal.tsx` (baru) |
 | 2026-08-14 | UI | Konsistensi desain modal hapus & pratinjau dengan modal pengaturan (header, Escape) | `src/components/ConfirmModal.tsx`, `src/components/PreviewModal.tsx` |
 | 2026-08-14 | UI | Responsivitas: grid prasetel 1/2/3 kolom, panel trim flex-wrap, padding/gap responsif baris antrean, toast tidak meluber, sidebar max-w 80vw | `src/components/PresetSelector.tsx`, `src/components/SortableFileItem.tsx`, `src/components/Toasts.tsx`, `src/App.tsx` |
+| 2026-08-14 | Fitur | Penyimpanan lokal preferensi (dark mode, prasetel, pengaturan unduhan, halaman/mode) + tombol Reset Semua Preferensi | `src/hooks/use-persistent-state.ts` (baru), `src/lib/preferences.ts` (baru), `src/App.tsx` |
