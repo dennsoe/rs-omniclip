@@ -53,35 +53,116 @@ export function ensureFfmpeg(onStatus?: (message: string) => void): Promise<Ffmp
   return binariesPromise
 }
 
+/** Apple Silicon (arm64) — butuh build native arm64, bukan x86_64. */
+function isAppleSilicon(): boolean {
+  return process.platform === 'darwin' && process.arch === 'arm64'
+}
+
+/**
+ * Versi FFmpeg yang diharapkan, disesuaikan platform & arsitektur:
+ * - macOS Apple Silicon : 9.0 (build native arm64 dari osxexperts.net —
+ *   ffbinaries hanya menyediakan build macOS x86_64 "osx-64" yang memicu
+ *   EBADARCH / errno -86 di Apple Silicon tanpa Rosetta).
+ * - lainnya (Intel macOS, Windows, Linux) : 6.1 (ffbinaries / ffbinaries-prebuilt).
+ */
+export function expectedFfmpegVersion(): string {
+  return isAppleSilicon() ? '9.0' : '6.1'
+}
+
+/**
+ * Menjalankan binary sekali dan mengembalikan versi dari baris pertama
+ * (null bila tidak dapat dijalankan). Verifikasi NYATA ini penting: binary
+ * ber-arsitektur salah (mis. x86_64 di Apple Silicon tanpa Rosetta) gagal
+ * di-spawn dengan EBADARCH — errno 86 "spawn Unknown system error -86".
+ * Sebelumnya hanya `isExecutable` (cek bit X_OK) yang tidak menangkap ini.
+ */
+function readBinaryVersion(binPath: string, args: string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    let stdout = ''
+    let settled = false
+    const done = (value: string | null): void => {
+      if (!settled) {
+        settled = true
+        resolve(value)
+      }
+    }
+    const proc = spawn(binPath, args, { timeout: 15_000 })
+    proc.stdout.on('data', (d: Buffer) => {
+      stdout += d.toString()
+    })
+    proc.on('error', () => done(null))
+    proc.on('close', (code) => {
+      if (code !== 0) return done(null)
+      const firstLine = stdout.split('\n')[0] ?? ''
+      const m = firstLine.match(/(\d+\.\d+(?:\.\d+)?[^\s]*)/)
+      done(m ? m[1] : firstLine.trim() || null)
+    })
+  })
+}
+
 async function doEnsureFfmpeg(onStatus?: (message: string) => void): Promise<FfmpegBinaries> {
   const binDir = getEngineBinDir()
   await fs.promises.mkdir(binDir, { recursive: true })
   const platform = ffbinaries.detectPlatform()
   const ffmpeg = path.join(binDir, ffbinaries.getBinaryFilename('ffmpeg', platform))
   const ffprobe = path.join(binDir, ffbinaries.getBinaryFilename('ffprobe', platform))
+  const arm64 = isAppleSilicon()
+  const expected = expectedFfmpegVersion()
 
-  const [hasFfmpeg, hasFfprobe] = await Promise.all([isExecutable(ffmpeg), isExecutable(ffprobe)])
-
-  if (hasFfmpeg && hasFfprobe) {
-    onStatus?.('FFmpeg sudah tersedia.')
-    return { ffmpeg, ffprobe }
+  // Verifikasi binary yang ADA benar-benar BISA DIJALANKAN (bukan sekadar ada
+  // & executable). Binary arsitektur salah menghasilkan EBADARCH (errno -86).
+  const [curFf, curFp] = await Promise.all([
+    readBinaryVersion(ffmpeg, ['-version']),
+    readBinaryVersion(ffprobe, ['-version'])
+  ])
+  if (curFf && curFp) {
+    // Apple Silicon: pastikan NATIVE arm64 dengan versi yang diharapkan (bukan
+    // x86_64 via Rosetta) — agar tidak bergantung Rosetta & konsisten dgn status.
+    if (!arm64 || (curFf.startsWith(expected) && curFp.startsWith(expected))) {
+      onStatus?.('FFmpeg sudah tersedia.')
+      return { ffmpeg, ffprobe }
+    }
   }
 
-  onStatus?.('Mengunduh binary FFmpeg untuk pertama kali (butuh koneksi internet)...')
-  try {
-    await downloadFfbinaries(binDir)
-  } catch {
-    // API ffbinaries.com tidak terjangkau - akan diverifikasi di bawah.
-    onStatus?.('Sumber ffbinaries tidak terjangkau; menyiapkan sumber cadangan...')
+  // Binary lama tidak valid (arsitektur salah / korup / versi tidak sesuai) →
+  // bersihkan agar diunduh ulang dengan arsitektur yang benar.
+  await fs.promises.rm(ffmpeg, { force: true })
+  await fs.promises.rm(ffprobe, { force: true })
+
+  if (arm64) {
+    onStatus?.('Mengunduh binary FFmpeg (Apple Silicon) — butuh koneksi internet...')
+    await downloadOsxExpertsArm64(binDir)
+  } else {
+    onStatus?.('Mengunduh binary FFmpeg untuk pertama kali (butuh koneksi internet)...')
+    try {
+      await downloadFfbinaries(binDir)
+    } catch {
+      // API ffbinaries.com tidak terjangkau - akan diverifikasi di bawah.
+      onStatus?.('Sumber ffbinaries tidak terjangkau; menyiapkan sumber cadangan...')
+    }
+
+    // Verifikasi hasil unduhan (ffbinaries kadang menyelesaikan tanpa mengekstrak).
+    const [okFfmpeg, okFfprobe] = await Promise.all([
+      readBinaryVersion(ffmpeg, ['-version']),
+      readBinaryVersion(ffprobe, ['-version'])
+    ])
+    if (!okFfmpeg || !okFfprobe) {
+      onStatus?.('Mengunduh binary FFmpeg dari sumber cadangan...')
+      await downloadFfmpegFallback(binDir)
+    }
   }
 
-  // Verifikasi hasil unduhan (ffbinaries kadang menyelesaikan tanpa mengekstrak).
-  const [okFfmpeg, okFfprobe] = await Promise.all([isExecutable(ffmpeg), isExecutable(ffprobe)])
-  if (!okFfmpeg || !okFfprobe) {
-    onStatus?.('Mengunduh binary FFmpeg dari sumber cadangan...')
-    await downloadFfmpegFallback(binDir)
+  // Verifikasi akhir: binary harus benar-benar bisa dijalankan pada perangkat ini.
+  const [finalFf, finalFp] = await Promise.all([
+    readBinaryVersion(ffmpeg, ['-version']),
+    readBinaryVersion(ffprobe, ['-version'])
+  ])
+  if (!finalFf || !finalFp) {
+    throw new Error(
+      'Binary FFmpeg tidak dapat dijalankan pada perangkat ini (arsitektur tidak kompatibel). ' +
+        'Periksa koneksi internet lalu coba lagi.'
+    )
   }
-
   onStatus?.('FFmpeg berhasil diunduh dan siap.')
   return { ffmpeg, ffprobe }
 }
@@ -156,12 +237,34 @@ async function downloadFfmpegFallback(binDir: string): Promise<void> {
   }
 }
 
-async function isExecutable(p: string): Promise<boolean> {
-  try {
-    await fs.promises.access(p, fs.constants.X_OK)
-    return true
-  } catch {
-    return false
+/**
+ * Sumber khusus Apple Silicon: build native arm64 dari osxexperts.net
+ * (ffmpeg/ffprobe 9.0 — terverifikasi berjalan tanpa Rosetta & memuat seluruh
+ * filter yang dipakai preset: unsharp, afftdn, drawtext, scale + libx264/aac).
+ * ffbinaries hanya menyediakan build macOS x86_64 (osx-64) — penyebab
+ * EBADARCH / errno -86 ("spawn Unknown system error -86") di Apple Silicon
+ * tanpa Rosetta.
+ */
+async function downloadOsxExpertsArm64(binDir: string): Promise<void> {
+  const base = 'https://www.osxexperts.net/'
+  const components = [
+    { name: 'ffmpeg', url: `${base}ffmpeg9arm.zip` },
+    { name: 'ffprobe', url: `${base}ffprobe9arm.zip` }
+  ]
+
+  for (const comp of components) {
+    const zipPath = path.join(binDir, `${comp.name}-9.0-arm64.zip`)
+    const extractDir = path.join(binDir, `.ffb-tmp-${comp.name}`)
+    try {
+      await downloadFile(comp.url, zipPath, FFMPEG_DOWNLOAD_TIMEOUT_MS)
+      await fs.promises.mkdir(extractDir, { recursive: true })
+      await extract(zipPath, { dir: extractDir })
+      await fs.promises.rename(path.join(extractDir, comp.name), path.join(binDir, comp.name))
+      await fs.promises.chmod(path.join(binDir, comp.name), 0o755)
+    } finally {
+      await fs.promises.rm(zipPath, { force: true })
+      await fs.promises.rm(extractDir, { recursive: true, force: true })
+    }
   }
 }
 
