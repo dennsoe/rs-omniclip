@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { getEngineBinDir } from './paths'
-import { ensureFfmpeg, resetFfmpegCache } from './ffmpeg'
+import { ensureFfmpeg, resetFfmpegCache, expectedFfmpegVersion } from './ffmpeg'
 import { ensureYtdlp, resetYtdlpCache } from './downloader'
 
 /**
@@ -235,7 +235,14 @@ export async function getResourceStatus(): Promise<ResourceInfo[]> {
 
   const build = (id: string, label: string, fallbackExpected: string): ResourceInfo => {
     const current = installed[id as keyof InstalledVersions] ?? null
-    const expected = expectedMap.get(id) ?? fallbackExpected
+    let expected = expectedMap.get(id) ?? fallbackExpected
+    // macOS Apple Silicon memakai FFmpeg 9.0 native arm64 (osxexperts.net) —
+    // bukan 6.1 dari ffbinaries (yang hanya menyediakan build x86_64 / osx-64
+    // dan memicu EBADARCH di Apple Silicon tanpa Rosetta). Sesuaikan versi
+    // diharapkan per-arsitektur agar status tidak salah "Perlu update".
+    if (id === 'ffmpeg' && process.platform === 'darwin' && process.arch === 'arm64') {
+      expected = expectedFfmpegVersion()
+    }
     // Perbandingan awalan: ffmpeg "6.1-tessus" tetap dianggap cocok dengan "6.1".
     const outdated =
       current === null ||
