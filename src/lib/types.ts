@@ -40,6 +40,8 @@ export interface DownloadOptions {
   maxHeight?: number
   /** Browser untuk mengambil cookies (mis. 'chrome', 'edge', 'safari'). '' = tanpa cookies. */
   cookiesBrowser?: string
+  /** Header Cookie mentah dari sesi Douyin yang sudah login (opsional, untuk Douyin). */
+  douyinCookie?: string
   /** Unduh beberapa URL sekaligus (maks 2) alih-alih berurutan. Default false. */
   parallel?: boolean
 }

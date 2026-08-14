@@ -5,6 +5,7 @@ import { getEngineBinDir, getDownloadDir } from './paths'
 import { downloadFile } from './net'
 import { trackProcess, untrackProcess } from './procmon'
 import { isTikTokUrl, downloadTikTokVideo } from './tiktok'
+import { isDouyinUrl, normalizeDouyinUrl, writeNetscapeCookieFile } from './douyin'
 
 export interface DownloadProgress {
   id: string
@@ -28,12 +29,16 @@ export interface DownloadProgress {
   filePath?: string
 }
 
-/** Opsi unduhan dari UI (kualitas, cookies browser, paralel). */
+/** Opsi unduhan dari UI (kualitas, cookies browser, cookie Douyin, paralel). */
 export interface DownloadOptions {
   /** Batas tinggi resolusi video (px). 0 / tanpa = kualitas terbaik (tanpa batas). */
   maxHeight?: number
   /** Browser untuk mengambil cookies (mis. 'chrome', 'edge', 'safari'). Kosong = tanpa cookies. */
   cookiesBrowser?: string
+  /** Header Cookie mentah dari sesi Douyin yang sudah login (opsional). */
+  douyinCookie?: string
+  /** Path file cookies Netscape (internal — diisi engine setelah menulis douyinCookie). */
+  cookiesFile?: string
   /** Unduh beberapa URL sekaligus (maks 2) alih-alih berurutan. Default false. */
   parallel?: boolean
 }
@@ -236,6 +241,27 @@ async function downloadSingle(
 ): Promise<boolean> {
   const id = url
   let lastError = ''
+  let targetUrl = url
+
+  // Lapisan 0a (khusus Douyin): normalisasi short link -> URL kanonik + tulis
+  // file cookie sesi bila pengguna menyediakan header Cookie. Douyin (2026)
+  // mewajibkan cookie sesi; yt-dlp menerimanya via `--cookies <file>`.
+  if (isDouyinUrl(url)) {
+    if (options.douyinCookie && options.douyinCookie.trim()) {
+      const cookiePath = path.join(getEngineBinDir(), 'douyin-cookies.txt')
+      try {
+        writeNetscapeCookieFile(options.douyinCookie.trim(), cookiePath)
+        options = { ...options, cookiesFile: cookiePath }
+      } catch {
+        // Abaikan — lanjut tanpa file cookie (yt-dlp akan melaporkan butuh cookie).
+      }
+    }
+    const canonical = await normalizeDouyinUrl(url)
+    if (canonical !== url) {
+      targetUrl = canonical
+      onProgress({ id, url, percent: 0, status: 'downloading', phase: 'extracting' })
+    }
+  }
 
   // Lapisan 0: TikTok via TikWM (cepat & bekerja saat yt-dlp ditolak TikTok).
   if (isTikTokUrl(url)) {
@@ -250,7 +276,7 @@ async function downloadSingle(
       onProgress({ id, url, percent: 0, status: 'downloading', phase: 'retrying' })
       await sleep(2000 * attempt)
     }
-    const result = await runYtdlpDownload(url, id, onProgress, options)
+    const result = await runYtdlpDownload(targetUrl, id, onProgress, options)
     if (result.ok) return true
     lastError = result.error ?? ''
     if (!result.retryable) break
@@ -261,7 +287,7 @@ async function downloadSingle(
   if (EXTRACTOR_ISSUE_RE.test(lastError)) {
     const workaroundArgs = ['--user-agent', CHROME_USER_AGENT]
     onProgress({ id, url, percent: 0, status: 'downloading', phase: 'retrying' })
-    const wResult = await runYtdlpDownload(url, id, onProgress, options, workaroundArgs)
+    const wResult = await runYtdlpDownload(targetUrl, id, onProgress, options, workaroundArgs)
     if (wResult.ok) return true
 
     // Lapisan 3: self-heal — perbarui yt-dlp ke rilis terbaru (sekali per sesi)
@@ -271,7 +297,7 @@ async function downloadSingle(
       ytdlpSelfHealed = true
       onProgress({ id, url, percent: 0, status: 'downloading', phase: 'retrying' })
       await ensureLatestYtdlp()
-      const hResult = await runYtdlpDownload(url, id, onProgress, options, workaroundArgs)
+      const hResult = await runYtdlpDownload(targetUrl, id, onProgress, options, workaroundArgs)
       if (hResult.ok) return true
       lastError = hResult.error ?? lastError
     } else {
@@ -554,7 +580,12 @@ function buildDownloadArgs(
   if (options.maxHeight && options.maxHeight > 0) {
     args.push('-f', `bv*[height<=${options.maxHeight}]+ba/b[height<=${options.maxHeight}]`)
   }
-  if (options.cookiesBrowser && options.cookiesBrowser.trim()) {
+  // Cookie Douyin (file Netscape hasil paste header) lebih spesifik dan
+  // diprioritaskan daripada Cookies Browser. Keduanya untuk situs yang
+  // membatasi unduhan anonim (Douyin/Facebook/Instagram).
+  if (options.cookiesFile && options.cookiesFile.trim()) {
+    args.push('--cookies', options.cookiesFile.trim())
+  } else if (options.cookiesBrowser && options.cookiesBrowser.trim()) {
     args.push('--cookies-from-browser', options.cookiesBrowser.trim())
   }
   args.push('-o', outputTemplate, url)
@@ -573,7 +604,7 @@ function friendlyDownloadError(raw: string): string {
   // "Fresh cookies (not necessarily logged in) are needed"). TikWM tidak
   // mendukung Douyin, jadi solusinya adalah Cookies Browser.
   if (/\[Douyin\]|Fresh cookies \(not necessarily logged in\) are needed/i.test(raw)) {
-    return `${tail} — Douyin kini mewajibkan cookie browser (anti-bot ketat). Buka douyin.com di Chrome/Firefox (login opsional, cukup kunjungi halamannya), lalu pilih "Cookies Browser" di Pengaturan Unduhan (browser yang sama), kemudian unduh ulang.`
+    return `${tail} — Douyin mewajibkan cookie sesi browser (anti-bot ketat, memengaruhi semua pengunduh). Solusinya di Pengaturan Unduhan: 1) pilih "Cookies Browser" (browser yang sudah membuka douyin.com), ATAU 2) tempel header Cookie dari sesi douyin.com yang sudah login ke kolom "Cookie Douyin" (buka douyin.com di Chrome → F12 → Application → Cookies → salin seluruh header), lalu unduh ulang.`
   }
   if (/Cannot parse data|Unexpected response|report this issue|Confirm you are on the latest version/i.test(raw)) {
     // TikTok memperketat bot-detection (Agustus 2026) yang memengaruhi SEMUA
