@@ -3,6 +3,41 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
 
+## Status Rilis v1.3.2 (2026-08-14) — Bugfix UI block + Douyin, LIVE
+
+- **Release `v1.3.2` LIVE**:
+  https://github.com/dennsoe/rs-omniclip/releases/tag/v1.3.2
+  - macOS: `RS-OmniClip-1.3.2-arm64.dmg` (99 MB) + `.zip` (95 MB).
+  - Windows: `RS-OmniClip-1.3.2-x64-setup.exe` (NSIS, 82 MB) +
+    `RS-OmniClip-1.3.2-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
+  - API `releases/latest` = `v1.3.2`.
+- **PR #20** (`a260a1f`, fix UI block + Douyin) + **PR #21** (`44591d0`, bump
+  1.3.2) — merge commit.
+
+## Fix: app terkunci "Menyiapkan Mesin Video" + error Douyin (2026-08-14)
+
+Laporan (perangkat baru): (1) app terus di layar "Menyiapkan Mesin Video...",
+tidak masuk aplikasi; (2) tidak bisa unduh Douyin.
+
+- **Issue 1 (kritis)**: `App.tsx` menampilkan LAYAR PENUH yang di-gate
+  `isAppReady` — bila provisioning FFmpeg lambat/gagal (mis. sumber arm64 tak
+  terjangkau), app tidak pernah masuk ke halaman utama. **Fix**: hapus gate
+  layar penuh — app SELALU menampilkan UI; mesin diprovisoning lazy saat
+  benar-benar dipakai; status mesin jadi **banner non-blocking** di atas
+  aplikasi (spinner + pesan + tombol "Coba Lagi" → `engine:check` →
+  `initEngine`).
+- **Issue 2 (Douyin)**: audit menyeluruh — tidak ada metode gratis yang andal
+  (diuji: TikWM → "Url parsing is failed"; douyin.wtf/qjqq/yujn/xxapi →
+  mati/404/502; iesdouyin iteminfo/share → kosong/302; yt-dlp → "Fresh cookies
+  are needed"; yt-dlp + ttwid otomatis → tetap gagal; yt-dlp + cookies Chrome →
+  tetap gagal karena butuh cookie sesi Douyin penuh). Douyin kini mewajibkan
+  cookie browser (anti-bot ketat). **Fix**: error Douyin kini jelas & menuntun
+  pengguna mengaktifkan "Cookies Browser" (buka douyin.com di Chrome/Firefox
+  lalu pilih browser tsb di Pengaturan Unduhan).
+- **Verifikasi**: E2E (Electron+CDP, userData terisolasi) — UI utama tampil
+  segera, layar "Menyiapkan" tidak memblokir. typecheck/lint/build PASS.
+- File berubah: `src/App.tsx`, `electron/main/engine/downloader.ts`.
+
 ## Status Rilis v1.3.1 (2026-08-14) — Bugfix kritis FFmpeg arm64, LIVE
 
 - **Release `v1.3.1` LIVE**:
