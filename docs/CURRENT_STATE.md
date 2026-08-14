@@ -3,6 +3,53 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
 
+## Status Rilis v1.3.1 (2026-08-14) — Bugfix kritis FFmpeg arm64, LIVE
+
+- **Release `v1.3.1` LIVE**:
+  https://github.com/dennsoe/rs-omniclip/releases/tag/v1.3.1
+  - macOS: `RS-OmniClip-1.3.1-arm64.dmg` (99 MB) + `.zip` (95 MB).
+  - Windows: `RS-OmniClip-1.3.1-x64-setup.exe` (NSIS, 82 MB) +
+    `RS-OmniClip-1.3.1-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
+  - `latest-mac.yml` + `latest.yml` ikut diunggah. API `releases/latest` =
+    `v1.3.1`.
+- **PR #17** (`4d04c83`, fix FFmpeg arm64) + **PR #18** (`139b511`, bump 1.3.1) —
+  merge commit.
+
+## Fix FFmpeg di Apple Silicon — EBADARCH -86 (2026-08-14) — audit forensik
+
+Laporan pengguna (perangkat baru): (1) pemrosesan video gagal `spawn Unknown
+system error -86`; (2) FFmpeg tidak bisa diunduh/diperbarui (Terpasang: —).
+Audit forensik menemukan akar masalah NYATA (bukan asumsi):
+
+- **Akar**: ffbinaries 1.1.6 hanya menyediakan build FFmpeg macOS **x86_64**
+  (`osx-64`); `detectPlatform()` selalu `osx-64` di Mac mana pun. Binary yang
+  terpasang = `Mach-O x86_64` (diverifikasi `lipo -archs`). Di **Apple Silicon
+  tanpa Rosetta**, spawn binary x86_64 → **errno -86 (EBADARCH)** =
+  `spawn Unknown system error -86`. Mesin dengan Rosetta tidak terpengaruh
+  (jalan via emulasi) → bug hanya muncul di perangkat baru tanpa Rosetta.
+- **Gap kode**: `isExecutable()` hanya cek bit X_OK, TIDAK memverifikasi binary
+  bisa dijalankan → binary arsitektur salah dianggap "terpasang".
+- **Fix (`electron/main/engine/ffmpeg.ts`)**:
+  - Provisioning **arch-aware**: Apple Silicon → unduh build **native arm64
+    (FFmpeg 9.0)** dari osxexperts.net (`ffmpeg9arm.zip`/`ffprobe9arm.zip` —
+    terverifikasi berjalan tanpa Rosetta, memuat semua filter preset:
+    unsharp/afftdn/drawtext/scale + libx264/aac). Intel/Windows/Linux → jalur
+    lama (ffbinaries → fallback) tidak berubah.
+  - **Verifikasi binary benar-benar bisa dijalankan** (`readBinaryVersion` =
+    spawn `-version`, bukan cek bit). Binary lama salah-arsitektur/korup dihapus
+    lalu diunduh ulang. Gagal tetap → error jelas.
+  - `expectedFfmpegVersion()` per-arsitektur (9.0 arm64 / 6.1 lainnya).
+- **Fix (`electron/main/engine/updater.ts`)**: `getResourceStatus` memakai
+  `expectedFfmpegVersion()` untuk ffmpeg di Apple Silicon agar status tidak
+  salah "Perlu update".
+- **Verifikasi nyata** (Electron+CDP, userData terisolasi, Apple Silicon):
+  `checkResources` → ffmpeg `current=9.0 expected=9.0 outdated=false`; binary
+  arm64 jalan native; `versions.json` = `{ffmpeg: "9.0", yt-dlp: "2026.07.04"}`;
+  typecheck/lint/build PASS, get_errors bersih.
+- **Catatan**: app v1.3.0 lama TIDAK bisa self-heal (kode lama tetap unduh x64);
+  pengguna harus pasang v1.3.1. FFmpeg arm64 diunduh otomatis saat app pertama
+  dibuka / Perbarui Resource.
+
 ## Status Rilis v1.3.0 (2026-08-14) — LIVE (macOS + Windows)
 
 - **Release `v1.3.0` LIVE**:
