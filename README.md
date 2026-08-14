@@ -15,7 +15,9 @@ desktop **Electron-Vite** dengan backend Node.js asli. Kode lama tersimpan di
 2. **Peningkat Video & Normalisasi Audio** — Upscale 1080p (sumbu panjang) + penajaman AI-like (`unsharp`) + reduksi noise audio (`afftdn`).
 3. **Pengunduh Video Universal** — unduh banyak link sekaligus (batch) atau ambil
    daftar video dari satu akun/halaman lalu pilih yang ingin diunduh, via `yt-dlp`
-   (YouTube, TikTok, Instagram, dll).
+   (YouTube, TikTok, Instagram, dll). Dilengkapi **pilihan kualitas** (maks
+   resolusi), **cookies browser** (untuk Facebook/Instagram yang membatasi
+   unduhan anonim), dan opsi **unduh paralel** (maks 2).
 4. **Pemotong Video Inline** — Potong lossless (stream copy) tanpa re-encode.
 5. **Watermark & Auto-Caption** — Di roadmap (build FFmpeg saat ini tidak
    mendukung filter `drawtext`).

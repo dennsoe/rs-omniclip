@@ -196,6 +196,24 @@ Halaman Pengunduh di-redesign total (single link → multi-link + scrape + toggl
   bergeser, badge berubah, hanya 1 panel di DOM), badge multi-link, nav pill,
   animasi pilihan preset, dan fallback web diuji via browser.
 
+## Perbaikan Pengunduh (2026-08-14) — kualitas, cookies, paralel, error jelas
+
+Menindaklanjuti audit download lambat + error Facebook:
+- **Error Facebook "Cannot parse data"**: yt-dlp terpasang sudah terbaru
+  (2026.07.04) — bug extractor upstream yang intermiten (bukan karena yt-dlp
+  usang, bukan bug app). App kini menampilkan pesan error yang lebih jelas +
+  saran (coba lagi, cookies browser, perbarui resource).
+- **Kualitas/Batas Resolusi** (UI "Pengaturan Unduhan" → `-f
+  bv*[height<=H]+ba/b[height<=H]`): Terbaik / 2160p / 1440p / 1080p / 720p /
+  480p / 360p — mempercepat unduhan & mengecilkan file.
+- **Cookies Browser** (UI → `--cookies-from-browser`): Chrome / Edge / Safari /
+  Firefox / Brave — menghindari throttle Facebook/Instagram pada unduhan anonim.
+- **Unduh Paralel** (opsional, maks 2 sekaligus): checkbox "Unduh 2 sekaligus"
+  (default berurutan agar stabil).
+- Kontrak: `startDownloadBatch(urls, options?)` → `download:start` payload
+  `{ urls, options }`. Verifikasi: typecheck/lint/build PASS, get_errors
+  kosong, UI Pengaturan Unduhan tampil & berfungsi di browser.
+
 ## Mekanisme Pembaruan GRATIS (2026-08-13) — versi 1.1.0
 
 Aplikasi kini punya **mekanisme pembaruan 100% gratis** (tanpa biaya apa pun):

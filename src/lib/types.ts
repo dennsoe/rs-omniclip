@@ -34,6 +34,16 @@ export interface ScrapeItem {
   url: string
 }
 
+/** Opsi unduhan (engine yt-dlp) — dikirim renderer → main → downloader. */
+export interface DownloadOptions {
+  /** Batas tinggi resolusi video (px). 0 / tanpa = kualitas terbaik (tanpa batas). */
+  maxHeight?: number
+  /** Browser untuk mengambil cookies (mis. 'chrome', 'edge', 'safari'). '' = tanpa cookies. */
+  cookiesBrowser?: string
+  /** Unduh beberapa URL sekaligus (maks 2) alih-alih berurutan. Default false. */
+  parallel?: boolean
+}
+
 /** Info versi aplikasi (lokal vs rilis terbaru dari GitHub). */
 export interface UpdateInfo {
   /** Versi lokal dari package.json. */

@@ -92,8 +92,11 @@ const api = {
     ipcRenderer.send('folder:open', folderPath)
   },
 
-  startDownloadBatch: (urls: string[]): void => {
-    ipcRenderer.send('download:start', { urls })
+  startDownloadBatch: (
+    urls: string[],
+    options?: { maxHeight?: number; cookiesBrowser?: string; parallel?: boolean }
+  ): void => {
+    ipcRenderer.send('download:start', { urls, options })
   },
 
   onDownloadProgress: (cb: (data: DownloadProgressData) => void): Unsubscribe => {

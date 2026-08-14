@@ -28,6 +28,7 @@ import {
   ExternalLink,
   BadgeCheck,
   CircleAlert,
+  Settings,
   type LucideIcon
 } from 'lucide-react'
 import {
@@ -96,6 +97,10 @@ export default function App(): React.ReactElement {
   const [isScraping, setIsScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState<string | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
+  // Pengaturan unduhan (kualitas, cookies browser, paralel).
+  const [downloadMaxHeight, setDownloadMaxHeight] = useState<number>(0)
+  const [downloadCookiesBrowser, setDownloadCookiesBrowser] = useState<string>('')
+  const [downloadParallel, setDownloadParallel] = useState(false)
 
   const [files, setFiles] = useState<FileItem[]>([])
   const [preset, setPreset] = useState<PresetType>('fullhd')
@@ -358,7 +363,11 @@ export default function App(): React.ReactElement {
       ...prev
     ])
     if (window.api?.startDownloadBatch) {
-      window.api.startDownloadBatch(urls)
+      window.api.startDownloadBatch(urls, {
+        maxHeight: downloadMaxHeight > 0 ? downloadMaxHeight : undefined,
+        cookiesBrowser: downloadCookiesBrowser || undefined,
+        parallel: downloadParallel
+      })
     } else {
       // Mode web/fallback: mesin tidak tersedia di browser biasa.
       setIsDownloading(false)
@@ -1001,6 +1010,82 @@ export default function App(): React.ReactElement {
 
               {/* Konten mode (animasi) + antrean unduhan */}
               <div className="flex-1 min-h-0 relative z-10 px-4 sm:px-6 md:px-8 pb-24 overflow-y-auto">
+                {/* Pengaturan unduhan (kualitas, cookies browser, paralel) */}
+                <div className="mb-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
+                      <Settings className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
+                        Pengaturan Unduhan
+                      </h3>
+                      <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
+                        Kualitas, cookies &amp; kecepatan batch.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
+                        Kualitas
+                      </span>
+                      <select
+                        value={downloadMaxHeight}
+                        onChange={(e) => setDownloadMaxHeight(Number(e.target.value))}
+                        className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                      >
+                        <option value={0}>Terbaik</option>
+                        <option value={2160}>2160p (4K)</option>
+                        <option value={1440}>1440p</option>
+                        <option value={1080}>1080p</option>
+                        <option value={720}>720p</option>
+                        <option value={480}>480p</option>
+                        <option value={360}>360p</option>
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
+                        Cookies Browser
+                      </span>
+                      <select
+                        value={downloadCookiesBrowser}
+                        onChange={(e) => setDownloadCookiesBrowser(e.target.value)}
+                        className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                      >
+                        <option value="">Tanpa Cookies</option>
+                        <option value="chrome">Chrome</option>
+                        <option value="edge">Edge</option>
+                        <option value="safari">Safari</option>
+                        <option value="firefox">Firefox</option>
+                        <option value="brave">Brave</option>
+                      </select>
+                    </label>
+                    <label className="flex items-end gap-2 cursor-pointer pb-2">
+                      <input
+                        type="checkbox"
+                        checked={downloadParallel}
+                        onChange={(e) => setDownloadParallel(e.target.checked)}
+                        className="accent-blue-600 w-4 h-4 shrink-0"
+                      />
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                          Unduh 2 sekaligus
+                        </span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                          Lebih cepat untuk banyak tautan.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                  {downloadCookiesBrowser && (
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                      <Info className="w-3 h-3 shrink-0" />
+                      Gunakan browser yang sudah login ke Facebook/Instagram agar unduhan lebih cepat &amp;
+                      jarang gagal. Tutup browser bila muncul error kunci database.
+                    </p>
+                  )}
+                </div>
                 {downloaderMode === 'links' ? (
                   <motion.div
                     key="links-mode"

@@ -1,4 +1,4 @@
-import type { FileItem, PresetType, ScrapeItem, UpdateInfo, ResourceInfo } from '@lib/types'
+import type { FileItem, PresetType, ScrapeItem, UpdateInfo, ResourceInfo, DownloadOptions } from '@lib/types'
 
 /**
  * Kontrak jembatan IPC (window.api) antara renderer React dan backend Node.js.
@@ -21,7 +21,7 @@ declare global {
       ) => () => void
       onProcessingComplete: (cb: (data: { outputFolder: string }) => void) => () => void
       openFolder: (folderPath: string) => void
-      startDownloadBatch: (urls: string[]) => void
+      startDownloadBatch: (urls: string[], options?: DownloadOptions) => void
       onDownloadProgress: (
         cb: (data: {
           id: string
