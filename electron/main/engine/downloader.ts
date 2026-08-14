@@ -568,6 +568,13 @@ function buildDownloadArgs(
  */
 function friendlyDownloadError(raw: string): string {
   const tail = lastLines(raw)
+  // Douyin (2026) kini mewajibkan cookie browser untuk unduhan anonim
+  // (anti-bot sangat ketat, memengaruhi semua pengunduh; yt-dlp menampilkan
+  // "Fresh cookies (not necessarily logged in) are needed"). TikWM tidak
+  // mendukung Douyin, jadi solusinya adalah Cookies Browser.
+  if (/\[Douyin\]|Fresh cookies \(not necessarily logged in\) are needed/i.test(raw)) {
+    return `${tail} — Douyin kini mewajibkan cookie browser (anti-bot ketat). Buka douyin.com di Chrome/Firefox (login opsional, cukup kunjungi halamannya), lalu pilih "Cookies Browser" di Pengaturan Unduhan (browser yang sama), kemudian unduh ulang.`
+  }
   if (/Cannot parse data|Unexpected response|report this issue|Confirm you are on the latest version/i.test(raw)) {
     // TikTok memperketat bot-detection (Agustus 2026) yang memengaruhi SEMUA
     // pengunduh berbasis yt-dlp di dunia. App sudah otomatis memperbarui

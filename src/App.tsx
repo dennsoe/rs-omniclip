@@ -592,26 +592,10 @@ export default function App(): React.ReactElement {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  if (!isAppReady) {
-    return (
-      <div className={isDarkMode ? 'dark' : ''}>
-        <div className="flex flex-col items-center justify-center h-dvh bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-sans transition-colors duration-500">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="flex flex-col items-center gap-6"
-          >
-            <Loader2 className="w-16 h-16 text-blue-600 animate-spin" />
-            <div className="text-center">
-              <h1 className="text-2xl font-bold tracking-tight mb-2">Menyiapkan Mesin Video...</h1>
-              <p className="text-slate-500 dark:text-slate-400">{engineStatus}</p>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-    )
-  }
-
+  // Mesin (FFmpeg/yt-dlp) diprovisoning SAAT DIBUTUHKAN (lazy) — tidak lagi
+  // memblokir seluruh aplikasi di layar "Menyiapkan Mesin Video". Status mesin
+  // ditampilkan sebagai banner non-blocking (lihat di bawah) sehingga aplikasi
+  // tetap bisa dipakai meski provisioning masih berjalan / sempat gagal.
   const presetsList: Array<{
     id: PresetType
     title: string
@@ -627,8 +611,23 @@ export default function App(): React.ReactElement {
   ]
 
   return (
-    <div className={isDarkMode ? 'dark' : ''}>
-      <div className="flex h-dvh bg-slate-50 dark:bg-slate-900 overflow-hidden font-sans text-slate-800 dark:text-slate-100 transition-colors duration-500">
+    <div className={`${isDarkMode ? 'dark' : ''} h-dvh flex flex-col overflow-hidden`}>
+      {/* BANNER STATUS MESIN — non-blocking: app tetap bisa dipakai. "Coba Lagi"
+          memicu ulang provisioning (engine:check -> initEngine). */}
+      {window.api?.checkEngine && !isAppReady && (
+        <div className="shrink-0 flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-slate-800/90 border-b border-blue-100 dark:border-blue-900/50 text-xs text-blue-700 dark:text-blue-300 transition-colors">
+          <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+          <span className="truncate">{engineStatus}</span>
+          <button
+            type="button"
+            onClick={() => window.api?.checkEngine()}
+            className="ml-auto shrink-0 text-[11px] font-semibold bg-white dark:bg-slate-900 hover:bg-blue-100 dark:hover:bg-slate-700 rounded-full px-2.5 py-1 transition-colors"
+          >
+            Coba Lagi
+          </button>
+        </div>
+      )}
+      <div className="flex flex-1 min-h-0 bg-slate-50 dark:bg-slate-900 overflow-hidden font-sans text-slate-800 dark:text-slate-100 transition-colors duration-500">
         <Toasts toasts={toasts} />
         <ConfirmModal confirmAction={confirmAction} onClose={() => setConfirmAction(null)} onConfirm={handleConfirm} />
         <PreviewModal previewFile={previewFile} onClose={() => setPreviewFile(null)} />
