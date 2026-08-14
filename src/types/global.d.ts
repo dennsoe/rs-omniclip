@@ -60,6 +60,8 @@ declare global {
       checkResources: () => Promise<ResourceInfo[]>
       updateResources: (force?: boolean) => Promise<ResourceInfo[]>
       onResourceStatus: (cb: (message: string) => void) => () => void
+      /** Status resource segar dari proses utama (dipakai badge update sidebar). */
+      onResourceChanged: (cb: (data: ResourceInfo[]) => void) => () => void
     }
   }
 }

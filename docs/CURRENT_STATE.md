@@ -3,6 +3,45 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
 
+## Badge Update di Sidebar "Tentang & Update" (2026-08-14) — otomatis & akurat
+
+Laporan: ingin notif/badge update di menu sidebar saat ada pembaruan baru
+(entah dari resource/yt-dlp atau versi aplikasi). Audit forensik sebelumnya:
+- **Update resource (ffmpeg/yt-dlp) SUDAH auto-install** saat runtime (tombol
+  "Perbarui Resource" → hapus + unduh ulang + deteksi versi, tanpa restart).
+- **Update versi app TIDAK bisa auto-install** pada strategi gratis (tanpa
+  Developer ID/notarisasi — electron-updater wajib signing). Tetap manual:
+  tombol membuka halaman rilis GitHub (keputusan user: tidak ingin berbayar).
+- Badge sidebar belum ada; data (app + resource) sudah di-cek saat mount.
+
+Implementasi:
+- **Sidebar badge** (`src/App.tsx`): badge angka (pill) di tombol "Tentang &
+  Update" saat `updateBadgeCount > 0`, dengan `appHasUpdate =
+  updateInfo?.hasUpdate` ATAU ada resource `outdated` (ffmpeg/yt-dlp). Warna
+  **biru** bila ada update app, **amber** bila hanya resource. Saat tidak ada
+  update, kembali ke dot aktif biasa.
+- **Akurasi (anti badge palsu)**: state `resourcesReady` baru. Cek resource
+  saat mount TIDAK mengaktifkan badge (versions.json masih kosong saat boot
+  yt-dlp ~11 dtk). Badge resource hanya aktif dari:
+  1. **Push main `resource:changed`** (`electron/main/index.ts`): setelah
+     `recordInstalledVersions()` selesai, main mengirim `ResourceInfo[]` segar
+     ke renderer (kanal baru, kontrak di preload `onResourceChanged` +
+     `src/types/global.d.ts`).
+  2. Tombol manual "Periksa Resource" / auto re-check berkala.
+- **Auto re-check berkala**: interval 30 menit + saat window focus — menangkap
+  rilis/resource baru tanpa membuka ulang app (jauh di bawah rate limit
+  GitHub API 60/jam).
+- **Fix minor**: fallback versi `'1.1.0'` hardcoded dihapus → memakai
+  `updateInfo?.current` dinamis (mencegah tampilan versi salah saat app sudah
+  1.2.0).
+- **Verifikasi**: typecheck (node+web)/lint/build PASS, `get_errors` bersih,
+  renderer di dev (5173) tampil normal. Catatan: perubahan `electron/main/**`
+  & preload butuh restart dev agar `resource:changed` aktif (dev tidak
+  hot-reload main).
+- File berubah: `src/App.tsx`, `electron/main/index.ts`,
+  `electron/preload/index.ts`, `src/types/global.d.ts` + docs
+  (`docs/IPC_CONTRACT.md` kanal `resource:changed`).
+
 ## Solusi TikTok via API TikWM — multi-key failover (2026-08-14)
 
 TikTok kini **BERFUNGSI** (sebelumnya rusak total di level yt-dlp — lihat

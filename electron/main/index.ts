@@ -340,10 +340,18 @@ function registerIpc(): void {
     return updateResources(onStatus, force === true)
   })
 
-  // Catat versi resource saat aplikasi selesai menginisialisasi engine.
-  void recordInstalledVersions().catch(() => {
-    /* versi resource tidak wajib untuk fungsi inti */
-  })
+  // Catat versi resource saat aplikasi selesai menginisialisasi engine, lalu
+  // kirim status resource SEGAR ke renderer — basis akurat badge update di
+  // sidebar (menghindari badge palsu saat versions.json belum terisi di mount,
+  // karena deteksi yt-dlp butuh ~11 detik boot).
+  void recordInstalledVersions()
+    .then(async () => {
+      const fresh = await getResourceStatus()
+      mainWindow?.webContents.send('resource:changed', fresh)
+    })
+    .catch(() => {
+      /* versi resource tidak wajib untuk fungsi inti */
+    })
 }
 
 const gotLock = app.requestSingleInstanceLock()

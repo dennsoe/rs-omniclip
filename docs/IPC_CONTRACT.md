@@ -36,6 +36,7 @@ dapat membersihkan listener saat unmount.
 | R → M | `resource:check` (invoke) | Status resource ffmpeg/yt-dlp vs `resources.json` → `ResourceInfo[]` |
 | R → M | `resource:update` (invoke) | Perbarui resource yang outdated (opsi `force`) → `ResourceInfo[]` |
 | M → R | `resource:status` | Pesan progres pembaruan resource dari proses utama |
+| M → R | `resource:changed` | Status resource SEGAR `ResourceInfo[]` (dikirim main setelah versi terdeteksi — basis badge update sidebar) |
 
 ## 3. Signature Lengkap `window.api`
 
@@ -136,6 +137,7 @@ interface Window {
     checkResources: () => Promise<
       Array<{ id: string; label: string; current: string | null; expected: string | null; outdated: boolean }>
     >
+    onResourceChanged: (cb: (data: ResourceInfo[]) => void) => () => void
     updateResources: (force?: boolean) => Promise<
       Array<{ id: string; label: string; current: string | null; expected: string | null; outdated: boolean }>
     >
@@ -256,8 +258,12 @@ tidak punya jalur nyata.
 - `updateResources(force?)` (invoke) → menghapus binary lama, me-reset cache
   single-flight (`resetFfmpegCache` / `resetYtdlpCache`), mengunduh ulang yang
   outdated, lalu mencatat ulang versi. Progres dikirim lewat event
-  `resource:status` (string pesan Bahasa Indonesia).
-
+  `resource:status` (string pesan Bahasa Indonesia).- `onResourceChanged(cb)` (event) → proses utama mengirim `ResourceInfo[]`
+  SEGAR setelah `recordInstalledVersions()` selesai (saat startup). Dipakai
+  renderer sebagai **basis akurat badge update di sidebar** — menghindari
+  badge palsu karena `versions.json` belum terisi saat mount (deteksi yt-dlp
+  butuh ~11 detik boot). Renderer juga menerima daftar ini setelah membuka
+  app tanpa perlu klik "Periksa Resource".
 ## 5. Aturan Penggunaan di Renderer
 
 1. Selalu panggil metode lewat optional chaining (`window.api?.method`) karena
