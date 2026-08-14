@@ -4,6 +4,7 @@ import { execFile, spawn } from 'node:child_process'
 import { getEngineBinDir, getDownloadDir } from './paths'
 import { downloadFile } from './net'
 import { trackProcess, untrackProcess } from './procmon'
+import { isTikTokUrl, downloadTikTokVideo } from './tiktok'
 
 export interface DownloadProgress {
   id: string
@@ -221,6 +222,9 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 /**
  * Mengunduh satu URL dengan lapisan pemulihan berjenjang:
+ * 0) TikTok → jalur TikWM (API multi-key, failover otomatis) terlebih dahulu,
+ *    karena yt-dlp kini digagalkan bot-detection TikTok. Bila TikWM gagal
+ *    total, lanjut ke lapisan pemulihan yt-dlp di bawahnya.
  * 1) percobaan normal + retry transien (backoff),
  * 2) workaround extractor (Chrome user-agent) bila situs menolak,
  * 3) self-heal: perbarui yt-dlp ke rilis terbaru lalu coba lagi (sekali per sesi).
@@ -232,6 +236,13 @@ async function downloadSingle(
 ): Promise<boolean> {
   const id = url
   let lastError = ''
+
+  // Lapisan 0: TikTok via TikWM (cepat & bekerja saat yt-dlp ditolak TikTok).
+  if (isTikTokUrl(url)) {
+    const tiktokOk = await tryTikTokDownload(url, id, onProgress)
+    if (tiktokOk) return true
+    lastError = 'TikWM tidak berhasil; mencoba jalur yt-dlp...'
+  }
 
   // Lapisan 1: percobaan normal + retry transien.
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -269,6 +280,43 @@ async function downloadSingle(
   }
 
   onProgress({ id, url, percent: 0, status: 'failed', error: friendlyDownloadError(lastError) })
+  return false
+}
+
+/**
+ * Jalur TikTok via API TikWM (multi-key failover). Sukses → kirim event
+ * `success` dengan metadata (judul, thumbnail, path file, ukuran). Gagal →
+ * kembali false agar `downloadSingle` melanjutkan ke lapisan yt-dlp.
+ */
+async function tryTikTokDownload(
+  url: string,
+  id: string,
+  onProgress: (p: DownloadProgress) => void
+): Promise<boolean> {
+  onProgress({ id, url, percent: 0, status: 'downloading', phase: 'downloading' })
+  const outDir = getDownloadDir()
+  const result = await downloadTikTokVideo(url, outDir, (phase, percent) => {
+    if (phase === 'resolving') {
+      onProgress({ id, url, percent: 0, status: 'downloading', phase: 'extracting' })
+    } else if (phase === 'downloading') {
+      onProgress({ id, url, percent, status: 'downloading', phase: 'downloading' })
+    }
+  })
+  if (result.ok && result.filePath) {
+    onProgress({
+      id,
+      url,
+      percent: 100,
+      status: 'success',
+      phase: 'done',
+      title: result.title,
+      thumbnail: result.thumbnail,
+      filePath: result.filePath,
+      sizeBytes: result.sizeBytes,
+      description: 'TikTok · via TikWM'
+    })
+    return true
+  }
   return false
 }
 

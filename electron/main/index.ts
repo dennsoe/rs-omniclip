@@ -246,7 +246,9 @@ function handleDownload(payload: { urls?: string[]; options?: DownloadOptions })
     (p: DownloadProgress) => emit('download:progress', p),
     (r) => emit('download:complete', r),
     options
-  )
+  ).catch((err) => {
+    console.error('[RS OmniClip] Gagal menjalankan unduhan batch:', err)
+  })
 }
 
 function handleScrape(payload: { id?: string; url?: string }): void {

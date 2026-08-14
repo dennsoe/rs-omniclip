@@ -128,20 +128,29 @@ Hasil build ke `out/main/index.js`, `out/preload/index.js`,
    `{ urls, options }` dengan `options = { maxHeight?, cookiesBrowser?, parallel? }`).
 2. Main: `handleDownload` → `startDownloadBatch` (engine/downloader.ts) — loop
    **berurutan** per URL (atau maks 2 paralel bila `parallel`).
-3. `ensureYtdlp()` memastikan binary yt-dlp tersedia.
-4. Tiap URL: spawn `yt-dlp --newline --no-playlist --progress [-f bv*[height<=H]...]
-   [--cookies-from-browser <browser>] --print after_move:__RSMETA__{json} -o <template> <url>`.
-5. **Progress realtime**: stdout di-buffer per baris; baris `[download] NN% of X
+3. **Jalur TikTok (Lapisan 0)**: bila `isTikTokUrl(url)` → coba **API TikWM**
+   (`electron/main/engine/tiktok.ts`) lebih dulu — 5 `api_key` (failover
+   berurutan k1→k5): resolve `code:0` + `data.play`, unduh MP4 via **GET** dengan
+   UA Chrome + `Referer: https://www.tiktok.com/` (HEAD CDN = 503), progress
+   0→100, nama `[judul] [id].mp4` (sanitasi + dedupe). Sukses → event `success`
+   (`description: "TikTok · via TikWM"`); gagal → jatuh ke jalur yt-dlp di bawah.
+   (Alasan: bot-detection TikTok 2026 memutus yt-dlp global; TikWM emulasi
+   mobile di sisi server tetap bekerja.)
+4. `ensureYtdlp()` memastikan binary yt-dlp tersedia.
+5. Tiap URL (non-TikTok / fallback TikTok): spawn `yt-dlp --newline --no-playlist
+   --progress [-f bv*[height<=H]...] [--cookies-from-browser <browser>]
+   --print after_move:__RSMETA__{json} -o <template> <url>`.
+6. **Progress realtime**: stdout di-buffer per baris; baris `[download] NN% of X
    at Y/s ETA MM:SS` diurai → `download:progress { id=url, url, percent, status,
    speedBytesPerSec?, etaSeconds?, sizeBytes?, phase? }` (throttle 300 ms).
-6. **Retry + self-heal**: retry transien (2×, jeda mundur) untuk error extractor
+7. **Retry + self-heal**: retry transien (2×, jeda mundur) untuk error extractor
    sementara; bila masih gagal dengan error situs/extractor (mis. TikTok
    bot-detection), coba ulang dengan **user-agent Chrome**, lalu **perbarui
    yt-dlp otomatis ke rilis terbaru** dan coba lagi (sekali per sesi).
-7. **Metadata** `title/thumbnail/description/filePath` dari baris `__RSMETA__`
+8. **Metadata** `title/thumbnail/description/filePath` dari baris `__RSMETA__`
    (JSON setelah `after_move`) disertakan pada event sukses.
-8. Selesai semua → `download:complete { total, success, failed }`.
-9. Output: `~/Downloads/RS-OmniClip/Unduhan/`; "Buka folder" via `folder:reveal`.
+9. Selesai semua → `download:complete { total, success, failed }`.
+10. Output: `~/Downloads/RS-OmniClip/Unduhan/`; "Buka folder" via `folder:reveal`.
 
 ### 8.2 Ambil Daftar Akun / Halaman
 

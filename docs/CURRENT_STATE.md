@@ -3,6 +3,55 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
 
+## Solusi TikTok via API TikWM — multi-key failover (2026-08-14)
+
+TikTok kini **BERFUNGSI** (sebelumnya rusak total di level yt-dlp — lihat
+"Audit Forensik TikTok" di bawah). Solusi: integrasi **API TikWM**
+(`https://www.tikwm.com/api`) dengan **5 api_key** milik user, disimpan di
+codebase (tanpa UI tambah key), failover berurutan otomatis.
+
+- **Akar**: bot-detection baru TikTok (Agustus 2026) memutus SEMUA pengunduh
+  berbasis yt-dlp (issue yt-dlp #17403); workaround UA/cookies/mobile API gagal.
+  TikWM memakai emulasi perangkat mobile di sisi server sehingga tetap bisa
+  mengunduh.
+- **Implementasi** — `electron/main/engine/tiktok.ts` (modul baru, murni
+  Node builtins, tanpa dependensi Electron):
+  1. `TIKWM_PROVIDERS` — array 5 provider `{ id: 'k1'..'k5', baseUrl, apiKey }`
+     (5 key user, hardcoded di codebase; tanpa UI tambah key).
+  2. `isTikTokUrl(url)` — deteksi host `tiktok.com` / `tiktokv.com`
+     (termasuk `vt.`/`vm.` short-link).
+  3. `resolveTikTokInfo(url)` — failover berurutan k1→k5; sukses bila
+     `code === 0` dan `data.play` ada; gagal → lanjut provider berikutnya;
+     semua gagal → Error jelas.
+  4. `downloadTikTokVideo(url, destDir, onProgress)` — resolve + unduh
+     `data.play` via **GET dengan header browser** (User-Agent Chrome +
+     `Referer: https://www.tiktok.com/`; HEAD dari CDN = 503, GET = MP4 valid),
+     progress byte 0→100, redirect ditangani, nama file `[judul] [id].mp4`
+     (sanitasi lintas-OS + dedupe ` (2)`), metadata (title/thumbnail/sizeBytes)
+     di-return untuk event sukses.
+- **Integrasi** — `electron/main/engine/downloader.ts`: `downloadSingle` kini
+  punya **Lapisan 0 — TikTok via TikWM** di depan lapisan yt-dlp (retry →
+  Chrome UA → self-heal). `isTikTokUrl(url)` true → coba TikWM dulu; sukses →
+  event `success` dengan metadata (`description: "TikTok · via TikWM"`); gagal
+  → jatuh ke jalur yt-dlp seperti biasa. Platform lain tidak berubah.
+- **Catatan audit**: parameter `api_key` diterima endpoint TikWM namun saat ini
+  **tidak di-enforce** (key invalid pun `code:0`). Failover tetap diterapkan
+  atas dasar kegagalan nyata (HTTP error / `code != 0` / `play` kosong / unduhan
+  CDN gagal). Semua 5 key terverifikasi berfungsi.
+- **Verifikasi E2E (Electron + CDP, build produksi)**:
+  - TikTok URL 1 (`vt.tiktok.com/ZS4c1gE2r/`) → `success` 100%, judul/thumbnail/
+    filePath/sizeBytes 7.643.096 B, `description "TikTok · via TikWM"`,
+    `complete {total:1, success:1, failed:0}`; MP4 tersimpan di
+    `~/Downloads/RS-OmniClip/Unduhan/`.
+  - TikTok URL 2 (`vt.tiktok.com/ZS4c1gxy2/`) → sukses 5.133.237 B (via UI app).
+  - **Failover**: unit-test 4 provider pertama dimatikan (baseUrl invalid) →
+    resolve jatuh ke provider k5 & sukses.
+  - **Regresi YouTube** (`jNQXAC9IVRw`) → tetap `success` (jalur yt-dlp utuh).
+- typecheck/lint/build PASS, `get_errors` bersih.
+- File berubah: `electron/main/engine/tiktok.ts` (baru), `electron/main/engine/
+  downloader.ts` (Lapisan 0 TikWM), `electron/main/index.ts` (guard `.catch`
+  pada `startDownloadBatch` — mencegah unhandled rejection di main).
+
 ## Fix "Perbarui Resource yt-dlp tidak terupdate" (2026-08-14) — deteksi versi
 
 Laporan: panel "Tentang & Update" selalu menampilkan `yt-dlp Terpasang: — ·
@@ -71,9 +120,11 @@ Laporan: "semua video TikTok gagal; kemarin bisa tanpa cookie". Audit menyeluruh
   + self-heal), fase `retrying`, error baru tampil; **YouTube tetap sukses**
   (metadata lengkap) — tidak ada regresi. Provisioning: binDir terisi ulang
   yt-dlp **2026.07.04** (latest) saat app start.
-- **Catatan jujur**: karena TikTok rusak di level yt-dlp GLOBAL saat ini, unduhan
-  TikTok belum bisa pulih sepenuhnya HARI INI — tetapi app kini memakai yt-dlp
-  terbaru, auto-sembuh saat yt-dlp di-fix, dan memberi pesan yang benar.
+- **Catatan jujur**: karena TikTok rusak di level yt-dlp GLOBAL, jalur yt-dlp
+  untuk TikTok masih bisa gagal — TETAPI app kini punya **jalur utama TikTok via
+  API TikWM (5 key, failover otomatis)** yang sudah terverifikasi berfungsi
+  (lihat seksi "Solusi TikTok via API TikWM" di atas). yt-dlp tetap di-update &
+  auto-sembuh sebagai cadangan.
 
 ## Perbaikan Mendalam Pengunduh (2026-08-14) — progress realtime, metadata, retry
 

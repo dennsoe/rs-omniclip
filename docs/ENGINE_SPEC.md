@@ -236,6 +236,27 @@ Opsi (dari UI "Pengaturan Unduhan"):
   terbaru GitHub → yt-dlp sistem (cadangan terakhir, hanya bila unduhan
   gagal)**. Tidak lagi memakai yt-dlp sistem secara diam-diam (yang bisa
   berusia >1 tahun dan gagal menangani situs modern).
+
+**Jalur TikTok via API TikWM (Lapisan 0)** — `electron/main/engine/tiktok.ts`:
+- `downloadSingle` memeriksa `isTikTokUrl(url)` lebih dulu. Bila TikTok → coba
+  **API TikWM** sebelum yt-dlp (bot-detection TikTok 2026 memutus yt-dlp global;
+  TikWM emulasi mobile di server tetap bekerja). Gagal → jatuh ke lapisan
+  yt-dlp di bawah.
+- `TIKWM_PROVIDERS`: 5 provider `{ id: k1..k5, baseUrl: 'https://www.tikwm.com/api',
+  apiKey }` (key user, hardcoded di codebase, tanpa UI). **Failover berurutan**
+  k1→k5 pada kegagalan nyata (HTTP error, `code != 0`, `data.play` kosong,
+  unduhan CDN gagal).
+- `resolveTikTokInfo(url)`: GET `/api/?url=<url>&api_key=<key>` (UA Chrome) →
+  `{ code: 0, data: { id, title, cover, duration, size, play, ... } }`. Sukses
+  bila `code === 0` dan `play` ada.
+- `downloadTikTokVideo(url, destDir, onProgress)`: unduh `data.play` via **GET**
+  dengan UA Chrome + `Referer: https://www.tiktok.com/` (HEAD CDN = 503; GET =
+  MP4 valid), redirect ditangani, progress byte 0→100 (dari `content-length`),
+  nama `[judul] [id].mp4` (sanitasi lintas-OS + dedupe ` (2)`), return
+  `{ ok, filePath, title, thumbnail, sizeBytes }`.
+- **Catatan**: `api_key` tidak di-enforce endpoint (key invalid tetap `code:0`);
+  failover berbasis kegagalan nyata. Metadata sukses disertakan pada event
+  `success` (`description: "TikTok · via TikWM"`).
 - `--no-playlist` hanya mengambil satu video per URL.
 
 **Metadata video** (thumbnail, judul, deskripsi, filePath):
