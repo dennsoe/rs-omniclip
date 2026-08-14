@@ -107,7 +107,7 @@ const api = {
 
   startDownloadBatch: (
     urls: string[],
-    options?: { maxHeight?: number; cookiesBrowser?: string; parallel?: boolean }
+    options?: { maxHeight?: number; cookiesBrowser?: string; douyinCookie?: string; parallel?: boolean }
   ): void => {
     ipcRenderer.send('download:start', { urls, options })
   },

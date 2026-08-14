@@ -28,6 +28,7 @@ import {
   ExternalLink,
   BadgeCheck,
   CircleAlert,
+  KeyRound,
   Settings,
   type LucideIcon
 } from 'lucide-react'
@@ -130,6 +131,7 @@ export default function App(): React.ReactElement {
   // Pengaturan unduhan (kualitas, cookies browser, paralel).
   const [downloadMaxHeight, setDownloadMaxHeight] = useState<number>(0)
   const [downloadCookiesBrowser, setDownloadCookiesBrowser] = useState<string>('')
+  const [downloadDouyinCookie, setDownloadDouyinCookie] = useState<string>('')
   const [downloadParallel, setDownloadParallel] = useState(false)
 
   const [files, setFiles] = useState<FileItem[]>([])
@@ -438,6 +440,7 @@ export default function App(): React.ReactElement {
       window.api.startDownloadBatch(urls, {
         maxHeight: downloadMaxHeight > 0 ? downloadMaxHeight : undefined,
         cookiesBrowser: downloadCookiesBrowser || undefined,
+        douyinCookie: downloadDouyinCookie || undefined,
         parallel: downloadParallel
       })
     } else {
@@ -1158,6 +1161,25 @@ export default function App(): React.ReactElement {
                         </span>
                       </div>
                     </label>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1.5">
+                      <KeyRound className="w-3 h-3" />
+                      Cookie Douyin
+                      <span className="normal-case font-normal">(opsional)</span>
+                    </span>
+                    <textarea
+                      value={downloadDouyinCookie}
+                      onChange={(e) => setDownloadDouyinCookie(e.target.value)}
+                      rows={2}
+                      placeholder="Tempel header Cookie dari douyin.com yang sudah login..."
+                      className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all resize-none leading-relaxed"
+                    />
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed">
+                      Khusus Douyin (anti-bot ketat, wajib cookie sesi). Cara ambil: buka douyin.com di
+                      Chrome → login → F12 → Application → Cookies → https://www.douyin.com → salin
+                      seluruh header Cookie. Disimpan lokal &amp; dipakai yt-dlp.
+                    </p>
                   </div>
                   {downloadCookiesBrowser && (
                     <p className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5">

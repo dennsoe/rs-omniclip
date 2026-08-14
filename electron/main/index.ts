@@ -239,6 +239,10 @@ function handleDownload(payload: { urls?: string[]; options?: DownloadOptions })
       typeof payload.options?.cookiesBrowser === 'string' && payload.options.cookiesBrowser.trim()
         ? payload.options.cookiesBrowser.trim()
         : undefined,
+    douyinCookie:
+      typeof payload.options?.douyinCookie === 'string' && payload.options.douyinCookie.trim()
+        ? payload.options.douyinCookie.trim()
+        : undefined,
     parallel: payload.options?.parallel === true
   }
   void startDownloadBatch(
