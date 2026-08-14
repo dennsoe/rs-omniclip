@@ -153,8 +153,15 @@ export interface ScrapeResult {
   truncated: boolean
 }
 
-/** Batas item hasil scrape agar UI tetap responsif untuk akun yang sangat besar. */
-const MAX_SCRAPE_ITEMS = 500
+/**
+ * Batas item scrape yang benar-benar DI-FETCH dari server (via `--playlist-items`).
+ * Mengurangi jumlah request API ke platform (TikTok me-rate-limit pagination
+ * dengan HTTP 429) — akar masalah scrape gagal pada akun besar.
+ */
+const SCRAPE_FETCH_LIMIT = 200
+
+/** Pola error transien scrape (mis. HTTP 429 TikTok) yang memicu retry + rotasi endpoint. */
+const SCRAPE_TRANSIENT_RE = /HTTP Error 429|Too Many Requests|Unable to download JSON metadata/i
 
 /** Batas unduhan paralel saat opsi `parallel` aktif (agar stabil & tidak kena rate-limit berlebihan). */
 const MAX_PARALLEL_DOWNLOADS = 2
@@ -491,23 +498,79 @@ async function runYtdlpDownload(
 
 /**
  * Mengambil daftar video dari satu akun/halaman (YouTube channel/@user, TikTok,
- * Instagram, dll) via `yt-dlp --flat-playlist --print` (cepat, tanpa mengunduh).
+ * Instagram, Douyin, dll) via `yt-dlp --flat-playlist --print` (cepat, tanpa
+ * mengunduh).
+ *
+ * DIPERKUAT (audit forensik 2026-08-14) — akar masalah HTTP 429 saat scrape:
+ * - TikTok me-rate-limit endpoint pagination (`/api/post/item_list/`) → 429
+ *   transien (per-IP). Scrape mem-fetch SEMUA halaman akun (1 request API per
+ *   halaman), jadi akun besar = banyak request = makin mungkin 429.
+ * - Sebelumnya scrape TANPA perlindungan: tanpa UA browser, tanpa cookies,
+ *   tanpa retry, tanpa rotasi endpoint, tanpa batas request, dan error mentah.
+ * Perbaikan: batas item yang DI-FETCH (`--playlist-items`, mengurangi request
+ * API), UA Chrome, cookies browser bila dikonfigurasi, retry + rotasi
+ * `api_hostname` saat 429, dan pesan error ramah.
  */
-export async function scrapeAccount(url: string): Promise<ScrapeResult> {
+export async function scrapeAccount(url: string, options: DownloadOptions = {}): Promise<ScrapeResult> {
   const ytdlp = await ensureYtdlp()
   if (!ytdlp) {
     throw new Error('yt-dlp tidak tersedia. Periksa koneksi internet lalu coba lagi.')
   }
 
-  const args = [
+  // Normalisasi short link Douyin → URL kanonik agar scrape Douyin lebih andal.
+  let targetUrl = url
+  if (isDouyinUrl(url)) {
+    try {
+      targetUrl = await normalizeDouyinUrl(url)
+    } catch {
+      targetUrl = url
+    }
+  }
+
+  const baseArgs = [
     '--flat-playlist',
     '--no-warnings',
     '--print',
     '%(id)s\t%(title)s\t%(webpage_url)s',
-    url
+    '--playlist-items',
+    `1-${SCRAPE_FETCH_LIMIT}`,
+    '--user-agent',
+    CHROME_USER_AGENT
+  ]
+  if (options.cookiesBrowser && options.cookiesBrowser.trim()) {
+    baseArgs.push('--cookies-from-browser', options.cookiesBrowser.trim())
+  }
+
+  // Upaya 1: normal. Upaya 2 (hanya bila 429/transien): rotasi `api_hostname` —
+  // workaround komunitas yt-dlp untuk rate-limit TikTok.
+  const attempts: string[][] = [
+    [...baseArgs, targetUrl],
+    [
+      ...baseArgs,
+      '--extractor-args',
+      'tiktok:api_hostname=api16-normal-c-useast1a.tiktokv.com;app_name=trill',
+      targetUrl
+    ]
   ]
 
-  return await new Promise<ScrapeResult>((resolve, reject) => {
+  let lastError = ''
+  for (const args of attempts) {
+    const r = await runScrapeOnce(ytdlp, args, targetUrl)
+    if (r.ok && r.result) return r.result
+    lastError = r.error ?? ''
+    if (!SCRAPE_TRANSIENT_RE.test(lastError)) break
+    await sleep(2500)
+  }
+  throw new Error(friendlyScrapeError(lastError))
+}
+
+/** Menjalankan satu proses scrape yt-dlp dan mengurai hasil flat-playlist. */
+async function runScrapeOnce(
+  ytdlp: string,
+  args: string[],
+  originalUrl: string
+): Promise<{ ok: boolean; result?: ScrapeResult; error?: string }> {
+  return await new Promise((resolve) => {
     const proc = spawn(ytdlp, args)
     let stdout = ''
     let stderrTail = ''
@@ -519,11 +582,11 @@ export async function scrapeAccount(url: string): Promise<ScrapeResult> {
       if (stderrTail.length < 4000) stderrTail += text
     })
     proc.on('error', (err) => {
-      reject(new Error(`Gagal menjalankan yt-dlp: ${err.message}`))
+      resolve({ ok: false, error: `Gagal menjalankan yt-dlp: ${err.message}` })
     })
     proc.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(lastLines(stderrTail)))
+        resolve({ ok: false, error: lastLines(stderrTail) })
         return
       }
       const items: ScrapeItem[] = []
@@ -531,7 +594,7 @@ export async function scrapeAccount(url: string): Promise<ScrapeResult> {
       for (const line of stdout.split('\n')) {
         const parts = line.split('\t').map((s) => (s ?? '').trim())
         if (parts.length < 3 || !parts[0]) continue
-        const entryUrl = parts[2] || url
+        const entryUrl = parts[2] || originalUrl
         if (seen.has(entryUrl)) continue
         seen.add(entryUrl)
         items.push({
@@ -540,11 +603,20 @@ export async function scrapeAccount(url: string): Promise<ScrapeResult> {
           title: parts[1] || `Video ${items.length + 1}`,
           url: entryUrl
         })
-        if (items.length >= MAX_SCRAPE_ITEMS) break
+        if (items.length >= SCRAPE_FETCH_LIMIT) break
       }
-      resolve({ items, truncated: items.length >= MAX_SCRAPE_ITEMS })
+      resolve({ ok: true, result: { items, truncated: items.length >= SCRAPE_FETCH_LIMIT } })
     })
   })
+}
+
+/** Menerjemahkan error scrape agar ramah & informatif (khususnya 429 TikTok). */
+function friendlyScrapeError(raw: string): string {
+  const tail = lastLines(raw)
+  if (/HTTP Error 429|Too Many Requests/i.test(raw)) {
+    return `${tail} — TikTok sedang membatasi permintaan (429, sementara). Sudah dicoba ulang otomatis dgn user-agent browser & endpoint cadangan. Tunggu beberapa menit lalu coba lagi, atau aktifkan Cookies Browser di Pengaturan Unduhan untuk mengurangi pembatasan.`
+  }
+  return tail
 }
 
 /** Mengambil beberapa baris terakhir dari teks untuk pesan error yang ringkas. */

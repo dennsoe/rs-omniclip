@@ -255,14 +255,20 @@ function handleDownload(payload: { urls?: string[]; options?: DownloadOptions })
   })
 }
 
-function handleScrape(payload: { id?: string; url?: string }): void {
+function handleScrape(payload: { id?: string; url?: string; options?: DownloadOptions }): void {
   const id = typeof payload?.id === 'string' && payload.id ? payload.id : generateScrapeId()
   const url = typeof payload?.url === 'string' ? payload.url.trim() : ''
   if (!url) {
     emit('scrape:complete', { id, items: [], error: 'URL tidak valid.' })
     return
   }
-  void scrapeAccount(url)
+  const options: DownloadOptions = {
+    cookiesBrowser:
+      typeof payload.options?.cookiesBrowser === 'string' && payload.options.cookiesBrowser.trim()
+        ? payload.options.cookiesBrowser.trim()
+        : undefined
+  }
+  void scrapeAccount(url, options)
     .then((result) => emit('scrape:complete', { id, items: result.items, truncated: result.truncated }))
     .catch((err) =>
       emit('scrape:complete', {

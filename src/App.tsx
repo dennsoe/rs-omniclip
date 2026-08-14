@@ -28,7 +28,6 @@ import {
   ExternalLink,
   BadgeCheck,
   CircleAlert,
-  KeyRound,
   Settings,
   type LucideIcon
 } from 'lucide-react'
@@ -60,6 +59,7 @@ import { useIsMobile } from '@hooks/use-mobile'
 import Toasts, { type ToastMessage, type ToastType } from '@components/Toasts'
 import ConfirmModal, { type ConfirmAction } from '@components/ConfirmModal'
 import PreviewModal from '@components/PreviewModal'
+import DownloadSettingsModal from '@components/DownloadSettingsModal'
 import SystemMonitor from '@components/SystemMonitor'
 import SortableFileItem from '@components/SortableFileItem'
 import PresetSelector from '@components/PresetSelector'
@@ -133,6 +133,8 @@ export default function App(): React.ReactElement {
   const [downloadCookiesBrowser, setDownloadCookiesBrowser] = useState<string>('')
   const [downloadDouyinCookie, setDownloadDouyinCookie] = useState<string>('')
   const [downloadParallel, setDownloadParallel] = useState(false)
+  // Modal pengaturan unduhan (dibuka dari tombol gear di header halaman Pengunduh).
+  const [isDownloadSettingsOpen, setIsDownloadSettingsOpen] = useState(false)
 
   const [files, setFiles] = useState<FileItem[]>([])
   const [preset, setPreset] = useState<PresetType>('fullhd')
@@ -273,6 +275,13 @@ export default function App(): React.ReactElement {
   const outdatedResources = resourcesReady ? (resources ?? []).filter((r) => r.outdated) : []
   const updateBadgeCount = (appHasUpdate ? 1 : 0) + outdatedResources.length
   const showUpdateBadge = updateBadgeCount > 0
+
+  // Jumlah pengaturan unduhan non-default (badge indikator pada tombol modal).
+  const downloadSettingsCount =
+    (downloadMaxHeight > 0 ? 1 : 0) +
+    (downloadCookiesBrowser ? 1 : 0) +
+    (downloadDouyinCookie ? 1 : 0) +
+    (downloadParallel ? 1 : 0)
 
   // BUKA HALAMAN RILIS GITHUB (strategi unduh manual macOS — 100% gratis)
   const handleOpenUpdate = (): void => {
@@ -465,7 +474,11 @@ export default function App(): React.ReactElement {
     setScrapeItems(null)
     setScrapeSelected({})
     if (window.api?.scrapeAccount) {
-      window.api.scrapeAccount({ id: Math.random().toString(36).substring(7), url })
+      window.api.scrapeAccount({
+        id: Math.random().toString(36).substring(7),
+        url,
+        options: { cookiesBrowser: downloadCookiesBrowser || undefined }
+      })
     } else {
       setIsScraping(false)
       setScrapeError('Ambil daftar hanya berjalan pada aplikasi desktop (Electron).')
@@ -634,6 +647,22 @@ export default function App(): React.ReactElement {
         <Toasts toasts={toasts} />
         <ConfirmModal confirmAction={confirmAction} onClose={() => setConfirmAction(null)} onConfirm={handleConfirm} />
         <PreviewModal previewFile={previewFile} onClose={() => setPreviewFile(null)} />
+        <DownloadSettingsModal
+          open={isDownloadSettingsOpen}
+          onClose={() => setIsDownloadSettingsOpen(false)}
+          settings={{
+            maxHeight: downloadMaxHeight,
+            cookiesBrowser: downloadCookiesBrowser,
+            douyinCookie: downloadDouyinCookie,
+            parallel: downloadParallel
+          }}
+          onChange={(patch) => {
+            if (patch.maxHeight !== undefined) setDownloadMaxHeight(patch.maxHeight)
+            if (patch.cookiesBrowser !== undefined) setDownloadCookiesBrowser(patch.cookiesBrowser)
+            if (patch.douyinCookie !== undefined) setDownloadDouyinCookie(patch.douyinCookie)
+            if (patch.parallel !== undefined) setDownloadParallel(patch.parallel)
+          }}
+        />
 
         {/* MOBILE OVERLAY — tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
         {isMobile && isSidebarOpen && (
@@ -1051,11 +1080,30 @@ export default function App(): React.ReactElement {
                   <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 transition-colors">
                     Unduh Video
                   </h2>
-                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                    {downloaderMode === 'links'
-                      ? `${validLinks.length} link`
-                      : `${scrapeItems?.length ?? 0} video`}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                      {downloaderMode === 'links'
+                        ? `${validLinks.length} link`
+                        : `${scrapeItems?.length ?? 0} video`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setIsDownloadSettingsOpen(true)
+                      }}
+                      aria-label="Pengaturan Unduhan"
+                      title="Pengaturan Unduhan"
+                      className="relative p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm transition-all"
+                    >
+                      <Settings className="w-4 h-4" />
+                      {downloadSettingsCount > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center shadow shadow-blue-600/40">
+                          {downloadSettingsCount}
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div className="relative inline-flex bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-full p-1 transition-colors">
                   {[
@@ -1094,101 +1142,6 @@ export default function App(): React.ReactElement {
 
               {/* Konten mode (animasi) + antrean unduhan */}
               <div className="flex-1 min-h-0 relative z-10 px-4 sm:px-6 md:px-8 pb-24 overflow-y-auto">
-                {/* Pengaturan unduhan (kualitas, cookies browser, paralel) */}
-                <div className="mb-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
-                      <Settings className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
-                        Pengaturan Unduhan
-                      </h3>
-                      <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
-                        Kualitas, cookies &amp; kecepatan batch.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
-                        Kualitas
-                      </span>
-                      <select
-                        value={downloadMaxHeight}
-                        onChange={(e) => setDownloadMaxHeight(Number(e.target.value))}
-                        className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                      >
-                        <option value={0}>Terbaik</option>
-                        <option value={2160}>2160p (4K)</option>
-                        <option value={1440}>1440p</option>
-                        <option value={1080}>1080p</option>
-                        <option value={720}>720p</option>
-                        <option value={480}>480p</option>
-                        <option value={360}>360p</option>
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
-                        Cookies Browser
-                      </span>
-                      <select
-                        value={downloadCookiesBrowser}
-                        onChange={(e) => setDownloadCookiesBrowser(e.target.value)}
-                        className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                      >
-                        <option value="">Tanpa Cookies</option>
-                        <option value="chrome">Chrome</option>
-                        <option value="edge">Edge</option>
-                        <option value="safari">Safari</option>
-                        <option value="firefox">Firefox</option>
-                        <option value="brave">Brave</option>
-                      </select>
-                    </label>
-                    <label className="flex items-end gap-2 cursor-pointer pb-2">
-                      <input
-                        type="checkbox"
-                        checked={downloadParallel}
-                        onChange={(e) => setDownloadParallel(e.target.checked)}
-                        className="accent-blue-600 w-4 h-4 shrink-0"
-                      />
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                          Unduh 2 sekaligus
-                        </span>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                          Lebih cepat untuk banyak tautan.
-                        </span>
-                      </div>
-                    </label>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1.5">
-                      <KeyRound className="w-3 h-3" />
-                      Cookie Douyin
-                      <span className="normal-case font-normal">(opsional)</span>
-                    </span>
-                    <textarea
-                      value={downloadDouyinCookie}
-                      onChange={(e) => setDownloadDouyinCookie(e.target.value)}
-                      rows={2}
-                      placeholder="Tempel header Cookie dari douyin.com yang sudah login..."
-                      className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all resize-none leading-relaxed"
-                    />
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                      Khusus Douyin (anti-bot ketat, wajib cookie sesi). Cara ambil: buka douyin.com di
-                      Chrome → login → F12 → Application → Cookies → https://www.douyin.com → salin
-                      seluruh header Cookie. Disimpan lokal &amp; dipakai yt-dlp.
-                    </p>
-                  </div>
-                  {downloadCookiesBrowser && (
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
-                      <Info className="w-3 h-3 shrink-0" />
-                      Gunakan browser yang sudah login ke Facebook/Instagram agar unduhan lebih cepat &amp;
-                      jarang gagal. Tutup browser bila muncul error kunci database.
-                    </p>
-                  )}
-                </div>
                 {downloaderMode === 'links' ? (
                   <motion.div
                     key="links-mode"

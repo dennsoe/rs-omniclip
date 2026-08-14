@@ -132,7 +132,7 @@ const api = {
   },
 
   /** Mengambil daftar video dari satu akun/halaman (via yt-dlp flat-playlist). */
-  scrapeAccount: (payload: { id: string; url: string }): void => {
+  scrapeAccount: (payload: { id: string; url: string; options?: { cookiesBrowser?: string } }): void => {
     ipcRenderer.send('scrape:start', payload)
   },
 

@@ -35,7 +35,7 @@ declare global {
       onDownloadProgress: (cb: (data: DownloadProgress) => void) => () => void
       onDownloadComplete: (cb: (data: { total: number; success: number; failed: number }) => void) => () => void
       /** Mengambil daftar video dari satu akun/halaman. */
-      scrapeAccount: (payload: { id: string; url: string }) => void
+      scrapeAccount: (payload: { id: string; url: string; options?: { cookiesBrowser?: string } }) => void
       onScrapeComplete: (
         cb: (data: { id: string; items: ScrapeItem[]; truncated?: boolean; error?: string }) => void
       ) => () => void
