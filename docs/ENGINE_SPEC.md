@@ -204,19 +204,56 @@ Opsi (dari UI "Pengaturan Unduhan"):
 - `maxHeight` → `-f bv*[height<=H]+ba/b[height<=H]` (batas resolusi; tanpa =
   kualitas terbaik). Mempercepat unduhan & mengecilkan file.
 - `cookiesBrowser` → `--cookies-from-browser <browser>` (Chrome/Edge/Safari/
-  Firefox/Brave). Menghindari throttle Facebook/Instagram pada unduhan anonim
-  dan mengurangi kegagalan parse.
+  Firefox/Brave). Menghindari throttle Facebook/Instagram/TikTok pada unduhan
+  anonim dan mengurangi kegagalan parse.
 - `parallel` → maks 2 unduhan bersamaan (worker berbagi indeks antrean).
 
-- Parse baris `[download] NN%` dari stdout → event `download:progress` per URL
-  (`id` = URL).
+**Progress realtime** (stdout di-buffer per baris, bukan per potongan):
+- `--newline` membuat tiap baris progress terpisah; buffer stdout dipecah per
+  `\n` lalu `handleLine`. Tiap baris `[download] NN% of X at Y/s ETA MM:SS`
+  diurai menjadi `{ percent, speedBytesPerSec, etaSeconds, sizeBytes }`.
+- **Throttle 300 ms**: event dikirim maks 1×/300 ms; update antara di-koales
+  ke variabel `coalesced` lalu di-`flush` saat proses tutup — UI tidak
+  dibanjiri ribuan event, tapi tetap realtime.
+- Fase (`phase`): `extracting` → `downloading` (baris `Destination:` atau
+  `percent > 0`) → `merging` (`Merging formats into`/`[Merger]`) → `done`.
+
+**Retry otomatis extractor** (mis. Facebook "Cannot parse data" / TikTok):
+- Pola error transien `TRANSIENT_ERROR_RE` (`Cannot parse data`, `Unexpected
+  response`, `HTTP Error [45]xx`, `Sign in to confirm`, dll) DAN belum ada
+  unduhan (`!sawDownloadStart`) → ulang hingga 2× dengan jeda `2000 * attempt`
+  ms. Fase `retrying` dikirim ke UI saat mencoba ulang.
+- **Lapisan pemulihan (self-heal)**: bila masih gagal dengan error
+  extractor/situs (`EXTRACTOR_ISSUE_RE`), download dijalankan berjenjang:
+  1. **Workaround Chrome user-agent** — `--user-agent` Chrome modern. TikTok
+     mulai menolak permintaan non-browser (bot-detection baru, yt-dlp #17403);
+     sebagian besar unduhan pulih dengan ini.
+  2. **Auto-update yt-dlp** (`ensureLatestYtdlp`, sekali per sesi) — hapus
+     binary lokal, unduh rilis terbaru dari GitHub, lalu retry. Bila yt-dlp
+     menerbitkan perbaikan extractor, unduhan pulih otomatis tanpa campur
+     tangan pengguna.
+- **Provisioning `ensureYtdlp`**: prioritas **folder lokal → unduh rilis
+  terbaru GitHub → yt-dlp sistem (cadangan terakhir, hanya bila unduhan
+  gagal)**. Tidak lagi memakai yt-dlp sistem secara diam-diam (yang bisa
+  berusia >1 tahun dan gagal menangani situs modern).
 - `--no-playlist` hanya mengambil satu video per URL.
+
+**Metadata video** (thumbnail, judul, deskripsi, filePath):
+- Ditangkap via `--print after_move` sebagai **satu objek JSON valid**:
+  `after_move:__RSMETA__{"title":%(title)j,"thumbnail":%(thumbnail)j,"filepath":%(filepath)j,"description":%(description)j}`.
+  Setiap field di-encode `%(field)j` (aman dari newline/tab/emoji).
+- Baris `__RSMETA__` di-`JSON.parse` setelah prefix di-slice; hasil disertakan
+  pada event sukses (`percent: 100, status: 'success'`) dan dipakai renderer
+  untuk menampilkan thumbnail (`img` remote — diizinkan CSP `img-src ... https:
+  http:`), judul, deskripsi (line-clamp-2), dan tombol "Buka folder".
+
 - Selesai per URL (exit 0) → `success`; selain itu → `failed` dengan pesan
   `error`. Bila stderr mengandung tanda kegagalan extractor (mis. Facebook
   "Cannot parse data"), pesan diberi keterangan ramah + saran.
 - Setelah seluruh antrean → event `download:complete` berisi ringkasan
   `{ total, success, failed }`.
-- Output ke `~/Downloads/RS-OmniClip/Unduhan/`.
+- Output ke `~/Downloads/RS-OmniClip/Unduhan/`; tombol "Buka folder" memakai
+  channel `folder:reveal` (`shell.showItemInFolder`).
 
 ### 8.3 Ambil Daftar Akun / Halaman (`scrapeAccount`)
 

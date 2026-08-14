@@ -16,8 +16,12 @@ desktop **Electron-Vite** dengan backend Node.js asli. Kode lama tersimpan di
 3. **Pengunduh Video Universal** — unduh banyak link sekaligus (batch) atau ambil
    daftar video dari satu akun/halaman lalu pilih yang ingin diunduh, via `yt-dlp`
    (YouTube, TikTok, Instagram, dll). Dilengkapi **pilihan kualitas** (maks
-   resolusi), **cookies browser** (untuk Facebook/Instagram yang membatasi
-   unduhan anonim), dan opsi **unduh paralel** (maks 2).
+   resolusi), **cookies browser** (untuk Facebook/TikTok/Instagram yang membatasi
+   unduhan anonim), opsi **unduh paralel** (maks 2), **retry otomatis + self-heal**
+   (coba ulang dengan user-agent browser lalu **memperbarui yt-dlp otomatis** saat
+   platform memperketat proteksi, mis. bot-detection TikTok 2026), **progress
+   realtime** (persen, kecepatan, ETA, ukuran, fase menggabungkan/mencoba ulang),
+   dan **metadata video** (thumbnail, judul, deskripsi) + tombol buka folder.
 4. **Pemotong Video Inline** — Potong lossless (stream copy) tanpa re-encode.
 5. **Watermark & Auto-Caption** — Di roadmap (build FFmpeg saat ini tidak
    mendukung filter `drawtext`).
@@ -88,9 +92,10 @@ window.api = {
   onProcessingProgress: (cb: (data: { id; percent; status: 'processing'|'success'|'failed' }) => void) => void
   onProcessingComplete: (cb: (data: { outputFolder: string }) => void) => void
   openFolder: (folderPath: string) => void
-  startDownloadBatch: (urls: string[]) => void                       // unduh banyak URL berurutan
-  onDownloadProgress: (cb: (data: { id; url; percent; status }) => void) => void
+  startDownloadBatch: (urls: string[], options?) => void                  // unduh banyak URL (berurutan / paralel)
+  onDownloadProgress: (cb: (data: { id; url; percent; status; phase?; speedBytesPerSec?; etaSeconds?; sizeBytes?; title?; thumbnail?; description?; filePath? }) => void) => void
   onDownloadComplete: (cb: (data: { total; success; failed }) => void) => void
+  showItemInFolder: (filePath: string) => void                             // buka folder & sorot file
   scrapeAccount: (payload: { id: string; url: string }) => void      // ambil daftar video akun/halaman
   onScrapeComplete: (cb: (data: { id; items: ScrapeItem[]; truncated?; error? }) => void) => void
   onSystemStats: (cb: (data: { cpu; ramUsedMb; ramTotalMb }) => void) => void

@@ -124,14 +124,24 @@ Hasil build ke `out/main/index.js`, `out/preload/index.js`,
 
 ### 8.1 Unduhan Banyak Link
 
-1. Renderer: `window.api.startDownloadBatch(urls)` (array URL; payload `{ urls }`).
+1. Renderer: `window.api.startDownloadBatch(urls, options?)` (array URL; payload
+   `{ urls, options }` dengan `options = { maxHeight?, cookiesBrowser?, parallel? }`).
 2. Main: `handleDownload` → `startDownloadBatch` (engine/downloader.ts) — loop
-   **berurutan** per URL.
+   **berurutan** per URL (atau maks 2 paralel bila `parallel`).
 3. `ensureYtdlp()` memastikan binary yt-dlp tersedia.
-4. Tiap URL: spawn `yt-dlp --newline --no-playlist --progress -o <template> <url>`.
-5. Parse baris `[download] NN%` → `download:progress { id=url, url, percent, status }`.
-6. Selesai semua → `download:complete { total, success, failed }`.
-7. Output: `~/Downloads/RS-OmniClip/Unduhan/`.
+4. Tiap URL: spawn `yt-dlp --newline --no-playlist --progress [-f bv*[height<=H]...]
+   [--cookies-from-browser <browser>] --print after_move:__RSMETA__{json} -o <template> <url>`.
+5. **Progress realtime**: stdout di-buffer per baris; baris `[download] NN% of X
+   at Y/s ETA MM:SS` diurai → `download:progress { id=url, url, percent, status,
+   speedBytesPerSec?, etaSeconds?, sizeBytes?, phase? }` (throttle 300 ms).
+6. **Retry + self-heal**: retry transien (2×, jeda mundur) untuk error extractor
+   sementara; bila masih gagal dengan error situs/extractor (mis. TikTok
+   bot-detection), coba ulang dengan **user-agent Chrome**, lalu **perbarui
+   yt-dlp otomatis ke rilis terbaru** dan coba lagi (sekali per sesi).
+7. **Metadata** `title/thumbnail/description/filePath` dari baris `__RSMETA__`
+   (JSON setelah `after_move`) disertakan pada event sukses.
+8. Selesai semua → `download:complete { total, success, failed }`.
+9. Output: `~/Downloads/RS-OmniClip/Unduhan/`; "Buka folder" via `folder:reveal`.
 
 ### 8.2 Ambil Daftar Akun / Halaman
 

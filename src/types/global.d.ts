@@ -1,4 +1,12 @@
-import type { FileItem, PresetType, ScrapeItem, UpdateInfo, ResourceInfo, DownloadOptions } from '@lib/types'
+import type {
+  FileItem,
+  PresetType,
+  ScrapeItem,
+  UpdateInfo,
+  ResourceInfo,
+  DownloadOptions,
+  DownloadProgress
+} from '@lib/types'
 
 /**
  * Kontrak jembatan IPC (window.api) antara renderer React dan backend Node.js.
@@ -21,16 +29,10 @@ declare global {
       ) => () => void
       onProcessingComplete: (cb: (data: { outputFolder: string }) => void) => () => void
       openFolder: (folderPath: string) => void
+      /** Menampilkan berkas di folder (Finder/Explorer). */
+      showItemInFolder: (filePath: string) => void
       startDownloadBatch: (urls: string[], options?: DownloadOptions) => void
-      onDownloadProgress: (
-        cb: (data: {
-          id: string
-          url: string
-          percent: number
-          status: 'downloading' | 'success' | 'failed'
-          error?: string
-        }) => void
-      ) => () => void
+      onDownloadProgress: (cb: (data: DownloadProgress) => void) => () => void
       onDownloadComplete: (cb: (data: { total: number; success: number; failed: number }) => void) => () => void
       /** Mengambil daftar video dari satu akun/halaman. */
       scrapeAccount: (payload: { id: string; url: string }) => void

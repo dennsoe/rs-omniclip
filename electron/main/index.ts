@@ -311,6 +311,12 @@ function registerIpc(): void {
     }
   })
 
+  ipcMain.on('folder:reveal', (_event, filePath: string) => {
+    if (typeof filePath === 'string' && filePath.trim()) {
+      shell.showItemInFolder(filePath.trim())
+    }
+  })
+
   // --- Pembaruan aplikasi & resource (gratis, repo publik) ---
   ipcMain.handle('update:check', (): Promise<UpdateInfo> => checkForUpdate())
 
