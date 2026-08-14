@@ -23,7 +23,7 @@ dapat membersihkan listener saat unmount.
 | M → R | `processing:progress` | Kemajuan per file |
 | M → R | `processing:complete` | Selesai batch (folder output) |
 | R → M | `folder:open` | Membuka folder di Finder |
-| R → M | `download:start` | Memulai unduhan batch (banyak URL) |
+| R → M | `download:start` | Memulai unduhan batch — payload `{ urls, options? }` (kualitas, cookies, paralel) |
 | M → R | `download:progress` | Kemajuan per URL |
 | M → R | `download:complete` | Ringkasan akhir batch `{ total, success, failed }` |
 | R → M | `scrape:start` | Ambil daftar video dari satu akun/halaman |
@@ -66,7 +66,7 @@ interface Window {
 
     openFolder: (folderPath: string) => void
 
-    startDownloadBatch: (urls: string[]) => void
+    startDownloadBatch: (urls: string[], options?: DownloadOptions) => void
 
     onDownloadProgress: (
       cb: (data: {
@@ -174,10 +174,18 @@ dan `error` (jika tersedia) (batch tetap melanjutkan file berikutnya).
 
 ### 4.4 Unduhan Batch (`download:start` / `download:progress` / `download:complete`)
 
-- `startDownloadBatch(urls)` mengirim `{ urls }` ke channel `download:start`.
-  Engine memproses URL **berurutan**; `id` setiap progress = URL-nya.
+- `startDownloadBatch(urls, options?)` mengirim `{ urls, options }` ke channel
+  `download:start`. `options` = `{ maxHeight?, cookiesBrowser?, parallel? }`:
+  - `maxHeight` (px): batas resolusi via `-f bv*[height<=H]+ba/b[height<=H]`;
+    tanpa/kosong = kualitas terbaik.
+  - `cookiesBrowser` (mis. `'chrome'`): kirim `--cookies-from-browser` untuk
+    Facebook/Instagram yang membatasi unduhan anonim.
+  - `parallel: true`: unduh maks 2 URL sekaligus (default berurutan).
+  - `id` setiap progress = URL-nya.
 - `download:progress` membawa `{ id, url, percent, status }` dengan status
   `'downloading' | 'success' | 'failed'`, plus `error` (opsional) saat gagal.
+  Error kegagalan extractor (mis. Facebook "Cannot parse data") diberi
+  keterangan ramah + saran (coba lagi / cookies / perbarui resource).
 - `download:complete` membawa ringkasan akhir `{ total, success, failed }`
   agar UI bisa menampilkan toast kesimpulan (bukan toast per URL).
 

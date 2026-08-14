@@ -9,7 +9,7 @@ import {
   type ProcessProgress
 } from '@engine/processor'
 import { trimVideo, type TrimPayload } from '@engine/trimmer'
-import { startDownloadBatch, scrapeAccount, type DownloadProgress } from '@engine/downloader'
+import { startDownloadBatch, scrapeAccount, type DownloadProgress, type DownloadOptions } from '@engine/downloader'
 import {
   checkForUpdate,
   getResourceStatus,
@@ -220,7 +220,7 @@ async function handleProcessing(payload: {
   }
 }
 
-function handleDownload(payload: { urls?: string[] }): void {
+function handleDownload(payload: { urls?: string[]; options?: DownloadOptions }): void {
   if (!payload || !Array.isArray(payload.urls)) {
     return
   }
@@ -230,10 +230,22 @@ function handleDownload(payload: { urls?: string[] }): void {
   if (urls.length === 0) {
     return
   }
+  const options: DownloadOptions = {
+    maxHeight:
+      typeof payload.options?.maxHeight === 'number' && payload.options.maxHeight > 0
+        ? Math.round(payload.options.maxHeight)
+        : undefined,
+    cookiesBrowser:
+      typeof payload.options?.cookiesBrowser === 'string' && payload.options.cookiesBrowser.trim()
+        ? payload.options.cookiesBrowser.trim()
+        : undefined,
+    parallel: payload.options?.parallel === true
+  }
   void startDownloadBatch(
     urls,
     (p: DownloadProgress) => emit('download:progress', p),
-    (r) => emit('download:complete', r)
+    (r) => emit('download:complete', r),
+    options
   )
 }
 

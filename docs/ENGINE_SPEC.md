@@ -181,26 +181,39 @@ ffmpeg -y -i <in> -ss <start> -to <end> -c copy -map_metadata -1 -movflags +fast
 ### 8.1 Provisioning yt-dlp (`ensureYtdlp`)
 
 Prioritas lokasi binary:
-1. `binDir/yt-dlp` (lokal).
-2. Perintah sistem `yt-dlp` (via `which`).
-3. Unduh dari rilis resmi GitHub:
-   `https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos`,
-   disimpan sebagai `binDir/yt-dlp` lalu `chmod 755`.
+1. `binDir/yt-dlp` (lokal; `yt-dlp.exe` di Windows).
+2. Perintah sistem `yt-dlp` (via `which`/`where`).
+3. Unduh dari rilis resmi GitHub sesuai platform (`yt-dlp_macos` di macOS,
+   `yt-dlp.exe` di Windows), disimpan di `binDir`, lalu `chmod 755`
+   (kecuali Windows).
 
 ### 8.2 Unduhan Banyak Link (`startDownloadBatch`)
 
 Menerima array URL dan memprosesnya **berurutan** (satu per satu) agar
-progress & rate-limit yt-dlp stabil. Setiap URL:
+progress & rate-limit yt-dlp stabil — kecuali `options.parallel` true
+(unduh maks 2 sekaligus). Setiap URL:
 
 ```
-yt-dlp --newline --no-playlist --progress -o "<downloadDir>/%(title).80B [%(id)s].%(ext)s" <url>
+yt-dlp --newline --no-playlist --progress \
+  [-f bv*[height<=H]+ba/b[height<=H]] \
+  [--cookies-from-browser <browser>] \
+  -o "<downloadDir>/%(title).80B [%(id)s].%(ext)s" <url>
 ```
+
+Opsi (dari UI "Pengaturan Unduhan"):
+- `maxHeight` → `-f bv*[height<=H]+ba/b[height<=H]` (batas resolusi; tanpa =
+  kualitas terbaik). Mempercepat unduhan & mengecilkan file.
+- `cookiesBrowser` → `--cookies-from-browser <browser>` (Chrome/Edge/Safari/
+  Firefox/Brave). Menghindari throttle Facebook/Instagram pada unduhan anonim
+  dan mengurangi kegagalan parse.
+- `parallel` → maks 2 unduhan bersamaan (worker berbagi indeks antrean).
 
 - Parse baris `[download] NN%` dari stdout → event `download:progress` per URL
   (`id` = URL).
 - `--no-playlist` hanya mengambil satu video per URL.
 - Selesai per URL (exit 0) → `success`; selain itu → `failed` dengan pesan
-  `error` (cuplikan stderr yt-dlp) yang ditampilkan di UI.
+  `error`. Bila stderr mengandung tanda kegagalan extractor (mis. Facebook
+  "Cannot parse data"), pesan diberi keterangan ramah + saran.
 - Setelah seluruh antrean → event `download:complete` berisi ringkasan
   `{ total, success, failed }`.
 - Output ke `~/Downloads/RS-OmniClip/Unduhan/`.

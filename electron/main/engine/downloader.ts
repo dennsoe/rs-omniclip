@@ -14,6 +14,16 @@ export interface DownloadProgress {
   error?: string
 }
 
+/** Opsi unduhan dari UI (kualitas, cookies browser, paralel). */
+export interface DownloadOptions {
+  /** Batas tinggi resolusi video (px). 0 / tanpa = kualitas terbaik (tanpa batas). */
+  maxHeight?: number
+  /** Browser untuk mengambil cookies (mis. 'chrome', 'edge', 'safari'). Kosong = tanpa cookies. */
+  cookiesBrowser?: string
+  /** Unduh beberapa URL sekaligus (maks 2) alih-alih berurutan. Default false. */
+  parallel?: boolean
+}
+
 /** Nama binary yt-dlp sesuai platform (Windows memakai ekstensi .exe). */
 const YTDLP_BIN_NAME = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
 
@@ -106,19 +116,43 @@ export interface ScrapeResult {
 /** Batas item hasil scrape agar UI tetap responsif untuk akun yang sangat besar. */
 const MAX_SCRAPE_ITEMS = 500
 
+/** Batas unduhan paralel saat opsi `parallel` aktif (agar stabil & tidak kena rate-limit berlebihan). */
+const MAX_PARALLEL_DOWNLOADS = 2
+
 /**
- * Memulai unduhan untuk BANYAK URL secara berurutan (batch).
+ * Memulai unduhan untuk BANYAK URL (batch).
+ * Default: berurutan. Bila `options.parallel` true → maks 2 sekaligus.
  * Progress dilaporkan per URL (id = url); di akhir melaporkan ringkasan.
  */
 export async function startDownloadBatch(
   urls: string[],
   onProgress: (p: DownloadProgress) => void,
-  onComplete: (r: DownloadBatchComplete) => void
+  onComplete: (r: DownloadBatchComplete) => void,
+  options: DownloadOptions = {}
 ): Promise<void> {
+  if (options.parallel === true && urls.length > 1) {
+    let success = 0
+    let failed = 0
+    let cursor = 0
+    const worker = async (): Promise<void> => {
+      while (cursor < urls.length) {
+        const url = urls[cursor]
+        cursor += 1
+        const ok = await downloadSingle(url, onProgress, options)
+        if (ok) success++
+        else failed++
+      }
+    }
+    const workers = Array.from({ length: Math.min(MAX_PARALLEL_DOWNLOADS, urls.length) }, () => worker())
+    await Promise.all(workers)
+    onComplete({ total: urls.length, success, failed })
+    return
+  }
+
   let success = 0
   let failed = 0
   for (const url of urls) {
-    const ok = await downloadSingle(url, onProgress)
+    const ok = await downloadSingle(url, onProgress, options)
     if (ok) success++
     else failed++
   }
@@ -126,7 +160,11 @@ export async function startDownloadBatch(
 }
 
 /** Mengunduh satu URL. Mengembalikan true bila berhasil. */
-async function downloadSingle(url: string, onProgress: (p: DownloadProgress) => void): Promise<boolean> {
+async function downloadSingle(
+  url: string,
+  onProgress: (p: DownloadProgress) => void,
+  options: DownloadOptions = {}
+): Promise<boolean> {
   const id = url
   try {
     const ytdlp = await ensureYtdlp()
@@ -144,7 +182,7 @@ async function downloadSingle(url: string, onProgress: (p: DownloadProgress) => 
     const outDir = getDownloadDir()
     await fs.promises.mkdir(outDir, { recursive: true })
     const outputTemplate = path.join(outDir, '%(title).80B [%(id)s].%(ext)s')
-    const args = ['--newline', '--no-playlist', '--progress', '-o', outputTemplate, url]
+    const args = buildDownloadArgs(outputTemplate, url, options)
 
     return await new Promise<boolean>((resolve) => {
       const proc = spawn(ytdlp, args)
@@ -176,7 +214,7 @@ async function downloadSingle(url: string, onProgress: (p: DownloadProgress) => 
           onProgress({ id, url, percent: 100, status: 'success' })
           resolve(true)
         } else {
-          onProgress({ id, url, percent: 0, status: 'failed', error: lastLines(stderrTail) })
+          onProgress({ id, url, percent: 0, status: 'failed', error: friendlyDownloadError(stderrTail) })
           resolve(false)
         }
       })
@@ -259,6 +297,36 @@ function lastLines(text: string, count = 3): string {
     .map((l) => l.trim())
     .filter(Boolean)
   return lines.slice(-count).join(' ') || 'Unduhan gagal.'
+}
+
+/**
+ * Argumen yt-dlp sesuai opsi: batas resolusi (`-f`) dan cookies browser
+ * (`--cookies-from-browser`) untuk situs yang membatasi unduhan anonim
+ * (Facebook/Instagram).
+ */
+function buildDownloadArgs(outputTemplate: string, url: string, options: DownloadOptions): string[] {
+  const args = ['--newline', '--no-playlist', '--progress']
+  if (options.maxHeight && options.maxHeight > 0) {
+    args.push('-f', `bv*[height<=${options.maxHeight}]+ba/b[height<=${options.maxHeight}]`)
+  }
+  if (options.cookiesBrowser && options.cookiesBrowser.trim()) {
+    args.push('--cookies-from-browser', options.cookiesBrowser.trim())
+  }
+  args.push('-o', outputTemplate, url)
+  return args
+}
+
+/**
+ * Menerjemahkan error yt-dlp agar lebih ramah pengguna, terutama untuk
+ * kegagalan extractor (mis. Facebook "Cannot parse data") yang bukan
+ * kesalahan koneksi pengguna.
+ */
+function friendlyDownloadError(raw: string): string {
+  const tail = lastLines(raw)
+  if (/Cannot parse data|report this issue|Confirm you are on the latest version/i.test(raw)) {
+    return `${tail} — Kemungkinan kegagalan extractor yt-dlp untuk situs tersebut (bukan koneksi Anda). Coba lagi, aktifkan cookies browser untuk Facebook/Instagram, atau perbarui resource yt-dlp di halaman Tentang & Update.`
+  }
+  return tail
 }
 
 function extractPercent(line: string): number | null {
