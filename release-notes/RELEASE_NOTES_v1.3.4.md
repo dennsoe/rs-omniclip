@@ -35,6 +35,16 @@ siap disalin ke **detail release GitHub** (mis. `gh release create v1.3.4
   video kini memakai bahasa desain yang sama dengan modal Pengaturan Unduhan:
   header ber-ikon + judul + subjudul + tombol tutup, serta dapat ditutup dengan
   tombol **Escape**.
+- **Responsivitas &amp; layout di layar sempit** — audit forensik seluruh halaman
+  (Pilih Prasetel, Antrean Video, Antrean Unduhan, Tempel Banyak Tautan, Ambil
+  Video dari Akun/Halaman, Tentang):
+  - Grid prasetel adaptif: 1 kolom (&lt;420px) / 2 kolom (420–1023px) / 3 kolom (≥1024px).
+  - Panel potong (trim) kini membungkus rapi di layar sempit; tombol Simpan
+    full-width di mobile.
+  - Baris antrean video &amp; unduhan memakai padding/jarak yang mengecil di layar
+    sempit (tanpa overflow horizontal).
+  - Toast tidak lagi meluber keluar layar pada viewport sangat kecil.
+  - Sidebar dibatasi lebarnya (maks 80vw) dan lompatan lebarnya diperkecil.
 
 ### Unduhan
 - **macOS (Apple Silicon)**: `RS-OmniClip-1.3.4-arm64.dmg` / `.zip` — jika
@@ -52,3 +62,4 @@ siap disalin ke **detail release GitHub** (mis. `gh release create v1.3.4
 | 2026-08-14 | Fix | Scrape akun diperkeras (batas 200 item, UA Chrome, cookies, retry+rotasi endpoint, pesan ramah, resolve short link Douyin) | `electron/main/engine/downloader.ts`, `electron/main/index.ts`, `electron/preload/index.ts`, `src/App.tsx`, `src/types/global.d.ts` |
 | 2026-08-14 | UI | Pengaturan Unduhan dipindah ke modal popup + tombol gear + badge indikator | `src/App.tsx`, `src/components/DownloadSettingsModal.tsx` (baru) |
 | 2026-08-14 | UI | Konsistensi desain modal hapus & pratinjau dengan modal pengaturan (header, Escape) | `src/components/ConfirmModal.tsx`, `src/components/PreviewModal.tsx` |
+| 2026-08-14 | UI | Responsivitas: grid prasetel 1/2/3 kolom, panel trim flex-wrap, padding/gap responsif baris antrean, toast tidak meluber, sidebar max-w 80vw | `src/components/PresetSelector.tsx`, `src/components/SortableFileItem.tsx`, `src/components/Toasts.tsx`, `src/App.tsx` |

@@ -18,7 +18,7 @@ export default function Toasts({ toasts }: { toasts: ToastMessage[] }): React.Re
           key={toast.id}
           initial={{ opacity: 0, x: 50, scale: 0.9 }}
           animate={{ opacity: 1, x: 0, scale: 1 }}
-          className="p-4 rounded-xl shadow-xl flex items-center gap-3 border min-w-[300px] bg-white dark:bg-slate-800 text-slate-800 dark:text-white border-slate-200 dark:border-slate-700 pointer-events-auto transition-colors"
+          className="p-4 rounded-xl shadow-xl flex items-center gap-3 border min-w-[min(300px,calc(100vw-2rem))] bg-white dark:bg-slate-800 text-slate-800 dark:text-white border-slate-200 dark:border-slate-700 pointer-events-auto transition-colors"
         >
           {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />}
           {toast.type === 'error' && <XCircle className="w-5 h-5 text-rose-500 shrink-0" />}

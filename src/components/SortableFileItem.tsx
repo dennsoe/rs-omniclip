@@ -83,8 +83,8 @@ export default function SortableFileItem({
           : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
       }`}
     >
-      <div className="p-4 flex items-center justify-between">
-        <div className="flex items-center overflow-hidden mr-4 flex-grow">
+      <div className="p-3 sm:p-4 flex items-center justify-between gap-2">
+        <div className="flex items-center overflow-hidden mr-2 sm:mr-4 flex-grow min-w-0">
           <div
             {...attributes}
             {...listeners}
@@ -122,7 +122,7 @@ export default function SortableFileItem({
           </div>
         </div>
 
-        <div className="flex items-center gap-4 shrink-0 relative z-10">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0 relative z-10">
           {!isProcessing && (
             <button
               onClick={(e) => {
@@ -163,7 +163,7 @@ export default function SortableFileItem({
           animate={{ height: 'auto', opacity: 1 }}
           className="overflow-hidden"
         >
-            <div className="px-14 pb-4 flex items-center gap-4">
+            <div className="px-4 sm:px-14 pb-4 flex flex-wrap items-center gap-2 sm:gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-slate-500">Mulai</span>
                 <input
@@ -190,7 +190,7 @@ export default function SortableFileItem({
                   handleSaveTrim()
                 }}
                 disabled={isTrimmingPending}
-                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 w-full sm:w-auto"
               >
                 {isTrimmingPending ? 'Memotong...' : 'Simpan'}
               </button>

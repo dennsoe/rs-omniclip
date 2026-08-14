@@ -682,10 +682,10 @@ export default function App(): React.ReactElement {
             x: isMobile ? (isSidebarOpen ? 0 : -280) : 0
           }}
           style={{
-            width: isMobile ? 280 : files.length === 0 ? 260 : 320
+            width: isMobile ? 280 : files.length === 0 ? 260 : 300
           }}
           transition={{ type: 'spring', bounce: 0, duration: 0.8 }}
-          className={`sidebar bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200 dark:border-slate-800/80 flex flex-col h-full shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0 transition-colors overflow-y-auto ${
+          className={`sidebar bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200 dark:border-slate-800/80 flex flex-col h-full shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0 transition-colors overflow-y-auto max-w-[80vw] ${
             isMobile ? 'absolute inset-y-0 left-0 z-40' : 'relative z-20'
           }`}
         >
@@ -1334,9 +1334,9 @@ export default function App(): React.ReactElement {
                     {downloads.map((dl) => (
                       <div
                         key={dl.id}
-                        className="relative border-b border-slate-100 dark:border-slate-700/50 last:border-0 p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                        className="relative border-b border-slate-100 dark:border-slate-700/50 last:border-0 p-3 sm:p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
                       >
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-start gap-2 sm:gap-3">
                           {dl.status === 'success' && dl.thumbnail ? (
                             <img
                               src={dl.thumbnail}
