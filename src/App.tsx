@@ -113,6 +113,9 @@ export default function App(): React.ReactElement {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
   const [resources, setResources] = useState<ResourceInfo[] | null>(null)
+  // true setelah status resource terverifikasi (push main / cek manual) —
+  // basis badge update sidebar agar tidak muncul palsu sebelum versi terdeteksi.
+  const [resourcesReady, setResourcesReady] = useState(false)
   const [resourceStatus, setResourceStatus] = useState<string | null>(null)
   const [isUpdatingResources, setIsUpdatingResources] = useState(false)
   const [downloads, setDownloads] = useState<DownloadItem[]>([])
@@ -203,15 +206,24 @@ export default function App(): React.ReactElement {
   }, [])
 
   // PERIKSA STATUS RESOURCE (ffmpeg / yt-dlp vs manifest repo)
+  // Dipakai tombol "Periksa Resource" & auto re-check berkala — hasilnya
+  // dianggap terverifikasi sehingga badge update sidebar ikut aktif.
   const checkResources = useCallback(async (): Promise<void> => {
     if (!window.api?.checkResources) return
     try {
-      setResources(await window.api.checkResources())
+      const list = await window.api.checkResources()
+      setResources(list)
+      setResourcesReady(true)
     } catch {
       setResources(null)
+      setResourcesReady(false)
     }
   }, [])
 
+  // Cek awal saat mount: tampilkan data di halaman About, TAPI jangan aktifkan
+  // badge dulu (versi resource mungkin belum terdeteksi — versions.json kosong
+  // saat boot yt-dlp ~11 detik). Badge diaktifkan oleh push `resource:changed`
+  // dari main atau aksi manual di atas.
   useEffect(() => {
     if (!window.api?.checkResources) return
     let active = true
@@ -225,6 +237,40 @@ export default function App(): React.ReactElement {
       active = false
     }
   }, [])
+
+  // Status resource SEGAR dari proses utama (setelah versi terdeteksi) —
+  // sumber akurat badge update sidebar.
+  useEffect(() => {
+    if (!window.api?.onResourceChanged) return
+    return window.api.onResourceChanged((list) => {
+      setResources(list)
+      setResourcesReady(true)
+    })
+  }, [])
+
+  // Auto re-check berkala (30 mnt) + saat window fokus: menangkap rilis /
+  // resource baru tanpa membuka ulang app. Jauh di bawah batas rate limit
+  // GitHub API publik (60/jam).
+  useEffect(() => {
+    const refresh = (): void => {
+      void checkUpdate()
+      void checkResources()
+    }
+    const interval = window.setInterval(refresh, 30 * 60 * 1000)
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [checkUpdate, checkResources])
+
+  // Badge update sidebar "Tentang & Update": update aplikasi ATAU resource
+  // yang outdated (ffmpeg/yt-dlp). Biru bila ada update app, amber bila hanya
+  // resource.
+  const appHasUpdate = updateInfo?.hasUpdate === true
+  const outdatedResources = resourcesReady ? (resources ?? []).filter((r) => r.outdated) : []
+  const updateBadgeCount = (appHasUpdate ? 1 : 0) + outdatedResources.length
+  const showUpdateBadge = updateBadgeCount > 0
 
   // BUKA HALAMAN RILIS GITHUB (strategi unduh manual macOS — 100% gratis)
   const handleOpenUpdate = (): void => {
@@ -240,7 +286,9 @@ export default function App(): React.ReactElement {
     setResourceStatus('Memeriksa status resource...')
     const off = window.api.onResourceStatus((msg) => setResourceStatus(msg))
     try {
-      setResources(await window.api.updateResources())
+      const list = await window.api.updateResources()
+      setResources(list)
+      setResourcesReady(true)
       setResourceStatus('Resource berhasil diperbarui.')
     } catch {
       setResourceStatus('Gagal memperbarui resource. Periksa koneksi internet.')
@@ -749,8 +797,18 @@ export default function App(): React.ReactElement {
                   Versi, pembaruan &amp; resource
                 </span>
               </span>
-              {activeMenu === 'about' && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+              {showUpdateBadge ? (
+                <span
+                  className={`ml-auto min-w-5 h-5 px-1.5 rounded-full text-[10px] font-bold text-white flex items-center justify-center shrink-0 shadow ${
+                    appHasUpdate ? 'bg-blue-600 shadow-blue-600/30' : 'bg-amber-500 shadow-amber-500/30'
+                  }`}
+                >
+                  {updateBadgeCount}
+                </span>
+              ) : (
+                activeMenu === 'about' && (
+                  <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+                )
               )}
             </button>
           </div>
@@ -1423,7 +1481,7 @@ export default function App(): React.ReactElement {
                     <div className="min-w-0">
                       <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
                         RS OmniClip{' '}
-                        <span className="text-blue-600 dark:text-blue-400">v{updateInfo?.current ?? '1.1.0'}</span>
+                        <span className="text-blue-600 dark:text-blue-400">v{updateInfo?.current ?? ''}</span>
                       </h3>
                       <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
                         Versi, pembaruan &amp; resource — periksa rilis terbaru dari GitHub, gratis.
@@ -1437,7 +1495,7 @@ export default function App(): React.ReactElement {
                         Terpasang
                       </p>
                       <p className="text-lg font-bold text-slate-800 dark:text-slate-100 mt-0.5">
-                        v{updateInfo?.current ?? '1.1.0'}
+                        v{updateInfo?.current ?? ''}
                       </p>
                     </div>
                     <div className="flex-1 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 px-4 py-3 transition-colors">

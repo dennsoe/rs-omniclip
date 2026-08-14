@@ -218,6 +218,16 @@ const api = {
     return () => {
       ipcRenderer.removeListener('resource:status', listener)
     }
+  },
+
+  /** Status resource SEGAR dari proses utama (setelah versi terdeteksi) —
+   *  basis akurat badge update di sidebar. */
+  onResourceChanged: (cb: (data: ResourceInfoData[]) => void): Unsubscribe => {
+    const listener = (_event: Electron.IpcRendererEvent, data: ResourceInfoData[]): void => cb(data)
+    ipcRenderer.on('resource:changed', listener)
+    return () => {
+      ipcRenderer.removeListener('resource:changed', listener)
+    }
   }
 }
 
