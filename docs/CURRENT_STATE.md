@@ -3,6 +3,22 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
 
+## Status Rilis v1.3.0 (2026-08-14) — LIVE (macOS + Windows)
+
+- **Release `v1.3.0` LIVE**:
+  https://github.com/dennsoe/rs-omniclip/releases/tag/v1.3.0
+  - macOS: `RS-OmniClip-1.3.0-arm64.dmg` (99 MB) + `.zip` (95 MB).
+  - Windows: `RS-OmniClip-1.3.0-x64-setup.exe` (NSIS installer, 82 MB) +
+    `RS-OmniClip-1.3.0-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
+  - `latest-mac.yml` + `latest.yml` ikut diunggah.
+  - API `releases/latest` kini mengembalikan `v1.3.0` → tombol "Periksa Update"
+    di aplikasi menunjukkan update tersedia dari v1.2.0.
+- **Isi rilis**: TikTok via TikWM (5 key failover), badge update sidebar,
+  perbaikan pengunduh mendalam (0ae5df3), guard rejection.
+- **PR yang digabung**: #13 (`4c8dcb7`, TikWM) → #14 (`99dd2b0`, badge) →
+  #15 (`ba08bc53`, bump 1.3.0) — semuanya merge commit (bukan squash).
+- Tag `v1.3.0` = `ba08bc53`. Dibuat manual lokal (CI billing terkunci).
+
 ## Badge Update di Sidebar "Tentang & Update" (2026-08-14) — otomatis & akurat
 
 Laporan: ingin notif/badge update di menu sidebar saat ada pembaruan baru
