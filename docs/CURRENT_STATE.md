@@ -3,6 +3,43 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
 
+## Status Rilis v1.3.3 (2026-08-14) — Dukungan unduh Douyin, LIVE
+
+- **Release `v1.3.3` LIVE**:
+  https://github.com/dennsoe/rs-omniclip/releases/tag/v1.3.3
+  - macOS: `RS-OmniClip-1.3.3-arm64.dmg` (99 MB) + `.zip` (95 MB).
+  - Windows: `RS-OmniClip-1.3.3-x64-setup.exe` (NSIS, 82 MB) +
+    `RS-OmniClip-1.3.3-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
+  - API `releases/latest` = `v1.3.3`.
+- **PR #23** (`db8649cd`, fitur Douyin) + **PR #24** (`1d4c31e0`, bump 1.3.3) —
+  merge commit.
+
+## Fitur: unduh Douyin via cookie sesi + resolve short link (2026-08-14)
+
+Audit forensik menyeluruh + uji lapangan:
+- **Short link `v.douyin.com/xxx` MASIH resolve** (ikut redirect → aweme_id di
+  URL akhir) — tanpa login.
+- **Semua endpoint publik tanpa cookie MATI**: `iesdouyin.com/iteminfo` → 200
+  body kosong; `douyin.com/aweme/v1/web/aweme/detail` → 200 body kosong (butuh
+  X-Bogus + cookie sesi); yt-dlp → `Fresh cookies ... are needed`.
+- **Kesimpulan**: Douyin WAJIB cookie sesi (anti-bot ketat). Solusi = beri
+  cookie lalu serahkan ke yt-dlp (extractor terus diperbarui).
+- **Implementasi**:
+  - Modul baru `electron/main/engine/douyin.ts`: `isDouyinUrl`, `extractAwemeId`,
+    `normalizeDouyinUrl` (resolve short link → `https://www.douyin.com/video/{id}`),
+    `writeNetscapeCookieFile` (header Cookie → file Netscape untuk `--cookies`).
+  - `downloader.ts`: opsi `douyinCookie` + internal `cookiesFile`; `--cookies`
+    diprioritaskan atas `--cookies-from-browser`; routing Douyin (resolve +
+    tulis cookie) sebelum jalur yt-dlp; pesan error Douyin diperjelas.
+  - UI: kolom **"Cookie Douyin (opsional)"** di Pengaturan Unduhan (tempel header
+    Cookie dari sesi douyin.com yang sudah login).
+  - IPC/preload/types: `douyinCookie` di-pass renderer → main → engine.
+- **Validasi**: typecheck+lint+build PASS; unit test douyin 14/14; E2E
+  (Electron+CDP) — field tampil, short link ter-resolve ke aweme_id, yt-dlp
+  dipanggil dgn URL kanonik, file cookie Netscape tertulis & dibaca yt-dlp
+  (bukti `--cookies` dikirim), pesan error ramah muncul. Unduhan sukses nyata
+  tetap butuh cookie sesi valid milik pengguna (inheren Douyin, bukan bug).
+
 ## Status Rilis v1.3.2 (2026-08-14) — Bugfix UI block + Douyin, LIVE
 
 - **Release `v1.3.2` LIVE**:
