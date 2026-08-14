@@ -52,7 +52,8 @@ import type {
   FileStatus,
   ScrapeItem,
   UpdateInfo,
-  ResourceInfo
+  ResourceInfo,
+  DownloadProgress
 } from '@lib/types'
 import { useIsMobile } from '@hooks/use-mobile'
 import Toasts, { type ToastMessage, type ToastType } from '@components/Toasts'
@@ -62,12 +63,38 @@ import SystemMonitor from '@components/SystemMonitor'
 import SortableFileItem from '@components/SortableFileItem'
 import PresetSelector from '@components/PresetSelector'
 
-interface DownloadItem {
-  id: string
-  url: string
-  percent: number
-  status: 'downloading' | 'success' | 'failed'
-  error?: string
+/** Satu item antrean unduhan (kontrak window.api.onDownloadProgress). */
+type DownloadItem = DownloadProgress
+
+/** Memformat byte menjadi teks ringkas (mis. "12.3 MB"). */
+function formatBytes(bytes?: number): string {
+  if (!bytes || bytes <= 0) return ''
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0
+  let n = bytes
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024
+    i++
+  }
+  return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+/** Memformat kecepatan unduh (byte/detik) menjadi teks. */
+function formatSpeed(bytesPerSec?: number): string {
+  return bytesPerSec && bytesPerSec > 0 ? `${formatBytes(bytesPerSec)}/dtk` : ''
+}
+
+/** Memformat estimasi sisa waktu (detik) menjadi teks. */
+function formatEta(seconds?: number): string {
+  if (seconds === undefined || seconds < 0) return ''
+  const s = Math.round(seconds)
+  if (s < 60) return `${s} dtk`
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  if (m < 60) return `${m} mnt ${sec} dtk`
+  const h = Math.floor(m / 60)
+  const mm = m % 60
+  return `${h} jam ${mm} mnt`
 }
 
 export default function App(): React.ReactElement {
@@ -304,12 +331,9 @@ export default function App(): React.ReactElement {
     const offDownload = window.api.onDownloadProgress((data) => {
       setDownloads((prev) =>
         prev.map((d) => {
-          if (d.id === data.id) {
-            return { ...d, percent: data.percent, status: data.status, error: data.error }
-          }
-          // Cadangan: cocokkan via URL bila id berbeda.
-          if (data.url && d.url === data.url && d.status === 'downloading') {
-            return { ...d, percent: data.percent, status: data.status, error: data.error }
+          // Cocokkan via id atau (cadangan) via URL saat item masih mengunduh.
+          if (d.id === data.id || (data.url && d.url === data.url && d.status === 'downloading')) {
+            return { ...d, ...data }
           }
           return d
         })
@@ -1269,53 +1293,107 @@ export default function App(): React.ReactElement {
                 <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl overflow-hidden flex flex-col relative z-10 transition-colors">
                   <div className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 p-3 flex items-center transition-colors">
                     <span className="text-sm font-medium text-slate-500 dark:text-slate-400 pl-2">Antrean Unduhan</span>
+                    <span className="ml-auto text-[11px] text-slate-400 dark:text-slate-500 pr-2">
+                      {downloads.filter((d) => d.status === 'success').length} selesai ·{' '}
+                      {downloads.filter((d) => d.status === 'failed').length} gagal
+                    </span>
                   </div>
                   <div className="overflow-y-auto max-h-[50vh] p-0">
                     {downloads.map((dl) => (
                       <div
                         key={dl.id}
-                        className="relative border-b border-slate-100 dark:border-slate-700/50 last:border-0 p-4 flex items-center justify-between transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                        className="relative border-b border-slate-100 dark:border-slate-700/50 last:border-0 p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
                       >
-                        <div className="flex items-center overflow-hidden mr-4 flex-grow">
-                          <div className="mr-4 text-slate-300 dark:text-slate-500 shrink-0">
-                            <LinkIcon className="w-5 h-5" />
-                          </div>
-                          <div className="flex flex-col overflow-hidden">
-                            <span className="truncate font-medium text-slate-700 dark:text-slate-200">{dl.url}</span>
+                        <div className="flex items-start gap-3">
+                          {dl.status === 'success' && dl.thumbnail ? (
+                            <img
+                              src={dl.thumbnail}
+                              alt=""
+                              className="w-16 h-16 rounded-lg object-cover shrink-0 bg-slate-100 dark:bg-slate-900/60"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-lg shrink-0 flex items-center justify-center bg-blue-50 dark:bg-slate-900/60 text-blue-600 dark:text-blue-400">
+                              <LinkIcon className="w-6 h-6" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                              {dl.title || dl.url}
+                            </p>
+                            {dl.title && dl.url !== dl.title && (
+                              <p className="truncate text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                                {dl.url}
+                              </p>
+                            )}
+                            {dl.description && dl.status === 'success' && (
+                              <p className="line-clamp-2 text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                                {dl.description}
+                              </p>
+                            )}
                             {dl.status === 'failed' && dl.error && (
-                              <span className="truncate text-xs text-rose-500 dark:text-rose-400 mt-0.5" title={dl.error}>
+                              <p className="text-xs text-rose-500 dark:text-rose-400 mt-1 leading-snug" title={dl.error}>
                                 {dl.error}
+                              </p>
+                            )}
+
+                            {dl.status === 'downloading' && (
+                              <>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-900/60 overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full bg-blue-600 transition-[width] duration-300"
+                                      style={{ width: `${Math.max(2, Math.min(100, dl.percent))}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs tabular-nums text-slate-600 dark:text-slate-300 shrink-0 w-10 text-right">
+                                    {Math.round(dl.percent)}%
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 mt-1 flex-wrap">
+                                  {dl.phase === 'merging' && <span>Menggabungkan...</span>}
+                                  {dl.phase === 'retrying' && <span>Mencoba ulang...</span>}
+                                  {dl.speedBytesPerSec && dl.speedBytesPerSec > 0 && (
+                                    <span>{formatSpeed(dl.speedBytesPerSec)}</span>
+                                  )}
+                                  {dl.etaSeconds !== undefined && <span>± {formatEta(dl.etaSeconds)}</span>}
+                                  {dl.sizeBytes ? <span>{formatBytes(dl.sizeBytes)}</span> : null}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            {dl.status === 'downloading' && (
+                              <span className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-full text-[11px] font-medium border border-blue-200/50 dark:border-blue-500/20">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                Mengunduh
                               </span>
+                            )}
+                            {dl.status === 'success' && (
+                              <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full text-[11px] font-medium">
+                                Selesai
+                              </span>
+                            )}
+                            {dl.status === 'failed' && (
+                              <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 px-2.5 py-1 rounded-full text-[11px] font-medium">
+                                Gagal
+                              </span>
+                            )}
+                            {dl.status === 'success' && dl.filePath && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  window.api?.showItemInFolder?.(dl.filePath ?? '')
+                                }}
+                                title="Buka di folder"
+                                className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                <FolderOpen className="w-3.5 h-3.5" />
+                                Buka folder
+                              </button>
                             )}
                           </div>
                         </div>
-
-                        <div className="flex items-center gap-4 shrink-0 relative z-10">
-                          {dl.status === 'downloading' && (
-                            <span className="flex items-center gap-2 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border border-blue-200/50 dark:border-blue-500/20 shadow-sm">
-                              <Loader2 className="w-3 h-3 animate-spin shrink-0" />
-                              <span className="tabular-nums w-8 text-right tracking-tight">{Math.round(dl.percent)}%</span>
-                            </span>
-                          )}
-                          {dl.status === 'success' && (
-                            <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full text-xs font-medium">
-                              Selesai
-                            </span>
-                          )}
-                          {dl.status === 'failed' && (
-                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 px-3 py-1 rounded-full text-xs font-medium">
-                              Gagal
-                            </span>
-                          )}
-                        </div>
-
-                        {dl.status === 'downloading' && (
-                          <motion.div
-                            className="absolute bottom-0 left-0 h-[2px] bg-blue-600"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${dl.percent}%` }}
-                          />
-                        )}
                       </div>
                     ))}
                   </div>

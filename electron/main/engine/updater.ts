@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { getEngineBinDir } from './paths'
 import { ensureFfmpeg, resetFfmpegCache } from './ffmpeg'
 import { ensureYtdlp, resetYtdlpCache } from './downloader'
@@ -145,11 +145,34 @@ function writeInstalledVersions(versions: InstalledVersions): void {
 /** Menjalankan binary untuk membaca versi (ffmpeg -version, yt-dlp --version). */
 function detectVersion(binPath: string, args: string[]): Promise<string | null> {
   return new Promise((resolve) => {
-    execFile(binPath, args, { timeout: 10_000 }, (err, stdout) => {
-      if (err) return resolve(null)
+    // Pakai spawn (bukan execFile): binary yt-dlp macOS adalah PyInstaller
+    // "onefile" yang lambat boot-nya (~10 detik) dan tidak kompatibel dengan
+    // execFile timeout pendek → execFile 10s selalu timeout → versi terbaca
+    // null ("Terpasang: —") padahal binary ada & berfungsi.
+    const proc = spawn(binPath, args, { timeout: 60_000 })
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    const finish = (value: string | null): void => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    proc.stdout.on('data', (d: Buffer) => {
+      stdout += d.toString()
+    })
+    proc.stderr.on('data', (d: Buffer) => {
+      stderr += d.toString()
+    })
+    proc.on('error', () => finish(null))
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        // Beberapa build menulis versi ke stderr; pakai itu sebagai cadangan.
+        stdout = stdout || stderr
+      }
       const firstLine = String(stdout).split('\n')[0] ?? ''
       const m = firstLine.match(/(\d+\.\d+(?:\.\d+)?[^\s]*)/)
-      resolve(m ? m[1] : firstLine.trim() || null)
+      finish(m ? m[1] : firstLine.trim() || null)
     })
   })
 }

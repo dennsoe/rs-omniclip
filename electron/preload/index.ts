@@ -21,6 +21,14 @@ interface DownloadProgressData {
   status: 'downloading' | 'success' | 'failed'
   /** Pesan kegagalan opsional (hanya saat status 'failed'). */
   error?: string
+  speedBytesPerSec?: number
+  etaSeconds?: number
+  sizeBytes?: number
+  phase?: 'extracting' | 'downloading' | 'merging' | 'retrying' | 'done'
+  title?: string
+  thumbnail?: string
+  description?: string
+  filePath?: string
 }
 
 interface TrimCompleteData {
@@ -90,6 +98,11 @@ const api = {
 
   openFolder: (folderPath: string): void => {
     ipcRenderer.send('folder:open', folderPath)
+  },
+
+  /** Menampilkan berkas di folder (Finder/Explorer). */
+  showItemInFolder: (filePath: string): void => {
+    ipcRenderer.send('folder:reveal', filePath)
   },
 
   startDownloadBatch: (

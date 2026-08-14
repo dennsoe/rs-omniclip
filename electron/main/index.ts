@@ -246,7 +246,9 @@ function handleDownload(payload: { urls?: string[]; options?: DownloadOptions })
     (p: DownloadProgress) => emit('download:progress', p),
     (r) => emit('download:complete', r),
     options
-  )
+  ).catch((err) => {
+    console.error('[RS OmniClip] Gagal menjalankan unduhan batch:', err)
+  })
 }
 
 function handleScrape(payload: { id?: string; url?: string }): void {
@@ -308,6 +310,12 @@ function registerIpc(): void {
   ipcMain.on('folder:open', (_event, folderPath: string) => {
     if (typeof folderPath === 'string' && folderPath.trim()) {
       void shell.openPath(folderPath.trim())
+    }
+  })
+
+  ipcMain.on('folder:reveal', (_event, filePath: string) => {
+    if (typeof filePath === 'string' && filePath.trim()) {
+      shell.showItemInFolder(filePath.trim())
     }
   })
 

@@ -1,7 +1,173 @@
 # Kondisi Terkini — RS OmniClip
 
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
-ada perubahan. Tanggal terakhir diperbarui: **2026-08-13**.
+ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
+
+## Solusi TikTok via API TikWM — multi-key failover (2026-08-14)
+
+TikTok kini **BERFUNGSI** (sebelumnya rusak total di level yt-dlp — lihat
+"Audit Forensik TikTok" di bawah). Solusi: integrasi **API TikWM**
+(`https://www.tikwm.com/api`) dengan **5 api_key** milik user, disimpan di
+codebase (tanpa UI tambah key), failover berurutan otomatis.
+
+- **Akar**: bot-detection baru TikTok (Agustus 2026) memutus SEMUA pengunduh
+  berbasis yt-dlp (issue yt-dlp #17403); workaround UA/cookies/mobile API gagal.
+  TikWM memakai emulasi perangkat mobile di sisi server sehingga tetap bisa
+  mengunduh.
+- **Implementasi** — `electron/main/engine/tiktok.ts` (modul baru, murni
+  Node builtins, tanpa dependensi Electron):
+  1. `TIKWM_PROVIDERS` — array 5 provider `{ id: 'k1'..'k5', baseUrl, apiKey }`
+     (5 key user, hardcoded di codebase; tanpa UI tambah key).
+  2. `isTikTokUrl(url)` — deteksi host `tiktok.com` / `tiktokv.com`
+     (termasuk `vt.`/`vm.` short-link).
+  3. `resolveTikTokInfo(url)` — failover berurutan k1→k5; sukses bila
+     `code === 0` dan `data.play` ada; gagal → lanjut provider berikutnya;
+     semua gagal → Error jelas.
+  4. `downloadTikTokVideo(url, destDir, onProgress)` — resolve + unduh
+     `data.play` via **GET dengan header browser** (User-Agent Chrome +
+     `Referer: https://www.tiktok.com/`; HEAD dari CDN = 503, GET = MP4 valid),
+     progress byte 0→100, redirect ditangani, nama file `[judul] [id].mp4`
+     (sanitasi lintas-OS + dedupe ` (2)`), metadata (title/thumbnail/sizeBytes)
+     di-return untuk event sukses.
+- **Integrasi** — `electron/main/engine/downloader.ts`: `downloadSingle` kini
+  punya **Lapisan 0 — TikTok via TikWM** di depan lapisan yt-dlp (retry →
+  Chrome UA → self-heal). `isTikTokUrl(url)` true → coba TikWM dulu; sukses →
+  event `success` dengan metadata (`description: "TikTok · via TikWM"`); gagal
+  → jatuh ke jalur yt-dlp seperti biasa. Platform lain tidak berubah.
+- **Catatan audit**: parameter `api_key` diterima endpoint TikWM namun saat ini
+  **tidak di-enforce** (key invalid pun `code:0`). Failover tetap diterapkan
+  atas dasar kegagalan nyata (HTTP error / `code != 0` / `play` kosong / unduhan
+  CDN gagal). Semua 5 key terverifikasi berfungsi.
+- **Verifikasi E2E (Electron + CDP, build produksi)**:
+  - TikTok URL 1 (`vt.tiktok.com/ZS4c1gE2r/`) → `success` 100%, judul/thumbnail/
+    filePath/sizeBytes 7.643.096 B, `description "TikTok · via TikWM"`,
+    `complete {total:1, success:1, failed:0}`; MP4 tersimpan di
+    `~/Downloads/RS-OmniClip/Unduhan/`.
+  - TikTok URL 2 (`vt.tiktok.com/ZS4c1gxy2/`) → sukses 5.133.237 B (via UI app).
+  - **Failover**: unit-test 4 provider pertama dimatikan (baseUrl invalid) →
+    resolve jatuh ke provider k5 & sukses.
+  - **Regresi YouTube** (`jNQXAC9IVRw`) → tetap `success` (jalur yt-dlp utuh).
+- typecheck/lint/build PASS, `get_errors` bersih.
+- File berubah: `electron/main/engine/tiktok.ts` (baru), `electron/main/engine/
+  downloader.ts` (Lapisan 0 TikWM), `electron/main/index.ts` (guard `.catch`
+  pada `startDownloadBatch` — mencegah unhandled rejection di main).
+
+## Fix "Perbarui Resource yt-dlp tidak terupdate" (2026-08-14) — deteksi versi
+
+Laporan: panel "Tentang & Update" selalu menampilkan `yt-dlp Terpasang: — ·
+Perlu update` walau sudah diklik "Perbarui Resource" / yt-dlp sudah versi terbaru.
+
+- **Akar masalah**: `detectVersion()` di `electron/main/engine/updater.ts`
+  memakai **`execFile` dengan timeout 10 detik**. Binary yt-dlp macOS adalah
+  PyInstaller "onefile" yang **boot ~11 detik** untuk `--version` (self-extract
+  tiap run; diverifikasi: spawn exit 0 = `2026.07.04` dalam ~11,2 detik, execFile
+  10 s selalu timeout). Akibatnya `recordInstalledVersions()` selalu menulis
+  `"yt-dlp": null` ke `bin/versions.json` → `getResourceStatus` menganggap yt-dlp
+  "belum terpasang" (outdated) → badge "Perlu update" abadi, tombol Perbarui
+  tidak pernah "berhasil".
+- **Perbaikan** (`updater.ts`): `detectVersion` ditulis ulang memakai **`spawn`**
+  (kompatibel dengan binary PyInstaller), timeout **60 detik**, menangkap
+  stdout+stderr (fallback ke stderr bila exit != 0). `execFile` dihapus dari
+  import.
+- **Verifikasi**: `versions.json` kini berisi `{ "ffmpeg": "6.1-tessus",
+  "yt-dlp": "2026.07.04" }`; UI panel Resource via CDP menampilkan
+  `yt-dlp — Terpasang: 2026.07.04 · Diharapkan: 2026.07.04` (hijau, tanpa badge
+  "Perlu update"). typecheck/lint/build PASS, get_errors bersih.
+- **Catatan**: "TERBARU: —" pada panel versi = GitHub API lambat/rate-limit
+  sesaat (graceful degradation, bisa dicoba ulang via tombol Periksa Update);
+  bukan bug kode. Kecepatan boot yt-dlp ~11 dtk bersifat inheren pada binary
+  macOS (PyInstaller onefile) — timeout deteksi kini 60 dtk menanganinya.
+
+## Audit Forensik TikTok (2026-08-14) — bot-detection global + self-heal yt-dlp
+
+Laporan: "semua video TikTok gagal; kemarin bisa tanpa cookie". Audit menyeluruh:
+
+- **Akar (upstream)**: TikTok meluncurkan **bot-detection baru (11–12 Agustus
+  2026)** yang merusak extractor TikTok yt-dlp di SELURUH dunia — isu terbuka
+  yt-dlp #17403 (27 komentar, AS/Eropa/Brasil; "was still working 2 days ago").
+  Error `Unexpected response from webpage request` terjadi karena TikTok kini
+  menyajikan halaman challenge baru yang tidak dikenali extractor
+  (`_extract_web_data_and_status` → `_solve_challenge_and_set_cookies`).
+  **Terbukti bukan bug app**: versi resmi 2026.07.04 (latest) DAN nightly
+  2026.08.04 sama-sama gagal; workaround `--user-agent` Chrome, `--impersonate
+  chrome`, mobile API `app_info`, cookies browser, URL kanonik/tiktokv/share —
+  SEMUA gagal dari jaringan ini. Tidak ada perbaikan yt-dlp yang tersedia saat
+  ini; begitu rilis, app akan auto-sembuh.
+- **Akar (bug APP — wajib diperbaiki)**: folder binary app
+  (`~/Library/Application Support/rs-omniclip/bin/`) KOSONG → `ensureYtdlp`
+  lama **diam-diam jatuh ke yt-dlp SISTEM `2025.06.25`** (setahun lebih tua,
+  tidak sanggup menangani TikTok/Facebook modern). Ini bug nyata yang
+  memengaruhi SEMUA platform, bukan hanya TikTok.
+- **Perbaikan (downloader.ts)**:
+  1. **Urutan provisioning diubah**: lokal → **unduh rilis terbaru dari
+     GitHub** → yt-dlp sistem HANYA sebagai cadangan terakhir (bila jaringan
+     gagal). App tidak lagi memakai yt-dlp sistem yang bisa saja lawas.
+  2. **Self-heal otomatis**: saat error extractor/situs (`EXTRACTOR_ISSUE_RE`:
+     "report this issue on github", "Confirm you are on the latest version",
+     "Cannot parse data", "Unexpected response", dll), download dijalankan
+     berjenjang: (a) retry transien biasa (backoff), (b) **workaround dengan
+     Chrome user-agent** (`CHROME_USER_AGENT`), (c) **`ensureLatestYtdlp()`**
+     — hapus binary lama, unduh rilis terbaru, retry sekali per sesi. Bila
+     yt-dlp menerbitkan perbaikan TikTok, unduhan pulih otomatis tanpa campur
+     tangan pengguna.
+  3. **Pesan error akurat**: bukan lagi "kegagalan extractor... aktifkan
+     cookies" yang menyesatkan, melainkan "Platform (TikTok/Facebook)
+     memperketat proteksi anti-bot; ini memengaruhi semua pengunduh. Sudah
+     dicoba ulang otomatis dengan user-agent browser & yt-dlp terbaru. Bila
+     masih gagal, coba lagi nanti (perbaikan yt-dlp), atau aktifkan Cookies
+     Browser sebagai alternatif."
+- **Verifikasi E2E (Electron + CDP)**: TikTok → 5 percobaan (retry + workaround
+  + self-heal), fase `retrying`, error baru tampil; **YouTube tetap sukses**
+  (metadata lengkap) — tidak ada regresi. Provisioning: binDir terisi ulang
+  yt-dlp **2026.07.04** (latest) saat app start.
+- **Catatan jujur**: karena TikTok rusak di level yt-dlp GLOBAL, jalur yt-dlp
+  untuk TikTok masih bisa gagal — TETAPI app kini punya **jalur utama TikTok via
+  API TikWM (5 key, failover otomatis)** yang sudah terverifikasi berfungsi
+  (lihat seksi "Solusi TikTok via API TikWM" di atas). yt-dlp tetap di-update &
+  auto-sembuh sebagai cadangan.
+
+## Perbaikan Mendalam Pengunduh (2026-08-14) — progress realtime, metadata, retry
+
+Menindaklanjuti 7 bug laporan pengguna (TikTok semua gagal, Facebook error,
+download lambat, progress tidak realtime, tanpa estimasi waktu, tanpa
+thumbnail/judul/deskripsi setelah selesai, UI jelek). Akar masalah & perbaikan:
+
+- **TikTok semua gagal & Facebook error**: yt-dlp memblokir permintaan anonim
+  (TikTok: "Unexpected response from webpage request"; Facebook: "Cannot parse
+  data" intermiten). Fix: (1) **retry otomatis** — pola error transien
+  (`Cannot parse data`, `Unexpected response`, `HTTP Error [45]xx`,
+  `Sign in to confirm`, dll) DAN belum ada unduhan → ulang hingga 2× dengan
+  jeda mundur, fase `retrying` di UI; (2) **Cookies Browser** (
+  `--cookies-from-browser`) untuk TikTok/Facebook/Instagram; (3) pesan error
+  ramah + saran.
+- **Download lambat**: kualitas default "Terbaik" memilih format sangat besar
+  (diverifikasi 229 MB). Fix: opsi **Kualitas** (Terbaik/2160/1440/1080/720/480/
+  360) via `-f bv*[height<=H]+ba/b[height<=H]` + cookies untuk throttle.
+- **Progress tidak realtime**: parser lama hanya ambil match pertama per potongan
+  (~20 baris/detik burst) → tersendat. Fix: stdout **di-buffer per baris**
+  (`--newline`), tiap baris `[download] NN% of X at Y/s ETA MM:SS` diurai penuh,
+  dikirim dengan **throttle 300 ms** (koalesen lalu flush).
+- **Tanpa estimasi waktu**: kini `speedBytesPerSec`, `etaSeconds`, `sizeBytes`
+  diurai & ditampilkan (kecepatan, ETA "X mnt Y dtk", ukuran).
+- **Tanpa thumbnail/judul/deskripsi**: ditangkap via `--print after_move` sebagai
+  **satu objek JSON** (`__RSMETA__{"title":%(title)j,...}`) — setiap field
+  JSON-encoded (aman dari newline/tab/emoji; `\t` literal TIDAK dipakai sebagai
+  pemisah). Disertakan pada event sukses; renderer menampilkan thumbnail (`img`
+  remote — CSP `img-src ... https: http:`), judul, deskripsi (line-clamp-2), dan
+  tombol **"Buka folder"** (`showItemInFolder` → `folder:reveal`).
+- **UI kartu antrean di-redesign**: header "X selesai · Y gagal", thumbnail atau
+  placeholder ikon, judul, URL subtitle, deskripsi, bar progress + persen +
+  kecepatan + ETA + ukuran + label fase (Menggabungkan…/Mencoba ulang…), badge
+  status, tombol "Buka folder".
+- **Verifikasi end-to-end (produksi)**: typecheck/lint/build PASS, `get_errors`
+  bersih. Unduhan nyata via Electron (CDP): YouTube → `success:1`, metadata
+  lengkap (judul, thumbnail `maxresdefault` termuat 1280x720, deskripsi 1000
+  char, filePath `.webm`), kartu antrean menampilkan judul/deskripsi/badge
+  "Selesai"/tombol "Buka folder". Argumen `--print after_move` JSON + parser
+  baris progress diverifikasi langsung di terminal (download nyata).
+- File berubah: `electron/main/engine/downloader.ts`, `electron/main/index.ts`
+  (IPC `folder:reveal`), `electron/preload/index.ts`, `src/lib/types.ts`,
+  `src/types/global.d.ts`, `src/App.tsx`, `src/index.html` (CSP img-src).
 
 ## Status Rilis v1.2.0 (2026-08-13) — MULTI-OS
 
@@ -96,7 +262,7 @@ Aplikasi berfungsi end-to-end dan telah di-push ke GitHub.
 | Peningkat Video UHD 4K (`uhd`) | Selesai & terverifikasi |
 | Arsip Kualitas Maks (`archive`) | Selesai & terverifikasi |
 | Kompresor WhatsApp (`whatsapp`) | Selesai & terverifikasi |
-| Pengunduh Universal (yt-dlp) | Selesai — multi-link batch + ambil daftar akun/halaman (scrape), pilihan checkbox, ringkasan akhir |
+| Pengunduh Universal (yt-dlp) | Selesai — multi-link batch + ambil daftar akun/halaman (scrape), kualitas/cookies/paralel, progress realtime + ETA + metadata video, retry otomatis, tombol buka folder |
 | Pemotong Inline (lossless) | Selesai & terverifikasi |
 | Monitor System (CPU/RAM) | Selesai — pemakaian aplikasi nyata & realtime (`system:stats`, via `procmon` + `ps`, termasuk FFmpeg/yt-dlp) |
 | Watermark teks (`drawtext`) | DIHAPUS — build FFmpeg evermeet TIDAK punya filter `drawtext` |

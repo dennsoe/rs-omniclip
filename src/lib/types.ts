@@ -44,6 +44,29 @@ export interface DownloadOptions {
   parallel?: boolean
 }
 
+/** Satu item progress unduhan (dari engine yt-dlp). */
+export interface DownloadProgress {
+  id: string
+  url: string
+  percent: number
+  status: 'downloading' | 'success' | 'failed'
+  /** Pesan kegagalan opsional (hanya saat status 'failed'). */
+  error?: string
+  /** Kecepatan unduh (byte/detik). */
+  speedBytesPerSec?: number
+  /** Estimasi sisa waktu (detik). */
+  etaSeconds?: number
+  /** Ukuran total (byte). */
+  sizeBytes?: number
+  /** Fase proses: ekstraksi, unduh, penggabungan, retry, selesai. */
+  phase?: 'extracting' | 'downloading' | 'merging' | 'retrying' | 'done'
+  /** Metadata dari yt-dlp (terisi saat berhasil). */
+  title?: string
+  thumbnail?: string
+  description?: string
+  filePath?: string
+}
+
 /** Info versi aplikasi (lokal vs rilis terbaru dari GitHub). */
 export interface UpdateInfo {
   /** Versi lokal dari package.json. */

@@ -4,6 +4,7 @@ import { execFile, spawn } from 'node:child_process'
 import { getEngineBinDir, getDownloadDir } from './paths'
 import { downloadFile } from './net'
 import { trackProcess, untrackProcess } from './procmon'
+import { isTikTokUrl, downloadTikTokVideo } from './tiktok'
 
 export interface DownloadProgress {
   id: string
@@ -12,6 +13,19 @@ export interface DownloadProgress {
   status: 'downloading' | 'success' | 'failed'
   /** Pesan kegagalan opsional (diisi hanya saat status 'failed'). */
   error?: string
+  /** Kecepatan unduh (byte/detik). */
+  speedBytesPerSec?: number
+  /** Estimasi sisa waktu (detik). */
+  etaSeconds?: number
+  /** Ukuran total (byte). */
+  sizeBytes?: number
+  /** Fase proses: ekstraksi, unduh, penggabungan, retry, selesai. */
+  phase?: 'extracting' | 'downloading' | 'merging' | 'retrying' | 'done'
+  /** Metadata dari yt-dlp (terisi saat berhasil). */
+  title?: string
+  thumbnail?: string
+  description?: string
+  filePath?: string
 }
 
 /** Opsi unduhan dari UI (kualitas, cookies browser, paralel). */
@@ -74,13 +88,10 @@ async function doEnsureYtdlp(onStatus?: (message: string) => void): Promise<stri
     return localPath
   }
 
-  const systemPath = await findSystemCommand(YTDLP_BIN_NAME)
-  if (systemPath) {
-    onStatus?.('Menggunakan yt-dlp dari sistem.')
-    return systemPath
-  }
-
-  onStatus?.('Mengunduh yt-dlp untuk pertama kali (butuh koneksi internet)...')
+  // Prioritas: unduh rilis TERBARU dari GitHub (bukan yt-dlp sistem yang bisa
+  // saja sudah lawas — mis. sistem lama gagal menangani TikTok). yt-dlp sistem
+  // hanya dipakai bila unduhan gagal (jaringan bermasalah) sebagai cadangan.
+  onStatus?.('Mengunduh yt-dlp rilis terbaru (butuh koneksi internet)...')
   try {
     await downloadFile(YTDLP_DOWNLOAD_URL, localPath)
     // `chmod` hanya relevan di Unix; di Windows tidak diperlukan.
@@ -90,9 +101,33 @@ async function doEnsureYtdlp(onStatus?: (message: string) => void): Promise<stri
     onStatus?.('yt-dlp siap digunakan.')
     return localPath
   } catch {
+    const systemPath = await findSystemCommand(YTDLP_BIN_NAME)
+    if (systemPath) {
+      onStatus?.('Gagal mengunduh yt-dlp; memakai yt-dlp dari sistem (mungkin versi lama).')
+      return systemPath
+    }
     onStatus?.('Gagal mengunduh yt-dlp. Periksa koneksi internet lalu coba lagi.')
     return null
   }
+}
+
+/**
+ * Memaksa yt-dlp diunduh ulang ke rilis terbaru (self-heal saat extractor gagal).
+ * Menghapus binary lokal lama, mereset cache single-flight, lalu provisioning
+ * ulang — akan mengunduh rilis terbaru dari GitHub.
+ */
+async function ensureLatestYtdlp(onStatus?: (message: string) => void): Promise<string | null> {
+  const binDir = getEngineBinDir()
+  const localPath = path.join(binDir, YTDLP_BIN_NAME)
+  try {
+    if (await isFile(localPath)) {
+      await fs.promises.unlink(localPath)
+    }
+  } catch {
+    // Abaikan: folder mungkin tidak ada / tidak bisa dihapus.
+  }
+  resetYtdlpCache()
+  return ensureYtdlp(onStatus)
 }
 
 export interface DownloadBatchComplete {
@@ -159,76 +194,273 @@ export async function startDownloadBatch(
   onComplete({ total: urls.length, success, failed })
 }
 
-/** Mengunduh satu URL. Mengembalikan true bila berhasil. */
+/** Batas retry untuk kegagalan extractor yang bersifat sementara (mis. Facebook). */
+const MAX_RETRIES = 2
+/** Pola error transien yang layak dicoba ulang (ekstraksi gagal sebelum unduhan). */
+const TRANSIENT_ERROR_RE =
+  /Cannot parse data|Unexpected response|Unable to download webpage|HTTP Error [45]\d\d|Please try again|Requested format is not available|Sign in to confirm/i
+
+/**
+ * Pola error "masalah extractor/situs" (bukan koneksi pengguna) yang memicu
+ * jalur pemulihan: coba ulang dengan workaround lalu auto-update yt-dlp.
+ */
+const EXTRACTOR_ISSUE_RE =
+  /report this issue on https?:\/\/github\.com|Confirm you are on the latest version|Cannot parse data|Unexpected response|Unable to download webpage|Sign in to confirm|Requested format is not available/i
+
+/**
+ * User-Agent Chrome yang dikirim saat ekstraktor gagal — TikTok mulai menolak
+ * permintaan non-browser (bot-detection baru, lihat yt-dlp issue #17403).
+ * Dilaporkan memulihkan sebagian besar unduhan TikTok/Facebook.
+ */
+const CHROME_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+
+/** Sudahkah yt-dlp di-update sendiri pada sesi proses ini (self-heal sekali saja). */
+let ytdlpSelfHealed = false
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * Mengunduh satu URL dengan lapisan pemulihan berjenjang:
+ * 0) TikTok → jalur TikWM (API multi-key, failover otomatis) terlebih dahulu,
+ *    karena yt-dlp kini digagalkan bot-detection TikTok. Bila TikWM gagal
+ *    total, lanjut ke lapisan pemulihan yt-dlp di bawahnya.
+ * 1) percobaan normal + retry transien (backoff),
+ * 2) workaround extractor (Chrome user-agent) bila situs menolak,
+ * 3) self-heal: perbarui yt-dlp ke rilis terbaru lalu coba lagi (sekali per sesi).
+ */
 async function downloadSingle(
   url: string,
   onProgress: (p: DownloadProgress) => void,
   options: DownloadOptions = {}
 ): Promise<boolean> {
   const id = url
-  try {
-    const ytdlp = await ensureYtdlp()
-    if (!ytdlp) {
-      onProgress({
-        id,
-        url,
-        percent: 0,
-        status: 'failed',
-        error: 'yt-dlp tidak tersedia. Periksa koneksi internet lalu coba lagi.'
-      })
-      return false
+  let lastError = ''
+
+  // Lapisan 0: TikTok via TikWM (cepat & bekerja saat yt-dlp ditolak TikTok).
+  if (isTikTokUrl(url)) {
+    const tiktokOk = await tryTikTokDownload(url, id, onProgress)
+    if (tiktokOk) return true
+    lastError = 'TikWM tidak berhasil; mencoba jalur yt-dlp...'
+  }
+
+  // Lapisan 1: percobaan normal + retry transien.
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      onProgress({ id, url, percent: 0, status: 'downloading', phase: 'retrying' })
+      await sleep(2000 * attempt)
     }
+    const result = await runYtdlpDownload(url, id, onProgress, options)
+    if (result.ok) return true
+    lastError = result.error ?? ''
+    if (!result.retryable) break
+  }
 
-    const outDir = getDownloadDir()
-    await fs.promises.mkdir(outDir, { recursive: true })
-    const outputTemplate = path.join(outDir, '%(title).80B [%(id)s].%(ext)s')
-    const args = buildDownloadArgs(outputTemplate, url, options)
+  // Lapisan 2: error extractor/situs (mis. TikTok bot-detection) → coba lagi
+  // dengan user-agent Chrome yang meniru browser asli.
+  if (EXTRACTOR_ISSUE_RE.test(lastError)) {
+    const workaroundArgs = ['--user-agent', CHROME_USER_AGENT]
+    onProgress({ id, url, percent: 0, status: 'downloading', phase: 'retrying' })
+    const wResult = await runYtdlpDownload(url, id, onProgress, options, workaroundArgs)
+    if (wResult.ok) return true
 
-    return await new Promise<boolean>((resolve) => {
-      const proc = spawn(ytdlp, args)
-      // Lacak PID agar System Monitor menyertakan beban CPU/RAM yt-dlp.
-      trackProcess(proc.pid ?? 0)
+    // Lapisan 3: self-heal — perbarui yt-dlp ke rilis terbaru (sekali per sesi)
+    // lalu coba lagi. Bila yt-dlp sudah menerbitkan perbaikan extractor
+    // (mis. TikTok), unduhan pulih otomatis tanpa campur tangan pengguna.
+    if (!ytdlpSelfHealed) {
+      ytdlpSelfHealed = true
+      onProgress({ id, url, percent: 0, status: 'downloading', phase: 'retrying' })
+      await ensureLatestYtdlp()
+      const hResult = await runYtdlpDownload(url, id, onProgress, options, workaroundArgs)
+      if (hResult.ok) return true
+      lastError = hResult.error ?? lastError
+    } else {
+      lastError = wResult.error ?? lastError
+    }
+  }
 
-      proc.stdout.on('data', (chunk: Buffer) => {
-        const percent = extractPercent(chunk.toString())
-        if (percent !== null) {
-          onProgress({ id, url, percent, status: 'downloading' })
-        }
-      })
+  onProgress({ id, url, percent: 0, status: 'failed', error: friendlyDownloadError(lastError) })
+  return false
+}
 
-      let stderrTail = ''
-      proc.stderr.on('data', (chunk: Buffer) => {
-        const text = chunk.toString()
-        if (stderrTail.length < 4000) stderrTail += text
-      })
-
-      proc.on('error', () => {
-        untrackProcess(proc.pid ?? 0)
-        onProgress({ id, url, percent: 0, status: 'failed', error: 'Gagal menjalankan yt-dlp.' })
-        resolve(false)
-      })
-
-      proc.on('close', (code) => {
-        untrackProcess(proc.pid ?? 0)
-        if (code === 0) {
-          onProgress({ id, url, percent: 100, status: 'success' })
-          resolve(true)
-        } else {
-          onProgress({ id, url, percent: 0, status: 'failed', error: friendlyDownloadError(stderrTail) })
-          resolve(false)
-        }
-      })
-    })
-  } catch (err) {
+/**
+ * Jalur TikTok via API TikWM (multi-key failover). Sukses → kirim event
+ * `success` dengan metadata (judul, thumbnail, path file, ukuran). Gagal →
+ * kembali false agar `downloadSingle` melanjutkan ke lapisan yt-dlp.
+ */
+async function tryTikTokDownload(
+  url: string,
+  id: string,
+  onProgress: (p: DownloadProgress) => void
+): Promise<boolean> {
+  onProgress({ id, url, percent: 0, status: 'downloading', phase: 'downloading' })
+  const outDir = getDownloadDir()
+  const result = await downloadTikTokVideo(url, outDir, (phase, percent) => {
+    if (phase === 'resolving') {
+      onProgress({ id, url, percent: 0, status: 'downloading', phase: 'extracting' })
+    } else if (phase === 'downloading') {
+      onProgress({ id, url, percent, status: 'downloading', phase: 'downloading' })
+    }
+  })
+  if (result.ok && result.filePath) {
     onProgress({
       id,
       url,
-      percent: 0,
-      status: 'failed',
-      error: err instanceof Error ? err.message : 'Unduhan gagal.'
+      percent: 100,
+      status: 'success',
+      phase: 'done',
+      title: result.title,
+      thumbnail: result.thumbnail,
+      filePath: result.filePath,
+      sizeBytes: result.sizeBytes,
+      description: 'TikTok · via TikWM'
     })
-    return false
+    return true
   }
+  return false
+}
+
+interface YtdlpRunResult {
+  ok: boolean
+  error?: string
+  sawDownloadStart: boolean
+  retryable: boolean
+}
+
+/** Menjalankan satu proses yt-dlp dan melaporkan progress/metadata realtime. */
+async function runYtdlpDownload(
+  url: string,
+  id: string,
+  onProgress: (p: DownloadProgress) => void,
+  options: DownloadOptions,
+  extraArgs: string[] = []
+): Promise<YtdlpRunResult> {
+  const ytdlp = await ensureYtdlp()
+  if (!ytdlp) {
+    return {
+      ok: false,
+      error: 'yt-dlp tidak tersedia. Periksa koneksi internet lalu coba lagi.',
+      sawDownloadStart: false,
+      retryable: false
+    }
+  }
+  const outDir = getDownloadDir()
+  await fs.promises.mkdir(outDir, { recursive: true })
+  const outputTemplate = path.join(outDir, '%(title).80B [%(id)s].%(ext)s')
+  const args = buildDownloadArgs(outputTemplate, url, options, extraArgs)
+
+  return await new Promise<YtdlpRunResult>((resolve) => {
+    const proc = spawn(ytdlp, args)
+    // Lacak PID agar System Monitor menyertakan beban CPU/RAM yt-dlp.
+    trackProcess(proc.pid ?? 0)
+
+    let sawDownloadStart = false
+    let stderrTail = ''
+    let stdoutBuf = ''
+    let lastEmitAt = 0
+    let coalesced: DownloadProgress | null = null
+    const meta: { title?: string; thumbnail?: string; description?: string; filePath?: string } = {}
+
+    const emitProgress = (p: Partial<DownloadProgress>): void => {
+      const now = Date.now()
+      const full: DownloadProgress = {
+        id,
+        url,
+        ...p,
+        percent: p.percent ?? 0,
+        status: p.status ?? 'downloading'
+      }
+      if (now - lastEmitAt >= 300) {
+        lastEmitAt = now
+        coalesced = null
+        onProgress(full)
+      } else {
+        coalesced = full
+      }
+    }
+    const flushProgress = (): void => {
+      if (coalesced) {
+        onProgress(coalesced)
+        coalesced = null
+      }
+    }
+
+    const handleLine = (line: string): void => {
+      if (/\[download\]\s+Destination:/.test(line)) {
+        sawDownloadStart = true
+        emitProgress({ percent: 0, status: 'downloading', phase: 'downloading' })
+        return
+      }
+      if (/Merging formats into|\[Merger\]/.test(line)) {
+        emitProgress({ percent: 100, status: 'downloading', phase: 'merging' })
+        return
+      }
+      if (line.startsWith('__RSMETA__')) {
+        const raw = line.slice('__RSMETA__'.length).trim()
+        try {
+          const obj = JSON.parse(raw) as Record<string, unknown>
+          meta.title = typeof obj.title === 'string' ? obj.title.slice(0, 1000) : undefined
+          meta.thumbnail = typeof obj.thumbnail === 'string' ? obj.thumbnail.slice(0, 2000) : undefined
+          meta.filePath = typeof obj.filepath === 'string' ? obj.filepath : undefined
+          meta.description =
+            typeof obj.description === 'string' ? obj.description.slice(0, 1000) : undefined
+        } catch {
+          // Baris metadata tidak valid — abaikan, progress tetap berjalan.
+        }
+        return
+      }
+      const parsed = parseProgressLine(line)
+      if (parsed) {
+        if (parsed.percent > 0) sawDownloadStart = true
+        emitProgress({
+          percent: parsed.percent,
+          status: 'downloading',
+          phase: 'downloading',
+          speedBytesPerSec: parsed.speed,
+          etaSeconds: parsed.eta,
+          sizeBytes: parsed.sizeBytes
+        })
+      }
+    }
+
+    proc.stdout.on('data', (chunk: Buffer) => {
+      stdoutBuf += chunk.toString()
+      let nl: number
+      while ((nl = stdoutBuf.indexOf('\n')) >= 0) {
+        const line = stdoutBuf.slice(0, nl).replace(/\r$/, '')
+        stdoutBuf = stdoutBuf.slice(nl + 1)
+        handleLine(line)
+      }
+    })
+    proc.stdout.on('end', () => {
+      if (stdoutBuf.trim()) handleLine(stdoutBuf.replace(/\r$/, ''))
+      stdoutBuf = ''
+    })
+
+    proc.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString()
+      if (stderrTail.length < 4000) stderrTail += text
+    })
+
+    proc.on('error', () => {
+      untrackProcess(proc.pid ?? 0)
+      flushProgress()
+      resolve({ ok: false, error: 'Gagal menjalankan yt-dlp.', sawDownloadStart, retryable: false })
+    })
+
+    proc.on('close', (code) => {
+      untrackProcess(proc.pid ?? 0)
+      flushProgress()
+      if (code === 0) {
+        onProgress({ id, url, percent: 100, status: 'success', phase: 'done', ...meta })
+        resolve({ ok: true, sawDownloadStart, retryable: false })
+      } else {
+        const error = stderrTail.trim() || 'Unduhan gagal.'
+        const retryable = !sawDownloadStart && TRANSIENT_ERROR_RE.test(error)
+        resolve({ ok: false, error, sawDownloadStart, retryable })
+      }
+    })
+  })
 }
 
 /**
@@ -302,10 +534,23 @@ function lastLines(text: string, count = 3): string {
 /**
  * Argumen yt-dlp sesuai opsi: batas resolusi (`-f`) dan cookies browser
  * (`--cookies-from-browser`) untuk situs yang membatasi unduhan anonim
- * (Facebook/Instagram).
+ * (Facebook/Instagram). Metadata (title/thumbnail/description/filepath)
+ * ditangkap via `--print after_move` (JSON-encoded agar aman dari
+ * karakter tab/baris baru).
  */
-function buildDownloadArgs(outputTemplate: string, url: string, options: DownloadOptions): string[] {
-  const args = ['--newline', '--no-playlist', '--progress']
+function buildDownloadArgs(
+  outputTemplate: string,
+  url: string,
+  options: DownloadOptions,
+  extraArgs: string[] = []
+): string[] {
+  const args = ['--newline', '--no-playlist', '--progress', ...extraArgs]
+  // Metadata ditangkap via --print after_move sebagai SATU objek JSON valid
+  // (setiap field di-encode dengan %(field)j agar aman dari newline/tab).
+  args.push(
+    '--print',
+    'after_move:__RSMETA__{"title":%(title)j,"thumbnail":%(thumbnail)j,"filepath":%(filepath)j,"description":%(description)j}'
+  )
   if (options.maxHeight && options.maxHeight > 0) {
     args.push('-f', `bv*[height<=${options.maxHeight}]+ba/b[height<=${options.maxHeight}]`)
   }
@@ -318,21 +563,62 @@ function buildDownloadArgs(outputTemplate: string, url: string, options: Downloa
 
 /**
  * Menerjemahkan error yt-dlp agar lebih ramah pengguna, terutama untuk
- * kegagalan extractor (mis. Facebook "Cannot parse data") yang bukan
- * kesalahan koneksi pengguna.
+ * kegagalan extractor (mis. TikTok/Facebook) yang bukan kesalahan koneksi
+ * pengguna. Aplikasi sudah otomatis mencoba ulang + memperbarui yt-dlp.
  */
 function friendlyDownloadError(raw: string): string {
   const tail = lastLines(raw)
-  if (/Cannot parse data|report this issue|Confirm you are on the latest version/i.test(raw)) {
-    return `${tail} — Kemungkinan kegagalan extractor yt-dlp untuk situs tersebut (bukan koneksi Anda). Coba lagi, aktifkan cookies browser untuk Facebook/Instagram, atau perbarui resource yt-dlp di halaman Tentang & Update.`
+  if (/Cannot parse data|Unexpected response|report this issue|Confirm you are on the latest version/i.test(raw)) {
+    // TikTok memperketat bot-detection (Agustus 2026) yang memengaruhi SEMUA
+    // pengunduh berbasis yt-dlp di dunia. App sudah otomatis memperbarui
+    // yt-dlp & mencoba ulang — bila masih gagal, tunggu perbaikan yt-dlp.
+    return `${tail} — Platform (TikTok/Facebook) memperketat proteksi anti-bot; ini memengaruhi semua pengunduh. Sudah dicoba ulang otomatis dengan user-agent browser & yt-dlp terbaru. Bila masih gagal, coba lagi nanti (perbaikan yt-dlp), atau aktifkan Cookies Browser di Pengaturan Unduhan sebagai alternatif.`
   }
   return tail
 }
 
-function extractPercent(line: string): number | null {
-  const match = /\[download\]\s+(\d+(?:\.\d+)?)%/.exec(line)
-  if (!match) return null
-  return Math.min(100, Number.parseFloat(match[1]))
+interface ParsedProgress {
+  percent: number
+  speed?: number
+  eta?: number
+  sizeBytes?: number
+}
+
+/** Mengurai baris progress yt-dlp: persen, kecepatan, ETA, dan ukuran total. */
+function parseProgressLine(line: string): ParsedProgress | null {
+  const m = /\[download\]\s+(\d+(?:\.\d+)?)%/.exec(line)
+  if (!m) return null
+  const percent = Math.min(100, Number.parseFloat(m[1]))
+  return {
+    percent,
+    speed: parseSize(line, /at\s+([\d.]+)\s*([KMG]i?B)\/s/i),
+    eta: parseEta(line),
+    sizeBytes: parseSize(line, /of\s+([\d.]+)\s*([KMG]i?B)/i)
+  }
+}
+
+/** Mengurai ukuran (mis. "11.28MiB") menjadi byte. */
+function parseSize(line: string, re: RegExp): number | undefined {
+  const m = re.exec(line)
+  if (!m) return undefined
+  const n = Number.parseFloat(m[1])
+  if (!Number.isFinite(n)) return undefined
+  const unit = m[2].toUpperCase()
+  if (unit.startsWith('G')) return Math.round(n * 1024 ** 3)
+  if (unit.startsWith('M')) return Math.round(n * 1024 ** 2)
+  if (unit.startsWith('K')) return Math.round(n * 1024)
+  return Math.round(n)
+}
+
+/** Mengurai ETA yt-dlp ("MM:SS" / "HH:MM:SS") menjadi detik. */
+function parseEta(line: string): number | undefined {
+  const m = /ETA\s+(\d+):(\d+)(?::(\d+))?/.exec(line)
+  if (!m) return undefined
+  const a = Number(m[1])
+  const b = Number(m[2])
+  const c = m[3] !== undefined ? Number(m[3]) : undefined
+  if (c !== undefined) return a * 3600 + b * 60 + c
+  return a * 60 + b
 }
 
 async function isFile(p: string): Promise<boolean> {

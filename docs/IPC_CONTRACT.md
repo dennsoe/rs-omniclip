@@ -75,12 +75,22 @@ interface Window {
         percent: number
         status: 'downloading' | 'success' | 'failed'
         error?: string
+        speedBytesPerSec?: number
+        etaSeconds?: number
+        sizeBytes?: number
+        phase?: 'extracting' | 'downloading' | 'merging' | 'retrying' | 'done'
+        title?: string
+        thumbnail?: string
+        description?: string
+        filePath?: string
       }) => void
     ) => () => void
 
     onDownloadComplete: (
       cb: (data: { total: number; success: number; failed: number }) => void
     ) => () => void
+
+    showItemInFolder: (filePath: string) => void
 
     scrapeAccount: (payload: { id: string; url: string }) => void
 
@@ -182,10 +192,20 @@ dan `error` (jika tersedia) (batch tetap melanjutkan file berikutnya).
     Facebook/Instagram yang membatasi unduhan anonim.
   - `parallel: true`: unduh maks 2 URL sekaligus (default berurutan).
   - `id` setiap progress = URL-nya.
-- `download:progress` membawa `{ id, url, percent, status }` dengan status
-  `'downloading' | 'success' | 'failed'`, plus `error` (opsional) saat gagal.
-  Error kegagalan extractor (mis. Facebook "Cannot parse data") diberi
-  keterangan ramah + saran (coba lagi / cookies / perbarui resource).
+- `download:progress` membawa `{ id, url, percent, status, ... }` dengan status
+  `'downloading' | 'success' | 'failed'`, plus field opsional:
+  - `error` — pesan kegagalan (hanya saat `status: 'failed'`). Error extractor
+    (mis. Facebook "Cannot parse data") diberi keterangan ramah + saran.
+  - `speedBytesPerSec`, `etaSeconds`, `sizeBytes` — kecepatan, perkiraan waktu
+    sisa, dan ukuran total (dari baris `[download] NN% of X at Y/s ETA MM:SS`).
+  - `phase` — `extracting | downloading | merging | retrying | done` (UI
+    menampilkan label "Mengunduh…", "Menggabungkan…", "Mencoba ulang…").
+  - `title`, `thumbnail`, `description`, `filePath` — metadata video dari
+    `--print after_move` (objek JSON `__RSMETA__`); diisi pada event sukses
+    (`percent: 100`) untuk menampilkan judul, thumbnail, deskripsi, dan
+    tombol "Buka folder" (via `showItemInFolder` → channel `folder:reveal`).
+  - Progress dikirim **maks 1×/300 ms** (throttle + koalesen) agar realtime
+    tanpa membebani IPC.
 - `download:complete` membawa ringkasan akhir `{ total, success, failed }`
   agar UI bisa menampilkan toast kesimpulan (bukan toast per URL).
 
