@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, FileVideo, Scissors, Trash2 } from 'lucide-react'
 import type { FileItem } from '@lib/types'
 import StatusBadge from './StatusBadge'
+import { FloatingInput } from './ui/FloatingField'
 
 interface SortableFileItemProps {
   file: FileItem
@@ -163,25 +164,21 @@ export default function SortableFileItem({
           animate={{ height: 'auto', opacity: 1 }}
           className="overflow-hidden"
         >
-            <div className="px-4 sm:px-14 pb-4 flex flex-wrap items-center gap-2 sm:gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-slate-500">Mulai</span>
-                <input
+            <div className="px-4 sm:px-14 pb-4 flex flex-wrap items-end gap-2 sm:gap-4">
+              <div className="w-36">
+                <FloatingInput
                   type="text"
+                  label="Mulai (HH:MM:SS)"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  placeholder="HH:MM:SS"
-                  className="w-20 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-900 border-none focus:ring-1 focus:ring-blue-500 text-slate-700 dark:text-slate-300"
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-slate-500">Selesai</span>
-                <input
+              <div className="w-36">
+                <FloatingInput
                   type="text"
+                  label="Selesai (HH:MM:SS)"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  placeholder="HH:MM:SS"
-                  className="w-20 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-900 border-none focus:ring-1 focus:ring-blue-500 text-slate-700 dark:text-slate-300"
                 />
               </div>
               <button
@@ -190,7 +187,7 @@ export default function SortableFileItem({
                   handleSaveTrim()
                 }}
                 disabled={isTrimmingPending}
-                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 w-full sm:w-auto"
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 w-full sm:w-auto"
               >
                 {isTrimmingPending ? 'Memotong...' : 'Simpan'}
               </button>
@@ -200,7 +197,7 @@ export default function SortableFileItem({
 
       {isProcessing && file.status === 'processing' && (
         <motion.div
-          className="absolute bottom-0 left-0 h-[2px] bg-blue-600"
+          className="absolute bottom-0 left-0 h-0.5 bg-blue-600"
           initial={{ width: 0 }}
           animate={{ width: `${file.progress}%` }}
         />

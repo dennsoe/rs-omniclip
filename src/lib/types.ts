@@ -32,6 +32,26 @@ export interface ScrapeItem {
   title: string
   /** URL langsung video (siap diunduh). */
   url: string
+  /** URL thumbnail bila tersedia dari playlist (mis. YouTube); kosong bila NA (mis. TikTok). */
+  thumbnail?: string
+  /** Durasi (detik) bila tersedia dari playlist (flat-playlist menyediakannya untuk TikTok). */
+  duration?: number
+}
+
+/** Hasil resolusi pratinjau satu video (untuk thumbnail lazy & modal preview). */
+export interface ResolvedPreview {
+  /** URL video asal (yang diminta). */
+  url: string
+  /** URL media langsung yang bisa diputar <video>. */
+  playUrl?: string
+  /** URL thumbnail video. */
+  thumbnail?: string
+  /** Durasi (detik). */
+  duration?: number
+  /** Judul video. */
+  title?: string
+  /** Pesan kegagalan bila pratinjau tidak dapat diresolusi. */
+  error?: string
 }
 
 /** Opsi unduhan (engine yt-dlp) — dikirim renderer → main → downloader. */

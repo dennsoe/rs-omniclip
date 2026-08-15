@@ -159,6 +159,20 @@ const api = {
     }
   },
 
+  /** Meresolusi pratinjau satu video (URL media langsung + thumbnail/durasi). */
+  resolvePreview: (
+    payload: { url: string; options?: { cookiesBrowser?: string } }
+  ): Promise<{
+    url: string
+    playUrl?: string
+    thumbnail?: string
+    duration?: number
+    title?: string
+    error?: string
+  }> => {
+    return ipcRenderer.invoke('preview:resolve', payload)
+  },
+
   // --- Ekstensi (tidak mengubah kontrak inti) ---
   /** Mendapatkan jalur absolut file yang di-drop dari renderer (webUtils). */
   getPathForFile: (file: File): string => {

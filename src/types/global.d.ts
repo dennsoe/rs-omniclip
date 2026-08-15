@@ -5,7 +5,8 @@ import type {
   UpdateInfo,
   ResourceInfo,
   DownloadOptions,
-  DownloadProgress
+  DownloadProgress,
+  ResolvedPreview
 } from '@lib/types'
 
 /**
@@ -39,6 +40,10 @@ declare global {
       onScrapeComplete: (
         cb: (data: { id: string; items: ScrapeItem[]; truncated?: boolean; error?: string }) => void
       ) => () => void
+      /** Meresolusi pratinjau satu video (URL media langsung + thumbnail/durasi). */
+      resolvePreview: (
+        payload: { url: string; options?: { cookiesBrowser?: string } }
+      ) => Promise<ResolvedPreview>
 
       // --- Ekstensi (tidak mengubah kontrak inti) ---
       /** Mendapatkan jalur absolut file yang di-drop (via webUtils di preload). */

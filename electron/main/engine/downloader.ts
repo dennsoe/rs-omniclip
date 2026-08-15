@@ -4,7 +4,7 @@ import { execFile, spawn } from 'node:child_process'
 import { getEngineBinDir, getDownloadDir } from './paths'
 import { downloadFile } from './net'
 import { trackProcess, untrackProcess } from './procmon'
-import { isTikTokUrl, downloadTikTokVideo } from './tiktok'
+import { isTikTokUrl, resolveTikTokInfo, downloadTikTokVideo } from './tiktok'
 import { isDouyinUrl, normalizeDouyinUrl, writeNetscapeCookieFile } from './douyin'
 
 export interface DownloadProgress {
@@ -146,11 +146,25 @@ export interface ScrapeItem {
   id: string
   title: string
   url: string
+  /** URL thumbnail bila tersedia dari playlist; kosong bila NA (mis. TikTok). */
+  thumbnail?: string
+  /** Durasi (detik) bila tersedia dari playlist (flat-playlist menyediakannya). */
+  duration?: number
 }
 
 export interface ScrapeResult {
   items: ScrapeItem[]
   truncated: boolean
+}
+
+/** Hasil resolusi pratinjau satu video (untuk thumbnail lazy & modal preview). */
+export interface ResolvedPreview {
+  url: string
+  playUrl?: string
+  thumbnail?: string
+  duration?: number
+  title?: string
+  error?: string
 }
 
 /**
@@ -531,7 +545,7 @@ export async function scrapeAccount(url: string, options: DownloadOptions = {}):
     '--flat-playlist',
     '--no-warnings',
     '--print',
-    '%(id)s\t%(title)s\t%(webpage_url)s',
+    '%(id)s\t%(title)s\t%(webpage_url)s\t%(thumbnail)s\t%(duration)s',
     '--playlist-items',
     `1-${SCRAPE_FETCH_LIMIT}`,
     '--user-agent',
@@ -597,11 +611,18 @@ async function runScrapeOnce(
         const entryUrl = parts[2] || originalUrl
         if (seen.has(entryUrl)) continue
         seen.add(entryUrl)
+        // Kolom 4 = thumbnail (yt-dlp memakai 'NA' bila tidak tersedia di
+        // flat-playlist — mis. TikTok; YouTube tersedia). Kolom 5 = durasi.
+        const thumb = parts[3] && parts[3] !== 'NA' ? parts[3] : undefined
+        const durRaw = Number(parts[4])
+        const duration = parts[4] && parts[4] !== 'NA' && Number.isFinite(durRaw) ? durRaw : undefined
         items.push({
           index: items.length,
           id: parts[0],
           title: parts[1] || `Video ${items.length + 1}`,
-          url: entryUrl
+          url: entryUrl,
+          thumbnail: thumb,
+          duration
         })
         if (items.length >= SCRAPE_FETCH_LIMIT) break
       }
@@ -627,6 +648,70 @@ function lastLines(text: string, count = 3): string {
     .map((l) => l.trim())
     .filter(Boolean)
   return lines.slice(-count).join(' ') || 'Unduhan gagal.'
+}
+
+/**
+ * Meresolusi pratinjau satu video: URL media langsung yang bisa diputar
+ * (<video>), plus thumbnail/durasi/judul bila tersedia.
+ * - TikTok → TikWM (cepat, ~0,5 s, multi-key failover; data.play = tanpa watermark).
+ * - Platform lain → yt-dlp `--get-url` (best-effort; bisa lambat ~boot 11 s di macOS).
+ * Dipakai oleh modal preview video di hasil scrape & resolver thumbnail lazy.
+ */
+export async function resolvePreviewUrl(
+  url: string,
+  options: DownloadOptions = {}
+): Promise<ResolvedPreview> {
+  if (isTikTokUrl(url)) {
+    const info = await resolveTikTokInfo(url)
+    return {
+      url,
+      playUrl: info.playUrl,
+      thumbnail: info.thumbnail,
+      duration: info.duration,
+      title: info.title
+    }
+  }
+
+  const ytdlp = await ensureYtdlp()
+  if (!ytdlp) throw new Error('yt-dlp tidak tersedia. Periksa koneksi internet lalu coba lagi.')
+  const playUrl = await getDirectUrl(ytdlp, url, options)
+  if (!playUrl) throw new Error('Tidak dapat memuat pratinjau untuk URL ini.')
+  return { url, playUrl }
+}
+
+/** Menjalankan `yt-dlp --get-url` untuk mendapatkan URL media langsung (best-effort). */
+function getDirectUrl(
+  ytdlp: string,
+  url: string,
+  options: DownloadOptions
+): Promise<string | null> {
+  // Format TUNGGAL (progresif/HLS) — bisa diputar <video>. Hindari bv+ba
+  // (dua URL terpisah yang tidak bisa diputar bersamaan di <video>).
+  const args = [
+    '--no-warnings',
+    '--get-url',
+    '-f',
+    'b[height<=?1080]/b',
+    '--user-agent',
+    CHROME_USER_AGENT
+  ]
+  if (options.cookiesBrowser && options.cookiesBrowser.trim()) {
+    args.push('--cookies-from-browser', options.cookiesBrowser.trim())
+  }
+  args.push(url)
+
+  return new Promise((resolve) => {
+    const proc = spawn(ytdlp, args)
+    let stdout = ''
+    proc.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
+    proc.on('error', () => resolve(null))
+    proc.on('close', (code) => {
+      const first = stdout.split('\n').map((l) => l.trim()).find(Boolean)
+      resolve(code === 0 && first ? first : null)
+    })
+  })
 }
 
 /**

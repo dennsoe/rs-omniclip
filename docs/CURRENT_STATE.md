@@ -3,6 +3,115 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
 
+## Status Rilis v1.3.4 (SEDANG DIKERJAKAN) — redesign UI + prior fixes
+
+- **Branch**: `release/v1.3.4` (BELUM di-push ke remote; menunggu persetujuan
+  commit/push dari user).
+- **Sudah di-commit lokal** (4 commit):
+  - `1bad086` — Fix scrape 429 + Pengaturan Unduhan modal + konsistensi modal.
+  - `d3a03a5` — Pindah release note ke folder `release-notes/`.
+  - `8afae46` — Responsivitas (grid prasetel 1/2/3, trim flex-wrap, toast, sidebar).
+  - `3aacb32` — Penyimpanan lokal preferensi + modal konfirmasi reset.
+- **BELUM di-commit** (redesign tahap 1–7 selesai di working tree):
+  - **Font premium**: Plus Jakarta Sans (variable) via
+    `@fontsource-variable/plus-jakarta-sans`; import di `src/main.tsx` + `@theme`
+    di `src/assets/main.css`. Build terverifikasi meng-bundle 3 file woff2.
+  - **Video player sinematik** (`src/components/VideoPlayer.tsx`): kontrol
+    kustom (play/pause, progress played+buffered, waktu, volume, kecepatan
+    0.5×–2×, PiP, fullscreen), auto-hide idle, gradasi premium, state
+    loading/error/kosong. (Tanpa AnimatePresence — pola proyek.)
+  - **Primitif form** (`src/components/ui/`): `FloatingField.tsx`
+    (FloatingInput/FloatingTextarea), `FloatingSelect.tsx` (dropdown kustom),
+    `FloatingMultiSelect.tsx` (multi-pilih + pencarian + chip), `Toggle.tsx`
+    (switch animasi).
+  - **Penerapan**: modal Pengaturan Unduhan (FloatingSelect Kualitas/Cookies +
+    Toggle paralel + FloatingTextarea Cookie Douyin); App.tsx (FloatingTextarea
+    tautan, FloatingInput URL scrape, FloatingMultiSelect hasil scrape, Toggle
+    Mode Gelap di Tentang); SortableFileItem (FloatingInput trim Mulai/Selesai).
+  - **Pembersihan class Tailwind v4 non-kanonik** (`h-[2px]`→`h-0.5`,
+    `z-[70]`→`z-70`, `bg-gradient-to-*`→`bg-linear-to-*`).
+  - **Fix dropdown via portal (2026-08-15)**: panel `FloatingSelect` &
+    `FloatingMultiSelect` dirender via portal ke `document.body` (position
+    fixed, posisi dari bounding rect trigger). Mengatasi: (1) scrollbar jelek
+    pada dropdown Kualitas (daftar pendek kini tampil penuh, tanpa `max-h-64`);
+    (2) dropdown yang menutupi field Cookies Browser secara berantakan (kini
+    latar solid + shadow + z-90, selalu di atas modal). Panel tertutup otomatis
+    saat kontainer di-scroll & direposisi saat resize.
+  - **Fix mode gelap portal (2026-08-15)**: efek baru di `App.tsx` menyinkronkan
+    kelas `dark` ke `document.documentElement` (`<html>`). Sebelumnya `.dark`
+    hanya di div root aplikasi, sehingga panel dropdown yang di-portal ke
+    `<body>` berada di luar `.dark` dan selalu PUTIH di dark mode. Kini panel
+    dropdown ikut gelap di dark mode & putih di mode terang — diverifikasi via
+    pengukuran DOM (bg panel dark=`slate-800`/oklch(0.279...), light=`rgb(255,
+    255,255)`, teks opsi `slate-200` di dark / `slate-700` di light, tanpa
+    scroll, tanpa overlap geometris dengan field Cookies).
+  - **Fix overlap label–nilai kosong (2026-08-15)**: dropdown dengan opsi value
+    `''` ("Tanpa Cookies") — `floated = open || value.length > 0` membuat label
+    tetap di tengah saat nilai kosong → label menimpa teks nilai (overlap ~20px
+    terukur via DOM). FIX: `floated = open || !!selected` (label mengambang saat
+    ada opsi terpilih) + span nilai kosong saat label di tengah. Terverifikasi
+    `glyphOverlapPx: 0`. Sama diterapkan ke `FloatingMultiSelect` (saat kosong).
+  - **List/grid hasil "Akun/Halaman" + thumbnail + durasi + preview (2026-08-15)**:
+    - Hasil scrape kini **grid kartu / baris list** dengan **toggle Grid/List** +
+      pencarian judul (menggantikan dropdown multi-select).
+    - **Durasi** dari flat-playlist (tersedia TikTok & YouTube).
+    - **Thumbnail lazy**: flat-playlist TikTok = `NA` → resolve per item via IPC
+      baru `preview:resolve` (TikWM ~0,5 s, antrean 4 konkuren + cache);
+      YouTube = URL deterministik `i.ytimg.com/vi/{id}/hqdefault.jpg`; gagal →
+      placeholder.
+    - **Modal preview** (pola sama PreviewModal antrean pembersih): klik
+      kartu/baris → resolve URL media langsung (`preview:resolve`; TikTok →
+      TikWM, lain → yt-dlp `--get-url` format tunggal) → VideoPlayer
+      (`src`+`poster` baru).
+    - `ScrapeItem` diperluas `thumbnail?`/`duration?`; engine `--print` tambah
+      `%(thumbnail)s\t%(duration)s` (parse `NA`).
+    - **Fix CSP `media-src` (2026-08-15)**: `media-src 'self' blob:` TIDAK
+      mengizinkan `https:` → `<video src="https://...tiktokcdn...">` diblokir
+      (readyState 0, tanpa error). Ditambah `https: http:` → preview remote
+      memutar (E2E: readyState 4, dur 13,7 s).
+    - **Thumbnail lazy via IntersectionObserver (2026-08-15)**: resolve
+      thumbnail HANYA untuk kartu yang terlihat (rootMargin 300px) + cache,
+      bukan semua item sekaligus — terhindar rate-limit TikWM untuk daftar
+      besar (E2E: 7→22 ter-load saat scroll). Sebelumnya resolve 49 item
+      sekaligus → banyak gagal rate-limit (hanya ~5-15/49 termuat).
+    - **Thumbnail otomatis SEMUA (2026-08-15)**: resolve thumbnail untuk
+      SEMUA item begitu daftar selesai diambil — tanpa menunggu scroll (antrean
+      4 konkuren + retry/backoff + sweep berkala ~15 dtk utk yang gagal
+      rate-limit; YouTube deterministik). E2E: 49/49 kartu dapat elemen img;
+      kecepatan muat tergantung TikWM (segar ~0,5s/panggil → semua ~6-12s;
+      saat TikWM throttling karena kuota IP, sebagian butuh sweep). Play icon
+      kartu grid kini ter-center TEPAT di area video (dx:0, dy:0 terukur),
+      bukan seluruh kartu.
+    - **Input & tombol proporsional (2026-08-15)**: input tautan akun/halaman
+      full-width (sebelumnya terjepit di samping tombol) + tombol "Ambil Daftar"
+      ringkas (`rounded-lg`, tanpa shadow besar) rata kanan di bawah input;
+      tombol "Unduh Semua" disamakan gayanya (terverifikasi DOM: input 2258px,
+      tombol 137×35, rata kanan diff 1px).
+    - **Textarea auto-resize + label aman (2026-08-15)**: `FloatingTextarea`
+      kini auto-resize (tinggi = `scrollHeight`, `overflow-hidden`) utk SEMUA
+      textarea (Tempel Banyak Tautan & Cookie Douyin) — tidak pernah scroll.
+      Padding atas `pt-6`→`pt-7` (28px) agar label floating (top-2.5, 10px)
+      TIDAK menabrak baris teks pertama (sebelumnya overlap ~11px terukur;
+      kini `collisionPx: -3` = 3px jarak bebas, terverifikasi di Electron
+      nyata: 12 baris → 276px tanpa scroll; dikosongkan → 76px).
+    - **Validasi**: tsc/lint/build PASS; E2E Electron+CDP nyata — scrape 49
+      item, durasi tampil, thumbnail otomatis, preview memutar video.
+      CATATAN MOCK: id/url mock harus < 2^53 (angka besar runtuh presisi → semua
+      URL identik → seleksi tampak "semua terpilih" — artefak mock, bukan bug).
+    - **PELAJARAN OPERASIONAL (2026-08-15)**: error `No handler registered for
+      preview:resolve` + thumbnail tidak muncul = **main process STALE**
+      (electron-vite dev TIDAK hot-reload main). Renderer & preload baru dari
+      disk, tapi main di memori lama → `ipcMain.handle` tidak ada. FIX: restart
+      `npm run dev` (atau rebuild + relaunch) setelah mengubah `electron/main/**`
+      ATAU menambah IPC baru. Gejala khas: UI baru muncul tapi handler IPC lama
+      tidak ada.
+- **Validasi**: `tsc --noEmit` PASS, `eslint src` 0 error, `npm run build` PASS
+  (font ter-bundle). E2E via CDP (dev 5173): textarea/input floating tampil,
+  dropdown kustom Kualitas/Cookies terbuka + opsi render, toggle paralel &
+  Mode Gelap berfungsi (sinkron dengan sidebar), badge indikator pengaturan
+  non-default muncul, persistensi localStorage terverifikasi.
+- **Version bump 1.3.4 di package.json belum dilakukan** (menunggu commit/PR).
+
 ## Status Rilis v1.3.3 (2026-08-14) — Dukungan unduh Douyin, LIVE
 
 - **Release `v1.3.3` LIVE**:

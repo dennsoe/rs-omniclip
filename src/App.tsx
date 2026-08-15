@@ -30,6 +30,8 @@ import {
   BadgeCheck,
   CircleAlert,
   Settings,
+  LayoutGrid,
+  List,
   type LucideIcon
 } from 'lucide-react'
 import {
@@ -59,13 +61,18 @@ import type {
 import { useIsMobile } from '@hooks/use-mobile'
 import { usePersistentState } from '@hooks/use-persistent-state'
 import { PREF_KEYS, PREF_DEFAULTS, resetAllPreferences } from '@lib/preferences'
+import { cn } from '@lib/utils'
 import Toasts, { type ToastMessage, type ToastType } from '@components/Toasts'
 import ConfirmModal, { type ConfirmAction } from '@components/ConfirmModal'
 import PreviewModal from '@components/PreviewModal'
+import ScrapePreviewModal from '@components/ScrapePreviewModal'
+import ScrapeResultView from '@components/ScrapeResultView'
 import DownloadSettingsModal from '@components/DownloadSettingsModal'
 import SystemMonitor from '@components/SystemMonitor'
 import SortableFileItem from '@components/SortableFileItem'
 import PresetSelector from '@components/PresetSelector'
+import { FloatingInput, FloatingTextarea } from '@components/ui/FloatingField'
+import Toggle from '@components/ui/Toggle'
 
 /** Satu item antrean unduhan (kontrak window.api.onDownloadProgress). */
 type DownloadItem = DownloadProgress
@@ -134,6 +141,15 @@ export default function App(): React.ReactElement {
   const [scrapeItems, setScrapeItems] = useState<ScrapeItem[] | null>(null)
   const [scrapeTruncated, setScrapeTruncated] = useState(false)
   const [scrapeSelected, setScrapeSelected] = useState<Record<string, boolean>>({})
+  // Tampilan hasil scrape: grid (kartu) / list (baris) — user memilih.
+  const [scrapeView, setScrapeView] = useState<'grid' | 'list'>('grid')
+  // Pencarian cepat hasil scrape (filter judul).
+  const [scrapeQuery, setScrapeQuery] = useState('')
+  // Thumbnail hasil resolve lazy (per-item) — kunci = url video.
+  const [scrapeThumbs, setScrapeThumbs] = useState<Record<string, string>>({})
+  const scrapeThumbsCache = useRef<Record<string, string>>({})
+  // Item yang sedang dipratinjau (modal preview video).
+  const [scrapePreview, setScrapePreview] = useState<ScrapeItem | null>(null)
   const [isScraping, setIsScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState<string | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
@@ -178,6 +194,14 @@ export default function App(): React.ReactElement {
     filesRef.current = files
   }, [files])
 
+  // Sinkronkan mode gelap ke <html> — bukan hanya div root — agar konten yang
+  // dirender via PORTAL ke <body> (mis. panel dropdown FloatingSelect /
+  // FloatingMultiSelect) ikut bergaya dark. Sebelumnya .dark hanya di div root
+  // sehingga panel portal selalu berwarna putih di dark mode.
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode)
+  }, [isDarkMode])
+
   const filteredFiles = useMemo(() => {
     return files.filter((f) => {
       if (filter === 'all') return true
@@ -203,6 +227,106 @@ export default function App(): React.ReactElement {
     () => (scrapeItems ?? []).filter((it) => scrapeSelected[it.url]).map((it) => it.url),
     [scrapeItems, scrapeSelected]
   )
+
+  // Hasil scrape yang difilter oleh pencarian judul.
+  const filteredScrapeItems = useMemo(() => {
+    const q = scrapeQuery.trim().toLowerCase()
+    if (!q) return scrapeItems ?? []
+    return (scrapeItems ?? []).filter((it) => it.title.toLowerCase().includes(q))
+  }, [scrapeItems, scrapeQuery])
+
+  // Resolve SEMUA thumbnail hasil scrape SECARA OTOMATIS begitu daftar selesai
+  // diambil — tanpa menunggu scroll. Flat-playlist tidak menyertakan thumbnail
+  // TikTok (NA) → resolve via IPC (TikWM). Antrean konkuren terbatas + retry +
+  // backoff, lalu SWEEP BERKALA yang mencoba ulang yang masih gagal (mis.
+  // rate-limit sesaat) hingga semua muncul. YouTube memakai URL deterministik
+  // i.ytimg.com (tanpa request). Gagal total → placeholder.
+  useEffect(() => {
+    if (!scrapeItems || scrapeItems.length === 0) return
+    const cache = scrapeThumbsCache.current
+    const next: Record<string, string> = {}
+    const pending: ScrapeItem[] = []
+    for (const it of scrapeItems) {
+      if (it.thumbnail) {
+        next[it.url] = it.thumbnail
+      } else if (/youtube|youtu\.be/i.test(it.url)) {
+        next[it.url] = `https://i.ytimg.com/vi/${it.id}/hqdefault.jpg`
+      } else if (!cache[it.url]) {
+        pending.push(it)
+      }
+    }
+    scrapeThumbsCache.current = { ...cache, ...next }
+    setScrapeThumbs({ ...scrapeThumbsCache.current })
+    if (pending.length === 0) return
+    const resolvePreview = window.api?.resolvePreview
+    if (!resolvePreview) return
+
+    const MAX_CONCURRENT = 4
+    const MAX_ATTEMPTS = 3
+    const SWEEP_GAP_MS = 15000
+    const SWEEP_ROUNDS = 5
+    const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+    let cancelled = false
+    const attempt = async (it: ScrapeItem, n: number): Promise<void> => {
+      if (cancelled || scrapeThumbsCache.current[it.url]) return
+      try {
+        const res = await resolvePreview({ url: it.url })
+        if (res?.thumbnail) {
+          scrapeThumbsCache.current[it.url] = res.thumbnail
+          setScrapeThumbs({ ...scrapeThumbsCache.current })
+        } else if (res?.error && n < MAX_ATTEMPTS) {
+          await sleep(1000 * n)
+          await attempt(it, n + 1)
+        }
+      } catch {
+        if (n < MAX_ATTEMPTS) {
+          await sleep(1000 * n)
+          await attempt(it, n + 1)
+        }
+      }
+    }
+    const runBatch = (list: ScrapeItem[], roundLeft: number): void => {
+      if (cancelled) return
+      let cursor = 0
+      const workers = Array.from({ length: Math.min(MAX_CONCURRENT, list.length) }, () =>
+        (async () => {
+          while (cursor < list.length) {
+            const idx = cursor++
+            await attempt(list[idx], 1)
+          }
+        })()
+      )
+      void Promise.all(workers).then(() => {
+        if (cancelled || roundLeft <= 0) return
+        const missing = pending.filter((it) => !scrapeThumbsCache.current[it.url])
+        if (missing.length === 0) return
+        setTimeout(() => runBatch(missing, roundLeft - 1), SWEEP_GAP_MS)
+      })
+    }
+    runBatch(pending, SWEEP_ROUNDS)
+    return () => {
+      cancelled = true
+    }
+  }, [scrapeItems])
+
+  // Fallback: bila ada kartu yang TAMPAK namun thumbnail-nya belum ada (gagal
+  // resolve otomatis di atas — mis. rate-limit sesaat), retry saat terlihat
+  // (IntersectionObserver di ScrapeResultView). Cache mencegah panggilan ganda.
+  const onThumbVisible = useCallback((url: string): void => {
+    if (!url || scrapeThumbsCache.current[url]) return
+    const resolvePreview = window.api?.resolvePreview
+    if (!resolvePreview) return
+    void resolvePreview({ url })
+      .then((res) => {
+        if (res?.thumbnail && !scrapeThumbsCache.current[url]) {
+          scrapeThumbsCache.current[url] = res.thumbnail
+          setScrapeThumbs({ ...scrapeThumbsCache.current })
+        }
+      })
+      .catch(() => {
+        // Abaikan — placeholder tetap tampil.
+      })
+  }, [])
 
   // PERIKSA UPDATE APLIKASI (via GitHub Releases API, gratis, tanpa token)
   const checkUpdate = useCallback(async (): Promise<void> => {
@@ -494,6 +618,9 @@ export default function App(): React.ReactElement {
     setScrapeError(null)
     setScrapeItems(null)
     setScrapeSelected({})
+    setScrapeQuery('')
+    setScrapeThumbs({})
+    scrapeThumbsCache.current = {}
     if (window.api?.scrapeAccount) {
       window.api.scrapeAccount({
         id: Math.random().toString(36).substring(7),
@@ -680,6 +807,7 @@ export default function App(): React.ReactElement {
         <Toasts toasts={toasts} />
         <ConfirmModal confirmAction={confirmAction} onClose={() => setConfirmAction(null)} onConfirm={handleConfirm} />
         <PreviewModal previewFile={previewFile} onClose={() => setPreviewFile(null)} />
+        <ScrapePreviewModal item={scrapePreview} onClose={() => setScrapePreview(null)} />
         <DownloadSettingsModal
           open={isDownloadSettingsOpen}
           onClose={() => setIsDownloadSettingsOpen(false)}
@@ -1197,12 +1325,13 @@ export default function App(): React.ReactElement {
                             </p>
                           </div>
                         </div>
-                        <textarea
+                        <FloatingTextarea
+                          label="Tautan (satu per baris)"
+                          icon={<LinkIcon className="h-4 w-4" />}
                           value={linksText}
                           onChange={(e) => setLinksText(e.target.value)}
                           rows={5}
-                          placeholder={'https://www.youtube.com/watch?v=...\nhttps://www.tiktok.com/@user/video/...'}
-                          className="w-full resize-none bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                          helper="Format: https://www.youtube.com/watch?v=... atau https://www.tiktok.com/@user/video/..."
                         />
                         <div className="flex justify-end">
                           <button
@@ -1212,12 +1341,12 @@ export default function App(): React.ReactElement {
                               startBatchDownload(validLinks)
                             }}
                             disabled={validLinks.length === 0 || isDownloading}
-                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-5 py-2 text-sm font-semibold flex items-center gap-2 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {isDownloading ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              <DownloadCloud className="w-4 h-4" />
+                              <DownloadCloud className="h-4 w-4" />
                             )}
                             Unduh Semua ({validLinks.length})
                           </button>
@@ -1246,13 +1375,14 @@ export default function App(): React.ReactElement {
                             </p>
                           </div>
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <input
+                        <div className="flex flex-col gap-2.5">
+                          <FloatingInput
                             type="url"
+                            label="Tautan akun / halaman"
+                            icon={<Search className="h-4 w-4" />}
                             value={scrapeUrl}
                             onChange={(e) => setScrapeUrl(e.target.value)}
-                            placeholder="mis. https://www.tiktok.com/@username"
-                            className="flex-1 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                            helper="mis. https://www.tiktok.com/@username"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault()
@@ -1260,22 +1390,24 @@ export default function App(): React.ReactElement {
                               }
                             }}
                           />
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              handleScrape()
-                            }}
-                            disabled={!scrapeUrl.trim() || isScraping}
-                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-5 py-2 text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                          >
-                            {isScraping ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Search className="w-4 h-4" />
-                            )}
-                            Ambil Daftar
-                          </button>
+                          <div className="flex justify-end">
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                handleScrape()
+                              }}
+                              disabled={!scrapeUrl.trim() || isScraping}
+                              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isScraping ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Search className="h-4 w-4" />
+                              )}
+                              Ambil Daftar
+                            </button>
+                          </div>
                         </div>
 
                         {scrapeError && (
@@ -1286,68 +1418,94 @@ export default function App(): React.ReactElement {
                         )}
 
                         {scrapeItems && scrapeItems.length > 0 && (
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex flex-col gap-3">
+                            {/* Toolbar: jumlah + pencarian + toggle grid/list */}
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                               <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
                                 {scrapeItems.length} video ditemukan
                                 {scrapeTruncated ? ' (menampilkan sebagian)' : ''}
                               </span>
-                              <div className="flex items-center gap-3">
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    toggleScrapeAll()
-                                  }}
-                                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
-                                >
-                                  {scrapeItems.every((it) => scrapeSelected[it.url])
-                                    ? 'Kosongkan Pilihan'
-                                    : 'Pilih Semua'}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    startBatchDownload(selectedUrls)
-                                  }}
-                                  disabled={selectedUrls.length === 0 || isDownloading}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                                >
-                                  <DownloadCloud className="w-3.5 h-3.5" />
-                                  Unduh Terpilih ({selectedUrls.length})
-                                </button>
+                              <div className="flex items-center gap-2 sm:ml-auto">
+                                <div className="relative min-w-0 flex-1 sm:w-52">
+                                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    value={scrapeQuery}
+                                    onChange={(e) => setScrapeQuery(e.target.value)}
+                                    placeholder="Cari video..."
+                                    className="w-full rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 py-1.5 pl-8 pr-3 text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1 dark:bg-slate-900/60">
+                                  <button
+                                    type="button"
+                                    onClick={() => setScrapeView('grid')}
+                                    aria-label="Tampilan grid"
+                                    className={cn(
+                                      'flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors',
+                                      scrapeView === 'grid'
+                                        ? 'bg-white font-semibold text-slate-800 shadow-sm dark:bg-slate-700 dark:text-slate-100'
+                                        : 'font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                    )}
+                                  >
+                                    <LayoutGrid className="h-3.5 w-3.5" />
+                                    Grid
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setScrapeView('list')}
+                                    aria-label="Tampilan list"
+                                    className={cn(
+                                      'flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors',
+                                      scrapeView === 'list'
+                                        ? 'bg-white font-semibold text-slate-800 shadow-sm dark:bg-slate-700 dark:text-slate-100'
+                                        : 'font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                    )}
+                                  >
+                                    <List className="h-3.5 w-3.5" />
+                                    List
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                            <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/40">
-                              {scrapeItems.map((item, idx) => (
-                                <motion.label
-                                  key={item.url}
-                                  initial={{ opacity: 0, x: -8 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ delay: Math.min(idx * 0.02, 0.3), duration: 0.25 }}
-                                  className="flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={!!scrapeSelected[item.url]}
-                                    onChange={() => toggleScrapeItem(item.url)}
-                                    className="accent-blue-600 w-4 h-4 shrink-0"
-                                  />
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
-                                      {item.title}
-                                    </p>
-                                    <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
-                                      {item.url}
-                                    </p>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400 dark:text-slate-600 shrink-0">
-                                    #{item.index + 1}
-                                  </span>
-                                </motion.label>
-                              ))}
+
+                            {/* Aksi: Pilih Semua + Unduh Terpilih */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  toggleScrapeAll()
+                                }}
+                                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                {scrapeItems.every((it) => scrapeSelected[it.url])
+                                  ? 'Kosongkan Pilihan'
+                                  : 'Pilih Semua'}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  startBatchDownload(selectedUrls)
+                                }}
+                                disabled={selectedUrls.length === 0 || isDownloading}
+                                className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                              >
+                                <DownloadCloud className="w-3.5 h-3.5" />
+                                Unduh Terpilih ({selectedUrls.length})
+                              </button>
                             </div>
+
+                            {/* Daftar/grid hasil */}
+                            <ScrapeResultView
+                              items={filteredScrapeItems}
+                              view={scrapeView}
+                              selected={scrapeSelected}
+                              thumbs={scrapeThumbs}
+                              onToggle={toggleScrapeItem}
+                              onPreview={setScrapePreview}
+                              onThumbVisible={onThumbVisible}
+                            />
                           </div>
                         )}
                       </div>
@@ -1672,6 +1830,15 @@ export default function App(): React.ReactElement {
                         Mode gelap, prasetel &amp; pengaturan unduhan tersimpan otomatis di perangkat Anda.
                       </p>
                     </div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
+                    <Toggle
+                      checked={isDarkMode}
+                      onChange={(v) => setIsDarkMode(v)}
+                      label="Mode Gelap"
+                      hint="Tema gelap di seluruh aplikasi."
+                    />
+                    <Moon className="h-4 w-4 shrink-0 text-slate-400 dark:text-blue-400" />
                   </div>
                   <button
                     type="button"

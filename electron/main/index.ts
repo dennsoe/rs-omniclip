@@ -9,7 +9,13 @@ import {
   type ProcessProgress
 } from '@engine/processor'
 import { trimVideo, type TrimPayload } from '@engine/trimmer'
-import { startDownloadBatch, scrapeAccount, type DownloadProgress, type DownloadOptions } from '@engine/downloader'
+import {
+  startDownloadBatch,
+  scrapeAccount,
+  resolvePreviewUrl,
+  type DownloadProgress,
+  type DownloadOptions
+} from '@engine/downloader'
 import {
   checkForUpdate,
   getResourceStatus,
@@ -283,6 +289,32 @@ function generateScrapeId(): string {
   return `scrape-${Date.now().toString(36)}`
 }
 
+/**
+ * Meresolusi pratinjau satu video (URL media langsung + thumbnail/durasi).
+ * Request-response via ipcMain.handle + ipcRenderer.invoke.
+ */
+async function handleResolvePreview(payload: {
+  url?: string
+  options?: DownloadOptions
+}): Promise<import('@engine/downloader').ResolvedPreview> {
+  const url = typeof payload?.url === 'string' ? payload.url.trim() : ''
+  if (!url) return { url, error: 'URL tidak valid.' }
+  const options: DownloadOptions = {
+    cookiesBrowser:
+      typeof payload.options?.cookiesBrowser === 'string' && payload.options.cookiesBrowser.trim()
+        ? payload.options.cookiesBrowser.trim()
+        : undefined
+  }
+  try {
+    return await resolvePreviewUrl(url, options)
+  } catch (err) {
+    return {
+      url,
+      error: err instanceof Error ? err.message : 'Gagal memuat pratinjau video.'
+    }
+  }
+}
+
 function handleTrim(payload: TrimPayload): void {
   if (
     !payload ||
@@ -312,6 +344,8 @@ function registerIpc(): void {
   ipcMain.on('scrape:start', (_event, payload) => {
     handleScrape(payload)
   })
+
+  ipcMain.handle('preview:resolve', (_event, payload) => handleResolvePreview(payload))
 
   ipcMain.on('trim:start', (_event, payload) => {
     handleTrim(payload)

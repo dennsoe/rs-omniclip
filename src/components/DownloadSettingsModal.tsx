@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import { motion } from 'motion/react'
-import { Settings, KeyRound, Info, XCircle, RotateCcw } from 'lucide-react'
+import { Settings, XCircle, RotateCcw, Globe, MonitorDown, Info, KeyRound } from 'lucide-react'
+import FloatingSelect from './ui/FloatingSelect'
+import { FloatingTextarea } from './ui/FloatingField'
+import Toggle from './ui/Toggle'
 
 /** Nilai pengaturan unduhan (draf diedit langsung di dalam modal). */
 export interface DownloadSettings {
@@ -9,6 +12,25 @@ export interface DownloadSettings {
   douyinCookie: string
   parallel: boolean
 }
+
+const QUALITY_OPTIONS = [
+  { value: '0', label: 'Terbaik' },
+  { value: '2160', label: '2160p (4K)' },
+  { value: '1440', label: '1440p' },
+  { value: '1080', label: '1080p' },
+  { value: '720', label: '720p' },
+  { value: '480', label: '480p' },
+  { value: '360', label: '360p' }
+]
+
+const BROWSER_OPTIONS = [
+  { value: '', label: 'Tanpa Cookies' },
+  { value: 'chrome', label: 'Chrome' },
+  { value: 'edge', label: 'Edge' },
+  { value: 'safari', label: 'Safari' },
+  { value: 'firefox', label: 'Firefox' },
+  { value: 'brave', label: 'Brave' }
+]
 
 const SETTINGS_DEFAULT: DownloadSettings = {
   maxHeight: 0,
@@ -91,78 +113,40 @@ export default function DownloadSettingsModal({
         {/* Body */}
         <div className="overflow-y-auto px-5 py-4 flex flex-col gap-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
-                Kualitas
-              </span>
-              <select
-                value={settings.maxHeight}
-                onChange={(e) => set({ maxHeight: Number(e.target.value) })}
-                className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-              >
-                <option value={0}>Terbaik</option>
-                <option value={2160}>2160p (4K)</option>
-                <option value={1440}>1440p</option>
-                <option value={1080}>1080p</option>
-                <option value={720}>720p</option>
-                <option value={480}>480p</option>
-                <option value={360}>360p</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
-                Cookies Browser
-              </span>
-              <select
-                value={settings.cookiesBrowser}
-                onChange={(e) => set({ cookiesBrowser: e.target.value })}
-                className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-              >
-                <option value="">Tanpa Cookies</option>
-                <option value="chrome">Chrome</option>
-                <option value="edge">Edge</option>
-                <option value="safari">Safari</option>
-                <option value="firefox">Firefox</option>
-                <option value="brave">Brave</option>
-              </select>
-            </label>
+            <FloatingSelect
+              label="Kualitas"
+              icon={<MonitorDown className="h-4 w-4" />}
+              value={String(settings.maxHeight)}
+              options={QUALITY_OPTIONS}
+              onChange={(v) => set({ maxHeight: Number(v) })}
+            />
+            <FloatingSelect
+              label="Cookies Browser"
+              icon={<Globe className="h-4 w-4" />}
+              value={settings.cookiesBrowser}
+              options={BROWSER_OPTIONS}
+              onChange={(v) => set({ cookiesBrowser: v })}
+            />
           </div>
 
-          <label className="flex items-center gap-2.5 cursor-pointer">
-            <input
-              type="checkbox"
+          <div className="rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
+            <Toggle
               checked={settings.parallel}
-              onChange={(e) => set({ parallel: e.target.checked })}
-              className="accent-blue-600 w-4 h-4 shrink-0"
+              onChange={(v) => set({ parallel: v })}
+              label="Unduh 2 sekaligus"
+              hint="Lebih cepat untuk banyak tautan."
             />
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                Unduh 2 sekaligus
-              </span>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                Lebih cepat untuk banyak tautan.
-              </span>
-            </div>
-          </label>
+          </div>
 
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1.5">
-              <KeyRound className="w-3 h-3" />
-              Cookie Douyin
-              <span className="normal-case font-normal">(opsional)</span>
-            </span>
-            <textarea
+          <div className="flex flex-col gap-1">
+            <FloatingTextarea
+              label="Cookie Douyin (opsional)"
+              icon={<KeyRound className="h-4 w-4" />}
               value={settings.douyinCookie}
               onChange={(e) => set({ douyinCookie: e.target.value })}
               rows={2}
-              placeholder="Tempel header Cookie dari douyin.com yang sudah login..."
-              className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all resize-none leading-relaxed"
+              helper="Khusus Douyin (anti-bot ketat, wajib cookie sesi). Cara ambil: buka douyin.com di Chrome → login → F12 → Application → Cookies → https://www.douyin.com → salin seluruh header Cookie. Disimpan lokal & dipakai yt-dlp."
             />
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed">
-              Khusus Douyin (anti-bot ketat, wajib cookie sesi). Cara ambil: buka douyin.com di
-              Chrome → login → F12 → Application → Cookies → https://www.douyin.com → salin
-              seluruh header Cookie. Disimpan lokal &amp; dipakai yt-dlp.
-            </p>
           </div>
 
           {settings.cookiesBrowser && (
