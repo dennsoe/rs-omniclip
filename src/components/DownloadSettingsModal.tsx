@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import { Settings, XCircle, RotateCcw, Globe, MonitorDown, Info, KeyRound } from 'lucide-react'
+import { Settings, XCircle, RotateCcw, Globe, MonitorDown, MonitorUp, Info, KeyRound } from 'lucide-react'
 import FloatingSelect from './ui/FloatingSelect'
 import { FloatingTextarea } from './ui/FloatingField'
 import Toggle from './ui/Toggle'
+import ProxyManager from './ProxyManager'
 
 /** Nilai pengaturan unduhan (draf diedit langsung di dalam modal). */
 export interface DownloadSettings {
@@ -64,6 +65,41 @@ export default function DownloadSettingsModal({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  // --- Pemrosesan Hardware (encoder GPU) ---
+  const [hwAvailable, setHwAvailable] = useState<Array<'videotoolbox' | 'nvenc' | 'amf'>>([])
+  const [hwMode, setHwMode] = useState<'auto' | 'videotoolbox' | 'nvenc' | 'amf'>('auto')
+
+  useEffect(() => {
+    window.api
+      ?.detectEncoders?.()
+      .then((encs) => setHwAvailable(encs ?? []))
+      .catch(() => {})
+    window.api
+      ?.getConfig?.()
+      .then((cfg) => {
+        if (cfg?.hwAccel?.mode) setHwMode(cfg.hwAccel.mode)
+      })
+      .catch(() => {})
+  }, [])
+
+  const saveHwMode = (mode: typeof hwMode): void => {
+    setHwMode(mode)
+    window.api?.setConfig?.({ hwAccel: { mode } }).catch(() => {})
+  }
+
+  const hwOptions: Array<{ value: string; label: string }> = [
+    { value: 'auto', label: 'Otomatis (CPU)' },
+    ...(hwAvailable.includes('videotoolbox')
+      ? [{ value: 'videotoolbox', label: 'Apple VideoToolbox (Mac)' }]
+      : []),
+    ...(hwAvailable.includes('nvenc') ? [{ value: 'nvenc', label: 'NVIDIA NVENC' }] : []),
+    ...(hwAvailable.includes('amf') ? [{ value: 'amf', label: 'AMD AMF' }] : [])
+  ]
+  const effectiveHwMode =
+    hwAvailable.includes(hwMode as 'videotoolbox' | 'nvenc' | 'amf') || hwMode === 'auto'
+      ? hwMode
+      : 'auto'
 
   if (!open) return null
 
@@ -145,6 +181,35 @@ export default function DownloadSettingsModal({
               value={settings.douyinCookie}
               onChange={(e) => set({ douyinCookie: e.target.value })}
               helper="Khusus Douyin (anti-bot ketat, wajib cookie sesi). Cara ambil: buka douyin.com di Chrome → login → F12 → Application → Cookies → https://www.douyin.com → salin seluruh header Cookie. Disimpan lokal & dipakai yt-dlp."
+            />
+          </div>
+
+          <ProxyManager />
+
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 px-4 py-3 transition-colors">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-1.5 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
+                <MonitorUp className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-tight">
+                  Pemrosesan Hardware
+                </p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                  Percepat render (sampai 10x) via encoder GPU
+                </p>
+              </div>
+            </div>
+            <FloatingSelect
+              label="Encoder Render"
+              value={effectiveHwMode}
+              options={hwOptions}
+              onChange={(v) => saveHwMode(v as typeof hwMode)}
+              helper={
+                hwAvailable.length === 0
+                  ? 'Encoder hardware tidak terdeteksi — memakai CPU (libx264).'
+                  : 'Fallback otomatis ke CPU bila encoder GPU gagal.'
+              }
             />
           </div>
 

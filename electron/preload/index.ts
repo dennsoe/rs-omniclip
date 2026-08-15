@@ -54,6 +54,46 @@ interface ResourceInfoData {
   outdated: boolean
 }
 
+interface ProxyConfigData {
+  enabled: boolean
+  proxies: string[]
+  rotationEvery: number
+}
+
+interface HistoryEntryData {
+  url: string
+  title?: string
+  thumbnail?: string
+  filePath: string
+  platform?: string
+  ts: number
+}
+
+interface AppConfigData {
+  proxy: { enabled: boolean; proxies: string[]; rotationEvery: number }
+  watcher: WatcherConfigData
+  hwAccel: { mode: 'auto' | 'videotoolbox' | 'nvenc' | 'amf' }
+  analyticsExport: boolean
+  history: HistoryEntryData[]
+}
+
+interface WatcherConfigData {
+  enabled: boolean
+  intervalHours: number
+  accounts: Array<{
+    url: string
+    label?: string
+    lastSeenId?: string
+    lastCheckedAt?: number
+    lastFoundAt?: number
+  }>
+}
+
+interface WatcherNotifyData {
+  title: string
+  body: string
+}
+
 const api = {
   // --- Kontrak inti jembatan IPC ---
   checkEngine: (): void => {
@@ -241,6 +281,74 @@ const api = {
     ipcRenderer.on('resource:changed', listener)
     return () => {
       ipcRenderer.removeListener('resource:changed', listener)
+    }
+  },
+
+  // --- Konfigurasi & riwayat (main process) ---
+  getConfig: (): Promise<AppConfigData> => {
+    return ipcRenderer.invoke('config:get')
+  },
+  setConfig: (patch: Partial<AppConfigData>): Promise<AppConfigData> => {
+    return ipcRenderer.invoke('config:set', patch)
+  },
+  listHistory: (): Promise<HistoryEntryData[]> => {
+    return ipcRenderer.invoke('history:list')
+  },
+  clearHistory: (): Promise<boolean> => {
+    return ipcRenderer.invoke('history:clear')
+  },
+
+  // --- Manajer Proxy (anti-banned) ---
+  getProxyConfig: (): Promise<ProxyConfigData> => {
+    return ipcRenderer.invoke('proxy:list')
+  },
+  saveProxyConfig: (cfg: Partial<ProxyConfigData>): Promise<ProxyConfigData> => {
+    return ipcRenderer.invoke('proxy:save', cfg)
+  },
+  testProxy: (
+    proxyUrl: string
+  ): Promise<{ ok: boolean; latencyMs: number; error?: string }> => {
+    return ipcRenderer.invoke('proxy:test', proxyUrl)
+  },
+
+  // --- Hardware acceleration (deteksi encoder) ---
+  detectEncoders: (): Promise<Array<'videotoolbox' | 'nvenc' | 'amf'>> => {
+    return ipcRenderer.invoke('hw:detect')
+  },
+
+  // --- Ekspor data analitik (CSV) ---
+  exportAnalytics: (payload: {
+    items: Array<{
+      id?: string
+      title?: string
+      url: string
+      duration?: number
+      views?: number
+      likes?: number
+      comments?: number
+      description?: string
+    }>
+  }): Promise<string> => {
+    return ipcRenderer.invoke('analytics:export', payload)
+  },
+
+  // --- Auto-Watcher (pemantauan akun otomatis) ---
+  getWatcherConfig: (): Promise<WatcherConfigData> => ipcRenderer.invoke('watcher:list'),
+  addWatchedAccount: (payload: { url: string; label?: string }): Promise<WatcherConfigData> =>
+    ipcRenderer.invoke('watcher:add', payload),
+  removeWatchedAccount: (url: string): Promise<WatcherConfigData> =>
+    ipcRenderer.invoke('watcher:remove', url),
+  setWatcherEnabled: (enabled: boolean): Promise<WatcherConfigData> =>
+    ipcRenderer.invoke('watcher:setEnabled', enabled),
+  setWatcherInterval: (hours: number): Promise<WatcherConfigData> =>
+    ipcRenderer.invoke('watcher:setInterval', hours),
+  checkWatcherNow: (url?: string): Promise<Array<{ url: string; newItems?: unknown[]; error?: string }>> =>
+    ipcRenderer.invoke('watcher:checkNow', url),
+  onWatcherNotify: (cb: (data: WatcherNotifyData) => void): Unsubscribe => {
+    const listener = (_event: Electron.IpcRendererEvent, data: WatcherNotifyData): void => cb(data)
+    ipcRenderer.on('watcher:notify', listener)
+    return () => {
+      ipcRenderer.removeListener('watcher:notify', listener)
     }
   }
 }

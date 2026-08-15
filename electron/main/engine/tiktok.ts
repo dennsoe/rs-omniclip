@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import https from 'node:https'
 import http from 'node:http'
+import { proxyAgentFor } from './proxy'
 
 /**
  * Integrasi TikTok via API TikWM (www.tikwm.com) dengan failover multi-key.
@@ -102,11 +103,12 @@ export function isTikTokUrl(url: string): boolean {
 function getRequest(
   url: string,
   headers: Record<string, string>,
-  timeoutMs = 45000
+  timeoutMs = 45000,
+  agent?: http.Agent
 ): Promise<{ status: number; body: Buffer }> {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https:') ? https : http
-    const req = lib.get(url, { headers }, (res) => {
+    const req = lib.get(url, { headers, agent }, (res) => {
       const status = res.statusCode ?? 0
       if (status >= 300 && status < 400 && res.headers.location) {
         res.resume()
@@ -126,9 +128,14 @@ function getRequest(
 }
 
 /** Menyelesaikan info video dari satu provider TikWM; null bila gagal. */
-async function resolveWithProvider(provider: TikWmProvider, url: string): Promise<TikTokInfo | null> {
+async function resolveWithProvider(
+  provider: TikWmProvider,
+  url: string,
+  proxy?: string
+): Promise<TikTokInfo | null> {
   const apiUrl = `${provider.baseUrl}/?url=${encodeURIComponent(url)}&api_key=${encodeURIComponent(provider.apiKey)}`
-  const { status, body } = await getRequest(apiUrl, { 'User-Agent': CHROME_USER_AGENT })
+  const agent = proxy ? proxyAgentFor(proxy) : undefined
+  const { status, body } = await getRequest(apiUrl, { 'User-Agent': CHROME_USER_AGENT }, 45000, agent)
   if (status !== 200) return null
   let obj: unknown
   try {
@@ -155,11 +162,11 @@ async function resolveWithProvider(provider: TikWmProvider, url: string): Promis
  * Menyelesaikan info video TikTok dengan failover berurutan di seluruh
  * provider. Melempar Error bila semua provider gagal.
  */
-export async function resolveTikTokInfo(url: string): Promise<TikTokInfo> {
+export async function resolveTikTokInfo(url: string, proxy?: string): Promise<TikTokInfo> {
   let lastError = ''
   for (const provider of TIKWM_PROVIDERS) {
     try {
-      const info = await resolveWithProvider(provider, url)
+      const info = await resolveWithProvider(provider, url, proxy)
       if (info) return info
       lastError = `provider ${provider.id}: tidak ada data.play`
     } catch (err) {
@@ -179,7 +186,8 @@ export async function resolveTikTokInfo(url: string): Promise<TikTokInfo> {
 function downloadVideoUrl(
   playUrl: string,
   destPath: string,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  agent?: http.Agent
 ): Promise<{ ok: boolean; sizeBytes: number; error?: string }> {
   return new Promise((resolve) => {
     const lib = playUrl.startsWith('https:') ? https : http
@@ -213,7 +221,8 @@ function downloadVideoUrl(
           'User-Agent': CHROME_USER_AGENT,
           Referer: TIKTOK_REFERER,
           Accept: '*/*'
-        }
+        },
+        agent
       },
       (res) => {
         const status = res.statusCode ?? 0
@@ -224,7 +233,7 @@ function downloadVideoUrl(
           const location = res.headers.location
           const origin = new URL(playUrl).origin
           const next = location.startsWith('http') ? location : `${origin}${location}`
-          resolve(downloadVideoUrl(next, destPath, onProgress))
+          resolve(downloadVideoUrl(next, destPath, onProgress, agent))
           return
         }
         if (status !== 200) {
@@ -290,7 +299,8 @@ function uniquePath(destPath: string): string {
 export async function downloadTikTokVideo(
   url: string,
   destDir: string,
-  onProgress?: (phase: TikTokProgressPhase, percent: number) => void
+  onProgress?: (phase: TikTokProgressPhase, percent: number) => void,
+  proxy?: string
 ): Promise<TikTokDownloadResult> {
   await fs.promises.mkdir(destDir, { recursive: true })
   const tempPath = uniquePath(path.join(destDir, `.tiktok-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`))
@@ -300,7 +310,7 @@ export async function downloadTikTokVideo(
     onProgress?.('resolving', 0)
     let info: TikTokInfo
     try {
-      const found = await resolveWithProvider(provider, url)
+      const found = await resolveWithProvider(provider, url, proxy)
       if (!found) {
         lastError = `provider ${provider.id}: tidak ada data.play`
         continue
@@ -311,8 +321,11 @@ export async function downloadTikTokVideo(
       continue
     }
 
-    const dl = await downloadVideoUrl(info.playUrl, tempPath, (percent) =>
-      onProgress?.('downloading', percent)
+    const dl = await downloadVideoUrl(
+      info.playUrl,
+      tempPath,
+      (percent) => onProgress?.('downloading', percent),
+      proxy ? proxyAgentFor(proxy) : undefined
     )
     if (dl.ok) {
       const finalName = `${sanitizeFileName(info.title)} [${info.id || 'tiktok'}].mp4`

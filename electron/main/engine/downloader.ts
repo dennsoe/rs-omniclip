@@ -6,6 +6,7 @@ import { downloadFile } from './net'
 import { trackProcess, untrackProcess } from './procmon'
 import { isTikTokUrl, resolveTikTokInfo, downloadTikTokVideo } from './tiktok'
 import { isDouyinUrl, normalizeDouyinUrl, writeNetscapeCookieFile } from './douyin'
+import { nextProxy } from './proxy'
 
 export interface DownloadProgress {
   id: string
@@ -41,6 +42,8 @@ export interface DownloadOptions {
   cookiesFile?: string
   /** Unduh beberapa URL sekaligus (maks 2) alih-alih berurutan. Default false. */
   parallel?: boolean
+  /** Proxy aktif utk unduhan ini (http(s):// atau socks5://). Diisi engine dari rotasi. */
+  proxy?: string
 }
 
 /** Nama binary yt-dlp sesuai platform (Windows memakai ekstensi .exe). */
@@ -150,6 +153,12 @@ export interface ScrapeItem {
   thumbnail?: string
   /** Durasi (detik) bila tersedia dari playlist (flat-playlist menyediakannya). */
   duration?: number
+  /** Engagement (best-effort; flat-playlist sering 'NA'). Dipakai CSV analitik. */
+  views?: number
+  likes?: number
+  comments?: number
+  /** Caption/description (berisi hashtag). */
+  description?: string
 }
 
 export interface ScrapeResult {
@@ -264,6 +273,13 @@ async function downloadSingle(
   let lastError = ''
   let targetUrl = url
 
+  // Rotasi proxy anti-banned: ambil proxy berikutnya bila belum ditentukan
+  // (dari pengaturan global yang aktif).
+  if (!options.proxy) {
+    const picked = nextProxy()
+    if (picked) options = { ...options, proxy: picked }
+  }
+
   // Lapisan 0a (khusus Douyin): normalisasi short link -> URL kanonik + tulis
   // file cookie sesi bila pengguna menyediakan header Cookie. Douyin (2026)
   // mewajibkan cookie sesi; yt-dlp menerimanya via `--cookies <file>`.
@@ -286,7 +302,7 @@ async function downloadSingle(
 
   // Lapisan 0: TikTok via TikWM (cepat & bekerja saat yt-dlp ditolak TikTok).
   if (isTikTokUrl(url)) {
-    const tiktokOk = await tryTikTokDownload(url, id, onProgress)
+    const tiktokOk = await tryTikTokDownload(url, id, onProgress, options)
     if (tiktokOk) return true
     lastError = 'TikWM tidak berhasil; mencoba jalur yt-dlp...'
   }
@@ -338,17 +354,23 @@ async function downloadSingle(
 async function tryTikTokDownload(
   url: string,
   id: string,
-  onProgress: (p: DownloadProgress) => void
+  onProgress: (p: DownloadProgress) => void,
+  options: DownloadOptions = {}
 ): Promise<boolean> {
   onProgress({ id, url, percent: 0, status: 'downloading', phase: 'downloading' })
   const outDir = getDownloadDir()
-  const result = await downloadTikTokVideo(url, outDir, (phase, percent) => {
-    if (phase === 'resolving') {
-      onProgress({ id, url, percent: 0, status: 'downloading', phase: 'extracting' })
-    } else if (phase === 'downloading') {
-      onProgress({ id, url, percent, status: 'downloading', phase: 'downloading' })
-    }
-  })
+  const result = await downloadTikTokVideo(
+    url,
+    outDir,
+    (phase, percent) => {
+      if (phase === 'resolving') {
+        onProgress({ id, url, percent: 0, status: 'downloading', phase: 'extracting' })
+      } else if (phase === 'downloading') {
+        onProgress({ id, url, percent, status: 'downloading', phase: 'downloading' })
+      }
+    },
+    options.proxy
+  )
   if (result.ok && result.filePath) {
     onProgress({
       id,
@@ -525,7 +547,11 @@ async function runYtdlpDownload(
  * API), UA Chrome, cookies browser bila dikonfigurasi, retry + rotasi
  * `api_hostname` saat 429, dan pesan error ramah.
  */
-export async function scrapeAccount(url: string, options: DownloadOptions = {}): Promise<ScrapeResult> {
+export async function scrapeAccount(
+  url: string,
+  options: DownloadOptions = {},
+  fetchLimit = SCRAPE_FETCH_LIMIT
+): Promise<ScrapeResult> {
   const ytdlp = await ensureYtdlp()
   if (!ytdlp) {
     throw new Error('yt-dlp tidak tersedia. Periksa koneksi internet lalu coba lagi.')
@@ -545,9 +571,9 @@ export async function scrapeAccount(url: string, options: DownloadOptions = {}):
     '--flat-playlist',
     '--no-warnings',
     '--print',
-    '%(id)s\t%(title)s\t%(webpage_url)s\t%(thumbnail)s\t%(duration)s',
+    '%(id)s\t%(title)s\t%(webpage_url)s\t%(thumbnail)s\t%(duration)s\t%(view_count)s\t%(like_count)s\t%(comment_count)s\t%(description)s',
     '--playlist-items',
-    `1-${SCRAPE_FETCH_LIMIT}`,
+    `1-${fetchLimit}`,
     '--user-agent',
     CHROME_USER_AGENT
   ]
@@ -569,7 +595,7 @@ export async function scrapeAccount(url: string, options: DownloadOptions = {}):
 
   let lastError = ''
   for (const args of attempts) {
-    const r = await runScrapeOnce(ytdlp, args, targetUrl)
+    const r = await runScrapeOnce(ytdlp, args, targetUrl, fetchLimit)
     if (r.ok && r.result) return r.result
     lastError = r.error ?? ''
     if (!SCRAPE_TRANSIENT_RE.test(lastError)) break
@@ -582,7 +608,8 @@ export async function scrapeAccount(url: string, options: DownloadOptions = {}):
 async function runScrapeOnce(
   ytdlp: string,
   args: string[],
-  originalUrl: string
+  originalUrl: string,
+  fetchLimit = SCRAPE_FETCH_LIMIT
 ): Promise<{ ok: boolean; result?: ScrapeResult; error?: string }> {
   return await new Promise((resolve) => {
     const proc = spawn(ytdlp, args)
@@ -605,6 +632,10 @@ async function runScrapeOnce(
       }
       const items: ScrapeItem[] = []
       const seen = new Set<string>()
+      const parseNum = (v: string): number | undefined => {
+        const n = Number(v)
+        return v && v !== 'NA' && Number.isFinite(n) ? n : undefined
+      }
       for (const line of stdout.split('\n')) {
         const parts = line.split('\t').map((s) => (s ?? '').trim())
         if (parts.length < 3 || !parts[0]) continue
@@ -613,18 +644,22 @@ async function runScrapeOnce(
         seen.add(entryUrl)
         // Kolom 4 = thumbnail (yt-dlp memakai 'NA' bila tidak tersedia di
         // flat-playlist — mis. TikTok; YouTube tersedia). Kolom 5 = durasi.
+        // Kolom 6-9 = views/likes/comments/description (best-effort, NA diizinkan).
         const thumb = parts[3] && parts[3] !== 'NA' ? parts[3] : undefined
-        const durRaw = Number(parts[4])
-        const duration = parts[4] && parts[4] !== 'NA' && Number.isFinite(durRaw) ? durRaw : undefined
+        const desc = parts[8] && parts[8] !== 'NA' ? parts[8].slice(0, 2000) : undefined
         items.push({
           index: items.length,
           id: parts[0],
           title: parts[1] || `Video ${items.length + 1}`,
           url: entryUrl,
           thumbnail: thumb,
-          duration
+          duration: parseNum(parts[4]),
+          views: parseNum(parts[5]),
+          likes: parseNum(parts[6]),
+          comments: parseNum(parts[7]),
+          description: desc
         })
-        if (items.length >= SCRAPE_FETCH_LIMIT) break
+        if (items.length >= fetchLimit) break
       }
       resolve({ ok: true, result: { items, truncated: items.length >= SCRAPE_FETCH_LIMIT } })
     })
@@ -662,7 +697,7 @@ export async function resolvePreviewUrl(
   options: DownloadOptions = {}
 ): Promise<ResolvedPreview> {
   if (isTikTokUrl(url)) {
-    const info = await resolveTikTokInfo(url)
+    const info = await resolveTikTokInfo(url, options.proxy)
     return {
       url,
       playUrl: info.playUrl,
@@ -697,6 +732,9 @@ function getDirectUrl(
   ]
   if (options.cookiesBrowser && options.cookiesBrowser.trim()) {
     args.push('--cookies-from-browser', options.cookiesBrowser.trim())
+  }
+  if (options.proxy && options.proxy.trim()) {
+    args.push('--proxy', options.proxy.trim())
   }
   args.push(url)
 
@@ -744,6 +782,9 @@ function buildDownloadArgs(
     args.push('--cookies', options.cookiesFile.trim())
   } else if (options.cookiesBrowser && options.cookiesBrowser.trim()) {
     args.push('--cookies-from-browser', options.cookiesBrowser.trim())
+  }
+  if (options.proxy && options.proxy.trim()) {
+    args.push('--proxy', options.proxy.trim())
   }
   args.push('-o', outputTemplate, url)
   return args

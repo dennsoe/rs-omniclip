@@ -9,6 +9,62 @@ siap disalin ke **detail release GitHub** (mis. `gh release create v1.3.4
 
 ## Body release (salin ke detail release GitHub)
 
+## RS OmniClip v1.4 — 5 Fitur Besar: Proxy, Auto-Watcher, CSV Analytics, Hardware GPU, Preview + Riwayat
+
+> Fitur besar untuk tim riset & operasional: anti-banned, pemantauan akun
+> otomatis, data analitik ekspor CSV, akselerasi GPU saat memproses video,
+> serta pratinjau inline + riwayat unduhan.
+
+### 1. Manajemen Proxy (Sistem Anti-Banned)
+- Kelola daftar proxy (HTTP/HTTPS/SOCKS5, satu per baris) di Pengaturan Unduhan.
+- **Rotasi otomatis** — ganti proxy setelah N unduhan (default 5) agar IP tidak
+  cepat dibanned platform.
+- Proxy berlaku untuk **semua jalur**: yt-dlp, TikWM (resolver TikTok), dan CDN
+  unduhan.
+- Tombol **Tes** per proxy — menampilkan status sukses/gagal + latensi
+  (via api.ipify.org).
+- Catatan: Instagram/Facebook memblokir proxy datacenter — gunakan proxy
+  residential untuk platform tersebut.
+
+### 2. Auto-Watcher (Pemantauan Akun Otomatis)
+- Pantau akun/halaman (TikTok, YouTube, Instagram, dsb.) secara otomatis
+  **selama aplikasi terbuka**.
+- Cek berkala tiap N jam (default 1), tambah akun dgn label, aktif/nonaktif
+  sekali klik, tombol "Cek Sekarang" (semua atau per akun).
+- **Deteksi posting baru**: tick pertama hanya mengatur cursor (tidak mengunduh
+  video lama); video baru **diunduh otomatis**, **dibersihkan metadatanya**
+  (privasi), dan memberi **notifikasi** (native + toast di aplikasi).
+
+### 3. Pemisah Data Analitik (CSV Exporter)
+- Toggle "Ekspor Data Analitik ke CSV" di kartu Akun/Halaman.
+- Setelah ambil daftar, otomatis menulis **analytics-YYYY-MM-DD.csv** di folder
+  Unduhan: platform, URL, ID, judul, views, likes, komentar, caption, hashtag,
+  durasi (detik), tanggal unggah.
+- Format **RFC 4180 + BOM** — terbuka rapi di Excel/Number (field kosong/NA
+  diizinkan).
+
+### 4. Hardware Acceleration (GPU Selector)
+- **Deteksi otomatis** encoder GPU (`ffmpeg -encoders`): Apple VideoToolbox
+  (Mac), NVIDIA NVENC, AMD AMF.
+- Pengaturan "Pemrosesan Hardware" hanya menampilkan encoder yang **benar-benar
+  tersedia** di perangkat; mode "Otomatis" memakai CPU (libx264).
+- **Fallback berjenjang**: bila encode GPU gagal, otomatis turun ke CPU — hasil
+  tetap sesuai prasetel (HD/FullHD/UHD/WhatsApp).
+
+### 5. Pemutar Pratinjau Internal + Riwayat
+- **Pratinjau inline**: klik "Putar" pada baris antrean unduhan → video diputar
+  langsung di aplikasi (protokol `media://` lokal, dukungan seek via Range).
+- **Tab Riwayat** baru: semua unduhan tersimpan (judul, platform, waktu);
+  klik untuk memutar ulang, tombol "Bersihkan Riwayat".
+- Riwayat & semua pengaturan baru tersimpan **di main process** (aman, bukan
+  localStorage).
+
+### Catatan teknis
+- Fix: `https-proxy-agent`/`socks-proxy-agent` diturunkan ke versi CommonJS agar
+  kompatibel dengan build main process (Electron).
+
+---
+
 ## RS OmniClip v1.3.4 — Bugfix scrape 429 + Pengaturan Unduhan dalam Modal
 
 ### Perbaikan

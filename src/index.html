@@ -10,11 +10,12 @@
       untuk menampilkan thumbnail video yang diambil dari yt-dlp/TikWM. `media-src`
       mengizinkan https/http agar pratinjau video remote (mis. CDN TikTok via
       `preview:resolve`) bisa diputar di <video> — sebelumnya hanya `blob:` sehingga
-      preview remote DIBLOKIR (readyState 0, tanpa error).
+      preview remote DIBLOKIR (readyState 0, tanpa error). `media:` ditambahkan untuk
+      protokol kustom `media://` (pratinjau video hasil unduhan lokal).
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http:; connect-src 'self' ws:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; media-src 'self' blob: https: http: media:; connect-src 'self' ws:"
     />
   </head>
   <body>

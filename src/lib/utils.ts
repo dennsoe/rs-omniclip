@@ -25,3 +25,8 @@ export function guessPlatform(url: string): string {
   if (/twitter|x\.com/i.test(url)) return 'X / Twitter'
   return 'Video'
 }
+
+/** URL protokol kustom media:// untuk memutar file lokal di <video>. */
+export function mediaUrlForFile(filePath: string): string {
+  return `media://local/${encodeURIComponent(filePath)}`
+}

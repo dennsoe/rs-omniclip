@@ -6,7 +6,9 @@ import type {
   ResourceInfo,
   DownloadOptions,
   DownloadProgress,
-  ResolvedPreview
+  ResolvedPreview,
+  AppConfig,
+  HistoryEntry
 } from '@lib/types'
 
 /**
@@ -67,6 +69,47 @@ declare global {
       onResourceStatus: (cb: (message: string) => void) => () => void
       /** Status resource segar dari proses utama (dipakai badge update sidebar). */
       onResourceChanged: (cb: (data: ResourceInfo[]) => void) => () => void
+
+      // --- Konfigurasi & riwayat (main process) ---
+      getConfig: () => Promise<AppConfig>
+      setConfig: (patch: Partial<AppConfig>) => Promise<AppConfig>
+      listHistory: () => Promise<HistoryEntry[]>
+      clearHistory: () => Promise<boolean>
+
+      // --- Manajer Proxy (anti-banned) ---
+      getProxyConfig: () => Promise<AppConfig['proxy']>
+      saveProxyConfig: (cfg: Partial<AppConfig['proxy']>) => Promise<AppConfig['proxy']>
+      testProxy: (proxyUrl: string) => Promise<{ ok: boolean; latencyMs: number; error?: string }>
+
+      // --- Hardware acceleration (deteksi encoder) ---
+      detectEncoders: () => Promise<Array<'videotoolbox' | 'nvenc' | 'amf'>>
+
+      // --- Ekspor data analitik (CSV) ---
+      exportAnalytics: (payload: {
+        items: Array<{
+          id?: string
+          title?: string
+          url: string
+          duration?: number
+          views?: number
+          likes?: number
+          comments?: number
+          description?: string
+        }>
+      }) => Promise<string>
+
+      // --- Auto-Watcher (pemantauan akun otomatis) ---
+      getWatcherConfig: () => Promise<AppConfig['watcher']>
+      addWatchedAccount: (payload: { url: string; label?: string }) => Promise<AppConfig['watcher']>
+      removeWatchedAccount: (url: string) => Promise<AppConfig['watcher']>
+      setWatcherEnabled: (enabled: boolean) => Promise<AppConfig['watcher']>
+      setWatcherInterval: (hours: number) => Promise<AppConfig['watcher']>
+      checkWatcherNow: (
+        url?: string
+      ) => Promise<Array<{ url: string; newItems?: unknown[]; error?: string }>>
+      onWatcherNotify: (
+        cb: (data: { title: string; body: string }) => void
+      ) => () => void
     }
   }
 }

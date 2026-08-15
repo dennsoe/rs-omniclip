@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { Trash2, XCircle, RotateCcw } from 'lucide-react'
 
 export interface ConfirmAction {
-  type: 'clear' | 'remove' | 'reset'
+  type: 'clear' | 'remove' | 'reset' | 'clearHistory'
   id?: string
 }
 
@@ -59,9 +59,11 @@ export default function ConfirmModal({
             <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-tight">
               {confirmAction.type === 'reset'
                 ? 'Reset Semua Preferensi?'
-                : confirmAction.type === 'clear'
-                  ? 'Hapus Semua?'
-                  : 'Hapus Video?'}
+                : confirmAction.type === 'clearHistory'
+                  ? 'Bersihkan Riwayat?'
+                  : confirmAction.type === 'clear'
+                    ? 'Hapus Semua?'
+                    : 'Hapus Video?'}
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               {confirmAction.type === 'reset'
@@ -84,9 +86,11 @@ export default function ConfirmModal({
           <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
             {confirmAction.type === 'reset'
               ? 'Mode gelap, prasetel, dan pengaturan unduhan akan kembali ke nilai awal.'
-              : confirmAction.type === 'clear'
-                ? 'Apakah Anda yakin ingin menghapus semua video dari antrean?'
-                : 'Apakah Anda yakin ingin menghapus video ini dari antrean?'}
+              : confirmAction.type === 'clearHistory'
+                ? 'Seluruh riwayat unduhan akan dihapus. Tindakan ini tidak dapat dibatalkan.'
+                : confirmAction.type === 'clear'
+                  ? 'Apakah Anda yakin ingin menghapus semua video dari antrean?'
+                  : 'Apakah Anda yakin ingin menghapus video ini dari antrean?'}
           </p>
         </div>
 
@@ -115,9 +119,11 @@ export default function ConfirmModal({
             )}
             {confirmAction.type === 'reset'
               ? 'Reset'
-              : confirmAction.type === 'clear'
-                ? 'Hapus Semua'
-                : 'Hapus'}
+              : confirmAction.type === 'clearHistory'
+                ? 'Bersihkan'
+                : confirmAction.type === 'clear'
+                  ? 'Hapus Semua'
+                  : 'Hapus'}
           </button>
         </div>
       </motion.div>

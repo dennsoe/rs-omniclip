@@ -111,3 +111,41 @@ export interface ResourceInfo {
   expected: string | null
   outdated: boolean
 }
+
+/** Entri riwayat unduhan (tersimpan di main process). */
+export interface HistoryEntry {
+  url: string
+  title?: string
+  thumbnail?: string
+  filePath: string
+  platform?: string
+  ts: number
+}
+
+/** Akun yang dipantau Auto-Watcher. */
+export interface WatchedAccount {
+  url: string
+  label?: string
+  lastSeenId?: string
+  lastCheckedAt?: number
+  lastFoundAt?: number
+}
+
+/** Konfigurasi proxy (anti-banned system). */
+export interface ProxyConfig {
+  enabled: boolean
+  proxies: string[]
+  rotationEvery: number
+}
+
+/** Mode pemrosesan hardware (encoder GPU). */
+export type HwAccelMode = 'auto' | 'videotoolbox' | 'nvenc' | 'amf'
+
+/** Konfigurasi aplikasi (tersimpan di main process, bukan localStorage). */
+export interface AppConfig {
+  proxy: ProxyConfig
+  watcher: { enabled: boolean; intervalHours: number; accounts: WatchedAccount[] }
+  hwAccel: { mode: HwAccelMode }
+  analyticsExport: boolean
+  history: HistoryEntry[]
+}

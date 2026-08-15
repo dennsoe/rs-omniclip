@@ -1,7 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import path from 'node:path'
 import os from 'node:os'
-import { ensureFfmpeg } from '@engine/ffmpeg'
+import { ensureFfmpeg, detectEncoders, type EncoderId } from '@engine/ffmpeg'
 import {
   processBatch,
   type PresetType,
@@ -10,7 +10,6 @@ import {
 } from '@engine/processor'
 import { trimVideo, type TrimPayload } from '@engine/trimmer'
 import {
-  startDownloadBatch,
   scrapeAccount,
   resolvePreviewUrl,
   type DownloadProgress,
@@ -25,6 +24,17 @@ import {
   type ResourceInfo
 } from '@engine/updater'
 import { getTrackedPids, sampleProcess } from '@engine/procmon'
+import { enqueueBatch } from '@engine/queue'
+import { testProxy, resetRotation } from '@engine/proxy'
+import { registerMediaScheme, registerMediaProtocol } from './media'
+import { getConfig, setConfig, appendHistory, clearHistory } from './config'
+import { exportScrapeToCsv } from '@engine/analytics'
+import {
+  startWatcher,
+  stopWatcher,
+  checkAccountOnce,
+  setWatcherNotify
+} from '@engine/watcher'
 
 let mainWindow: BrowserWindow | null = null
 let engineReady = false
@@ -216,13 +226,30 @@ async function handleProcessing(payload: {
   }
 
   try {
+    const hwAccel = getConfig().hwAccel?.mode ?? 'auto'
     const outputFolder = await processBatch(validFiles, payload.preset, (p: ProcessProgress) => {
       emit('processing:progress', p)
-    })
+    }, hwAccel)
     emit('processing:complete', { outputFolder })
   } catch (err) {
     console.error('[RS OmniClip] Gagal memproses batch:', err)
     emit('processing:complete', { outputFolder: '' })
+  }
+}
+
+/** Tebak platform dari hostname URL (utk riwayat & CSV analytics). */
+function guessPlatform(url: string): string {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '')
+    if (host.endsWith('tiktok.com') || host.endsWith('tiktokv.com')) return 'TikTok'
+    if (host.endsWith('instagram.com') || host.endsWith('instagr.am')) return 'Instagram'
+    if (host.endsWith('youtube.com') || host.endsWith('youtu.be')) return 'YouTube'
+    if (host.endsWith('facebook.com') || host.endsWith('fb.watch')) return 'Facebook'
+    if (host.endsWith('douyin.com')) return 'Douyin'
+    if (host.endsWith('twitter.com') || host.endsWith('x.com')) return 'X'
+    return host.split('.')[0] || 'Lainnya'
+  } catch {
+    return 'Lainnya'
   }
 }
 
@@ -251,13 +278,26 @@ function handleDownload(payload: { urls?: string[]; options?: DownloadOptions })
         : undefined,
     parallel: payload.options?.parallel === true
   }
-  void startDownloadBatch(
+  // Route lewat antrean terpusat agar tidak bentrok dengan unduhan lain
+  // (mis. Auto-Watcher) — perilaku sama utk batch tunggal.
+  enqueueBatch({
     urls,
-    (p: DownloadProgress) => emit('download:progress', p),
-    (r) => emit('download:complete', r),
-    options
-  ).catch((err) => {
-    console.error('[RS OmniClip] Gagal menjalankan unduhan batch:', err)
+    options,
+    onProgress: (p: DownloadProgress) => {
+      // Catat riwayat saat unduhan berhasil (dipakai tab Riwayat).
+      if (p.status === 'success' && p.filePath) {
+        appendHistory({
+          url: p.url,
+          title: p.title,
+          thumbnail: p.thumbnail,
+          filePath: p.filePath,
+          platform: guessPlatform(p.url),
+          ts: Date.now()
+        })
+      }
+      emit('download:progress', p)
+    },
+    onComplete: (r) => emit('download:complete', r)
   })
 }
 
@@ -333,6 +373,124 @@ function registerIpc(): void {
     void initEngine()
   })
 
+  // --- Konfigurasi main process (proxy, watcher, riwayat, dll) ---
+  ipcMain.handle('config:get', () => getConfig())
+  ipcMain.handle('config:set', (_event, patch) => {
+    const next = setConfig(patch)
+    // Perubahan watcher (enabled/interval/accounts) → restart interval.
+    startWatcher()
+    return next
+  })
+
+  // --- Riwayat unduhan ---
+  ipcMain.handle('history:list', () => getConfig().history ?? [])
+  ipcMain.handle('history:clear', () => {
+    clearHistory()
+    return true
+  })
+
+  // --- Manajer Proxy (anti-banned) ---
+  ipcMain.handle('proxy:list', () => getConfig().proxy)
+  ipcMain.handle('proxy:save', (_event, payload) => {
+    const next = setConfig({
+      proxy: {
+        enabled: payload?.enabled === true,
+        proxies: Array.isArray(payload?.proxies)
+          ? payload.proxies.filter((p: unknown): p is string => typeof p === 'string')
+          : [],
+        rotationEvery: Math.max(1, Math.round(Number(payload?.rotationEvery) || 5))
+      }
+    })
+    resetRotation()
+    return next.proxy
+  })
+  ipcMain.handle('proxy:test', async (_event, proxyUrl: string) => {
+    if (typeof proxyUrl !== 'string' || !proxyUrl.trim()) {
+      return { ok: false, latencyMs: 0, error: 'URL proxy kosong.' }
+    }
+    return testProxy(proxyUrl.trim())
+  })
+
+  // --- Hardware acceleration (deteksi encoder tersedia) ---
+  ipcMain.handle('hw:detect', async (): Promise<EncoderId[]> => detectEncoders())
+
+  // --- Ekspor data analitik (CSV) hasil scrape ---
+  ipcMain.handle('analytics:export', (_event, payload) => {
+    const items = Array.isArray(payload?.items) ? payload.items : []
+    return exportScrapeToCsv(
+      items.map(
+        (it: {
+          id?: string
+          title?: string
+          url?: string
+          duration?: number
+          views?: number
+          likes?: number
+          comments?: number
+          description?: string
+        }) => ({
+          id: it.id,
+          title: it.title,
+          url: it.url ?? '',
+          duration: it.duration,
+          views: it.views,
+          likes: it.likes,
+          comments: it.comments,
+          description: it.description
+        })
+      ),
+      guessPlatform
+    )
+  })
+
+  // --- Auto-Watcher (pemantauan akun otomatis) ---
+  ipcMain.handle('watcher:list', () => getConfig().watcher)
+  ipcMain.handle('watcher:add', (_event, payload) => {
+    const url = typeof payload?.url === 'string' ? payload.url.trim() : ''
+    if (!url) return getConfig().watcher
+    const label = typeof payload?.label === 'string' ? payload.label.trim() : ''
+    const accounts = [...getConfig().watcher.accounts]
+    if (!accounts.some((a) => a.url === url)) {
+      accounts.push({ url, label: label || undefined })
+    }
+    setConfig({ watcher: { accounts } })
+    startWatcher()
+    return getConfig().watcher
+  })
+  ipcMain.handle('watcher:remove', (_event, url: string) => {
+    const accounts = getConfig().watcher.accounts.filter((a) => a.url !== url)
+    setConfig({ watcher: { accounts } })
+    startWatcher()
+    return getConfig().watcher
+  })
+  ipcMain.handle('watcher:setEnabled', (_event, enabled: boolean) => {
+    setConfig({ watcher: { enabled: enabled === true } })
+    startWatcher()
+    return getConfig().watcher
+  })
+  ipcMain.handle('watcher:setInterval', (_event, hours: number) => {
+    const h = Math.max(0.1, Math.round((Number(hours) || 1) * 10) / 10)
+    setConfig({ watcher: { intervalHours: h } })
+    startWatcher()
+    return getConfig().watcher
+  })
+  ipcMain.handle('watcher:checkNow', async (_event, url?: string) => {
+    const accounts = url
+      ? getConfig().watcher.accounts.filter((a) => a.url === url)
+      : getConfig().watcher.accounts
+    const results: Array<
+      | { url: string; newItems: import('@engine/downloader').ScrapeItem[] }
+      | { url: string; error: string }
+    > = []
+    for (const acc of accounts) {
+      const res = await checkAccountOnce(acc).catch((err) => ({
+        error: err instanceof Error ? err.message : 'Gagal memeriksa akun.'
+      }))
+      results.push({ url: acc.url, ...res })
+    }
+    return results
+  })
+
   ipcMain.on('processing:start', (_event, payload) => {
     void handleProcessing(payload)
   })
@@ -398,6 +556,9 @@ function registerIpc(): void {
     })
 }
 
+// Skema kustom media:// (streaming file lokal utk pratinjau) — WAJIB sebelum app ready.
+registerMediaScheme()
+
 const gotLock = app.requestSingleInstanceLock()
 
 if (!gotLock) {
@@ -411,10 +572,15 @@ if (!gotLock) {
   })
 
   app.whenReady().then(() => {
+    registerMediaProtocol()
     registerIpc()
     createWindow()
     void initEngine()
     startSystemStats()
+
+    // Auto-Watcher: notifikasi → renderer (toast) + mulai interval bila aktif.
+    setWatcherNotify((e) => emit('watcher:notify', e))
+    startWatcher()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -425,5 +591,9 @@ if (!gotLock) {
     if (process.platform !== 'darwin') {
       app.quit()
     }
+  })
+
+  app.on('before-quit', () => {
+    stopWatcher()
   })
 }

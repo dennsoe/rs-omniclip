@@ -2,6 +2,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { ensureFfmpeg, probe, runFfmpeg, type ProbeResult } from './ffmpeg'
 import { createOutputFolderForBatch } from './paths'
+import type { HwAccelMode } from '../config'
 
 export type PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'whatsapp'
 
@@ -35,7 +36,8 @@ const WHATSAPP_TARGET_MB = 16
 export async function processBatch(
   files: ProcessFileInput[],
   preset: PresetType,
-  onProgress: (p: ProcessProgress) => void
+  onProgress: (p: ProcessProgress) => void,
+  hwAccel: HwAccelMode = 'auto'
 ): Promise<string> {
   if (!files || files.length === 0) {
     throw new Error('Tidak ada video untuk diproses.')
@@ -48,7 +50,7 @@ export async function processBatch(
     const outputPath = uniqueOutputPath(outputFolder, stripExtension(file.name))
     try {
       const info = await probe(file.path, ffprobe)
-      const argSets = buildArgSets(preset, file.path, outputPath, info)
+      const argSets = buildArgSets(preset, file.path, outputPath, info, hwAccel)
       const totalDuration = info.duration || 0
 
       let processed = false
@@ -116,7 +118,8 @@ function buildArgSets(
   preset: PresetType,
   input: string,
   output: string,
-  info: ProbeResult
+  info: ProbeResult,
+  hwAccel: HwAccelMode = 'auto'
 ): string[][] {
   const common = ['-y', '-i', input, '-map_metadata', '-1']
 
@@ -128,12 +131,7 @@ function buildArgSets(
         // Fallback: codec tidak dapat diremux ke .mp4 -> encode minimal.
         [
           ...common,
-          '-c:v',
-          'libx264',
-          '-preset',
-          'veryfast',
-          '-crf',
-          '23',
+          ...encoderCrfArgs(hwAccel, 23),
           '-pix_fmt',
           'yuv420p',
           '-c:a',
@@ -148,23 +146,19 @@ function buildArgSets(
     }
 
     case 'hd':
-      return buildEnhance(common, 720, output)
+      return buildEnhance(common, 720, output, hwAccel)
     case 'fullhd':
-      return buildEnhance(common, 1080, output)
+      return buildEnhance(common, 1080, output, hwAccel)
     case 'uhd':
-      return buildEnhance(common, 2160, output)
+      return buildEnhance(common, 2160, output, hwAccel)
 
     case 'archive': {
-      // Arsip kualitas maks: resolusi asli + CRF 18.
-      return [
-        [
+      // Arsip kualitas maks: resolusi asli + CRF 18. HW dulu, lalu fallback x264.
+      const sets: string[][] = []
+      if (hwAccel !== 'auto') {
+        sets.push([
           ...common,
-          '-c:v',
-          'libx264',
-          '-preset',
-          'slow',
-          '-crf',
-          '18',
+          ...encoderCrfArgs(hwAccel, 18),
           '-pix_fmt',
           'yuv420p',
           '-c:a',
@@ -174,26 +168,39 @@ function buildArgSets(
           '-movflags',
           '+faststart',
           output
-        ]
-      ]
+        ])
+      }
+      sets.push([
+        ...common,
+        '-c:v',
+        'libx264',
+        '-preset',
+        'slow',
+        '-crf',
+        '18',
+        '-pix_fmt',
+        'yuv420p',
+        '-c:a',
+        'aac',
+        '-b:a',
+        '256k',
+        '-movflags',
+        '+faststart',
+        output
+      ])
+      return sets
     }
 
     case 'whatsapp': {
       // Kompresi WhatsApp: hitung bitrate dari target ukuran dan durasi.
       const videoBitrate = computeWhatsappVideoBitrate(info)
-      return [
-        [
+      const maxrate = Math.round(videoBitrate * 1.5)
+      const bufsize = Math.round(videoBitrate * 2)
+      const sets: string[][] = []
+      if (hwAccel !== 'auto') {
+        sets.push([
           ...common,
-          '-c:v',
-          'libx264',
-          '-preset',
-          'medium',
-          '-b:v',
-          `${videoBitrate}k`,
-          '-maxrate',
-          `${Math.round(videoBitrate * 1.5)}k`,
-          '-bufsize',
-          `${Math.round(videoBitrate * 2)}k`,
+          ...encoderBitrateArgs(hwAccel, videoBitrate, maxrate, bufsize),
           '-pix_fmt',
           'yuv420p',
           '-c:a',
@@ -203,8 +210,31 @@ function buildArgSets(
           '-movflags',
           '+faststart',
           output
-        ]
-      ]
+        ])
+      }
+      sets.push([
+        ...common,
+        '-c:v',
+        'libx264',
+        '-preset',
+        'medium',
+        '-b:v',
+        `${videoBitrate}k`,
+        '-maxrate',
+        `${maxrate}k`,
+        '-bufsize',
+        `${bufsize}k`,
+        '-pix_fmt',
+        'yuv420p',
+        '-c:a',
+        'aac',
+        '-b:a',
+        '128k',
+        '-movflags',
+        '+faststart',
+        output
+      ])
+      return sets
     }
 
     default:
@@ -215,12 +245,19 @@ function buildArgSets(
 /**
  * Set argumen preset "peningkat": upscale ke target sumbu panjang +
  * penajaman + denoise audio (dengan fallback tanpa filter audio).
+ * Bila hwAccel != auto: set HW dicoba lebih dulu, lalu fallback x264.
  */
-function buildEnhance(common: string[], target: ScaleTarget, output: string): string[][] {
-  const videoArgs = [
+function buildEnhance(
+  common: string[],
+  target: ScaleTarget,
+  output: string,
+  hwAccel: HwAccelMode = 'auto'
+): string[][] {
+  const filter = `scale='if(gt(iw,ih),${target},-2)':'if(gt(iw,ih),-2,${target})':flags=lanczos,unsharp=5:5:0.6:5:5:0.0`
+  const x264VideoArgs = [
     ...common,
     '-vf',
-    `scale='if(gt(iw,ih),${target},-2)':'if(gt(iw,ih),-2,${target})':flags=lanczos,unsharp=5:5:0.6:5:5:0.0`,
+    filter,
     '-c:v',
     'libx264',
     '-preset',
@@ -232,12 +269,49 @@ function buildEnhance(common: string[], target: ScaleTarget, output: string): st
   ]
   const audioArgs = ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
 
-  return [
-    // Set utama: dengan filter reduksi noise audio.
-    [...videoArgs, '-af', 'afftdn=nr=12:nf=-30', ...audioArgs, output],
-    // Fallback: tanpa filter audio (kompatibilitas codec audio tertentu).
-    [...videoArgs, ...audioArgs, output]
-  ]
+  const sets: string[][] = []
+  if (hwAccel !== 'auto') {
+    const hwVideoArgs = [...common, '-vf', filter, ...encoderCrfArgs(hwAccel, 20), '-pix_fmt', 'yuv420p']
+    sets.push([...hwVideoArgs, '-af', 'afftdn=nr=12:nf=-30', ...audioArgs, output])
+    sets.push([...hwVideoArgs, ...audioArgs, output])
+  }
+  sets.push([...x264VideoArgs, '-af', 'afftdn=nr=12:nf=-30', ...audioArgs, output])
+  sets.push([...x264VideoArgs, ...audioArgs, output])
+  return sets
+}
+
+/** Argumen encoder hardware utk mode "kualitas" (CRF/qp/q:v). */
+function encoderCrfArgs(hwAccel: HwAccelMode, crf: number): string[] {
+  switch (hwAccel) {
+    case 'videotoolbox':
+      return ['-c:v', 'h264_videotoolbox', '-q:v', '60']
+    case 'nvenc':
+      return ['-c:v', 'h264_nvenc', '-preset', 'p4', '-cq', String(crf)]
+    case 'amf':
+      return ['-c:v', 'h264_amf', '-quality', 'speed', '-qp_i', String(crf), '-qp_p', String(crf)]
+    default:
+      return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf)]
+  }
+}
+
+/** Argumen encoder hardware utk mode "bitrate target" (WhatsApp). */
+function encoderBitrateArgs(
+  hwAccel: HwAccelMode,
+  bitrateK: number,
+  maxrateK: number,
+  bufsizeK: number
+): string[] {
+  const base = ['-b:v', `${bitrateK}k`, '-maxrate', `${maxrateK}k`, '-bufsize', `${bufsizeK}k`]
+  switch (hwAccel) {
+    case 'videotoolbox':
+      return ['-c:v', 'h264_videotoolbox', ...base]
+    case 'nvenc':
+      return ['-c:v', 'h264_nvenc', '-preset', 'p4', ...base]
+    case 'amf':
+      return ['-c:v', 'h264_amf', '-quality', 'speed', ...base]
+    default:
+      return ['-c:v', 'libx264', '-preset', 'medium', ...base]
+  }
 }
 
 /**

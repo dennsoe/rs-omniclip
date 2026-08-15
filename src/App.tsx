@@ -21,6 +21,7 @@ import {
   MessageCircle,
   XCircle,
   FolderOpen,
+  History,
   ListVideo,
   Search,
   Info,
@@ -32,6 +33,7 @@ import {
   Settings,
   LayoutGrid,
   List,
+  FileSpreadsheet,
   type LucideIcon
 } from 'lucide-react'
 import {
@@ -56,7 +58,8 @@ import type {
   ScrapeItem,
   UpdateInfo,
   ResourceInfo,
-  DownloadProgress
+  DownloadProgress,
+  HistoryEntry
 } from '@lib/types'
 import { useIsMobile } from '@hooks/use-mobile'
 import { usePersistentState } from '@hooks/use-persistent-state'
@@ -68,6 +71,9 @@ import PreviewModal from '@components/PreviewModal'
 import ScrapePreviewModal from '@components/ScrapePreviewModal'
 import ScrapeResultView from '@components/ScrapeResultView'
 import DownloadSettingsModal from '@components/DownloadSettingsModal'
+import HistoryView from '@components/HistoryView'
+import MediaPreviewModal, { type LocalMediaFile } from '@components/MediaPreviewModal'
+import WatcherPanel from '@components/WatcherPanel'
 import SystemMonitor from '@components/SystemMonitor'
 import SortableFileItem from '@components/SortableFileItem'
 import PresetSelector from '@components/PresetSelector'
@@ -123,7 +129,7 @@ export default function App(): React.ReactElement {
     PREF_KEYS.activeMenu,
     PREF_DEFAULTS.activeMenu
   )
-  const [downloaderMode, setDownloaderMode] = usePersistentState<'links' | 'scrape'>(
+  const [downloaderMode, setDownloaderMode] = usePersistentState<'links' | 'scrape' | 'history'>(
     PREF_KEYS.downloaderMode,
     PREF_DEFAULTS.downloaderMode
   )
@@ -136,6 +142,16 @@ export default function App(): React.ReactElement {
   const [resourceStatus, setResourceStatus] = useState<string | null>(null)
   const [isUpdatingResources, setIsUpdatingResources] = useState(false)
   const [downloads, setDownloads] = useState<DownloadItem[]>([])
+  // Pratinjau video hasil unduhan lokal (via media://) & riwayat unduhan.
+  const [previewLocal, setPreviewLocal] = useState<LocalMediaFile | null>(null)
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+
+  const refreshHistory = (): void => {
+    window.api?.listHistory
+      ?.()
+      .then((h) => setHistory(h ?? []))
+      .catch(() => {})
+  }
   const [linksText, setLinksText] = useState('')
   const [scrapeUrl, setScrapeUrl] = useState('')
   const [scrapeItems, setScrapeItems] = useState<ScrapeItem[] | null>(null)
@@ -152,6 +168,9 @@ export default function App(): React.ReactElement {
   const [scrapePreview, setScrapePreview] = useState<ScrapeItem | null>(null)
   const [isScraping, setIsScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState<string | null>(null)
+  // Ekspor data analitik (CSV) otomatis setelah ambil daftar (Fase 4).
+  const [analyticsExport, setAnalyticsExport] = useState(false)
+  const analyticsExportRef = useRef(false)
   const [isDownloading, setIsDownloading] = useState(false)
   // Pengaturan unduhan (kualitas, cookies browser, paralel) — dipersist ke localStorage.
   const [downloadMaxHeight, setDownloadMaxHeight] = usePersistentState<number>(
@@ -549,6 +568,7 @@ export default function App(): React.ReactElement {
 
     const offDownloadComplete = window.api.onDownloadComplete((data) => {
       setIsDownloading(false)
+      refreshHistory()
       if (data.failed > 0) {
         addToast(`Unduhan selesai: ${data.success} berhasil, ${data.failed} gagal.`, 'error')
       } else {
@@ -572,7 +592,17 @@ export default function App(): React.ReactElement {
       } else {
         setScrapeError(null)
       }
+      // Ekspor data analitik (CSV) otomatis bila toggle aktif (Fase 4).
+      if (analyticsExportRef.current && data.items.length > 0) {
+        window.api
+          ?.exportAnalytics?.({ items: data.items })
+          .then((p) => addToast(`Data analitik diekspor ke ${p}`, 'success'))
+          .catch(() => addToast('Gagal mengekspor data analitik.', 'error'))
+      }
     })
+
+    // Muat riwayat unduhan saat aplikasi siap (dari main process).
+    refreshHistory()
 
     return () => {
       offProgress()
@@ -641,6 +671,26 @@ export default function App(): React.ReactElement {
     if (!scrapeItems) return
     const allSelected = scrapeItems.every((it) => scrapeSelected[it.url])
     setScrapeSelected(allSelected ? {} : Object.fromEntries(scrapeItems.map((it) => [it.url, true])))
+  }
+
+  // --- Ekspor data analitik (CSV): muat preferensi + toggle (Fase 4) ---
+  useEffect(() => {
+    window.api
+      ?.getConfig?.()
+      .then((cfg) => {
+        if (typeof cfg?.analyticsExport === 'boolean') {
+          setAnalyticsExport(cfg.analyticsExport)
+          analyticsExportRef.current = cfg.analyticsExport
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const toggleAnalyticsExport = (): void => {
+    const next = !analyticsExportRef.current
+    analyticsExportRef.current = next
+    setAnalyticsExport(next)
+    window.api?.setConfig?.({ analyticsExport: next }).catch(() => {})
   }
 
   const onDrop = useCallback(
@@ -712,6 +762,10 @@ export default function App(): React.ReactElement {
       setPreset(PREF_DEFAULTS.preset)
       setIsDarkMode(PREF_DEFAULTS.darkMode)
       addToast('Semua preferensi direset ke default.', 'info')
+    } else if (confirmAction.type === 'clearHistory') {
+      window.api?.clearHistory?.()
+      setHistory([])
+      addToast('Riwayat unduhan dibersihkan.', 'info')
     }
     setConfirmAction(null)
   }
@@ -812,6 +866,7 @@ export default function App(): React.ReactElement {
         <ConfirmModal confirmAction={confirmAction} onClose={() => setConfirmAction(null)} onConfirm={handleConfirm} />
         <PreviewModal previewFile={previewFile} onClose={() => setPreviewFile(null)} />
         <ScrapePreviewModal item={scrapePreview} onClose={() => setScrapePreview(null)} />
+        <MediaPreviewModal file={previewLocal} onClose={() => setPreviewLocal(null)} />
         <DownloadSettingsModal
           open={isDownloadSettingsOpen}
           onClose={() => setIsDownloadSettingsOpen(false)}
@@ -1249,7 +1304,9 @@ export default function App(): React.ReactElement {
                     <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
                       {downloaderMode === 'links'
                         ? `${validLinks.length} link`
-                        : `${scrapeItems?.length ?? 0} video`}
+                        : downloaderMode === 'scrape'
+                          ? `${scrapeItems?.length ?? 0} video`
+                          : `${history.length} riwayat`}
                     </span>
                     <button
                       type="button"
@@ -1273,7 +1330,8 @@ export default function App(): React.ReactElement {
                 <div className="relative inline-flex bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-full p-1 transition-colors">
                   {[
                     { id: 'links', label: 'Banyak Link', Icon: LinkIcon },
-                    { id: 'scrape', label: 'Akun / Halaman', Icon: ListVideo }
+                    { id: 'scrape', label: 'Akun / Halaman', Icon: ListVideo },
+                    { id: 'history', label: 'Riwayat', Icon: History }
                   ].map((m) => {
                     const isActive = downloaderMode === m.id
                     return (
@@ -1282,7 +1340,7 @@ export default function App(): React.ReactElement {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          setDownloaderMode(m.id as 'links' | 'scrape')
+                          setDownloaderMode(m.id as 'links' | 'scrape' | 'history')
                         }}
                         className={`relative px-4 py-2 text-xs font-semibold rounded-full transition-colors flex items-center gap-1.5 ${
                           isActive
@@ -1356,7 +1414,7 @@ export default function App(): React.ReactElement {
                         />
                       </div>
                     </motion.div>
-                  ) : (
+                  ) : downloaderMode === 'scrape' ? (
                     <motion.div
                       key="scrape-mode"
                       initial={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -1410,6 +1468,22 @@ export default function App(): React.ReactElement {
                             </button>
                           }
                         />
+
+                        {/* Ekspor data analitik (CSV) otomatis setelah ambil daftar */}
+                        <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 px-3 py-2 transition-colors">
+                          <FileSpreadsheet className="h-4 w-4 text-blue-500 dark:text-blue-400 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                              Ekspor Data Analitik ke CSV
+                            </p>
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-tight">
+                              Views / likes / komentar / caption tiap video disimpan ke file{' '}
+                              <code className="text-[10px] font-mono">analytics-YYYY-MM-DD.csv</code> di folder
+                              Unduhan.
+                            </p>
+                          </div>
+                          <Toggle checked={analyticsExport} onChange={toggleAnalyticsExport} aria-label="Ekspor data analitik" />
+                        </div>
 
                         {scrapeError && (
                           <p className="text-xs text-rose-500 dark:text-rose-400 flex items-center gap-1.5">
@@ -1510,6 +1584,27 @@ export default function App(): React.ReactElement {
                           </div>
                         )}
                       </div>
+
+                      {/* Panel Auto-Watcher (pemantauan akun otomatis) */}
+                      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
+                        <WatcherPanel
+                          onNotify={(title, body) => addToast(`${title} — ${body}`, 'success')}
+                        />
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="history-mode"
+                      initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+                      className="mb-4"
+                    >
+                      <HistoryView
+                        history={history}
+                        onPreview={(h) => setPreviewLocal({ filePath: h.filePath, title: h.title, platform: h.platform })}
+                        onClear={() => setConfirmAction({ type: 'clearHistory' })}
+                      />
                     </motion.div>
                   )}
 
@@ -1603,18 +1698,35 @@ export default function App(): React.ReactElement {
                               </span>
                             )}
                             {dl.status === 'success' && dl.filePath && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  window.api?.showItemInFolder?.(dl.filePath ?? '')
-                                }}
-                                title="Buka di folder"
-                                className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400"
-                              >
-                                <FolderOpen className="w-3.5 h-3.5" />
-                                Buka folder
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setPreviewLocal({
+                                      filePath: dl.filePath ?? '',
+                                      title: dl.title
+                                    })
+                                  }}
+                                  title="Putar video"
+                                  className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95"
+                                >
+                                  <PlayCircle className="w-3 h-3" />
+                                  Putar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    window.api?.showItemInFolder?.(dl.filePath ?? '')
+                                  }}
+                                  title="Buka di folder"
+                                  className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400"
+                                >
+                                  <FolderOpen className="w-3.5 h-3.5" />
+                                  Buka folder
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>

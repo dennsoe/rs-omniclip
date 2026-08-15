@@ -3,6 +3,104 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
 
+## Status Rilis v1.4 (SEDANG DIKERJAKAN) — 5 Fitur Besar
+
+- **Branch**: `release/v1.3.4` (BELUM di-push; menunggu persetujuan commit/push user).
+- **Referensi pengerjaan**: `docs/IMPLEMENTATION_v1.4.md` (semua keputusan teknis).
+- **Semua 5 fitur SELESAI diimplementasi & DIVALIDASI** (tsc/lint/build PASS +
+  E2E Electron+CDP nyata). File baru: `electron/main/config.ts`, `media.ts`,
+  `engine/queue.ts`, `engine/proxy.ts`, `engine/analytics.ts`, `engine/watcher.ts`,
+  `src/components/ProxyManager.tsx`, `HistoryView.tsx`, `WatcherPanel.tsx`,
+  `MediaPreviewModal.tsx`.
+
+### Fase 0 — Fondasi
+- **Config store main process** (`config.ts`): `AppConfig` lengkap (proxy,
+  watcher, hwAccel, analyticsExport, history) tersimpan di
+  `userData/omni-config.json`; tulis ATOMIK (tmp+rename); `getConfig()/setConfig()/
+  appendHistory()/clearHistory()` (cap 500). IPC `config:get`/`config:set`.
+- **Queue manager** (`engine/queue.ts`): `enqueueBatch()` — batch unduhan FIFO
+  serial (manual + watcher tidak bentrok); `source: 'manual'|'watcher'`.
+
+### Fase 1 — Preview Inline + Riwayat
+- **`media://` protocol** (`media.ts`): `registerSchemesAsPrivileged` SEBELUM
+  ready; handler dgn dukungan **Range (206)** utk seek; helper
+  `mediaUrlForFile()`. CSP `media-src` ditambah `media:` di `src/index.html`.
+- **Preview baris antrean unduhan**: baris sukses punya tombol "Putar" →
+  `MediaPreviewModal` (`src={media://...}`) — terverifikasi putar + seek.
+- **Tab Riwayat** (`HistoryView.tsx`): list entri (judul/platform/waktu) +
+  tombol "Putar" (media://) + "Bersihkan Riwayat" (ConfirmModal `clearHistory`).
+  Riwayat dicatat otomatis saat unduhan sukses (`appendHistory` di main).
+
+### Fase 2 — Proxy Manager (Anti-Banned)
+- **`engine/proxy.ts`**: `normalizeProxy()`, `proxyAgentFor()` (HttpsProxyAgent/
+  SocksProxyAgent), `validProxies()`, `currentProxy()/nextProxy()` (rotasi
+  counter), `resetRotation()`, `testProxy()` (api.ipify.org, latensi).
+- **Integrasi**: `DownloadOptions.proxy` → `buildDownloadArgs` (`--proxy`),
+  `getDirectUrl`, TikWM `getRequest`/`resolveTikTokInfo`/`downloadVideoUrl`,
+  `downloadSingle` memakai `nextProxy()` saat proxy aktif. E2E: proxy save/test
+  jalan; UI di modal Pengaturan (textarea daftar proxy, toggle, rotasi tiap N,
+  tombol tes per baris, catatan IG/FB butuh residential).
+- **⚠️ FIX KRITIS (2026-08-15)**: `https-proxy-agent@9` & `socks-proxy-agent@10`
+  adalah ESM-only → main process electron-vite (CommonJS) crash
+  `ERR_REQUIRE_ESM`. FIX: turunkan ke **`https-proxy-agent@7.0.6`** &
+  **`socks-proxy-agent@8.0.5`** (CommonJS) — verifikasi `require()` jalan.
+
+### Fase 3 — Hardware Acceleration (GPU)
+- **`detectEncoders()`** (`ffmpeg.ts`): spawn `ffmpeg -encoders` → grep
+  h264_videotoolbox/nvenc/amf (cache per sesi). IPC `hw:detect`.
+- **`processor.ts`**: `processBatch(files, preset, onProgress, hwAccel='auto')`;
+  `buildArgSets`/`buildEnhance` + helper `encoderCrfArgs`/`encoderBitrateArgs`
+  (videotoolbox `-q:v 60`, nvenc `-cq`, amf `-qp_i/-qp_p`). Set HW dicoba dulu,
+  fallback berjenjang ke `libx264`. Preset `metadata` (`-c copy`) tak terpengaruh.
+- UI modal Pengaturan: dropdown "Pemrosesan Hardware" hanya menampilkan encoder
+  TERDETEKSI. E2E: `detectEncoders()` → `['videotoolbox']` di Mac; dropdown
+  menampilkan "Apple VideoToolbox (Mac)".
+
+### Fase 4 — Pemisah Data Analitik (CSV Exporter)
+- **`engine/analytics.ts`**: `AnalyticsRecord`, `csvEscape()` (RFC 4180),
+  `parseHashtags()`, `writeAnalyticsCsv()` (BOM utk Excel, nama unik),
+  `exportScrapeToCsv()`. Kolom: platform,url,id,title,views,likes,comments,
+  caption,hashtags,duration_seconds,uploaded_at.
+- **Capture engagement**: `--print` scrape diperluas dgn
+  `%(view_count)s\t%(like_count)s\t%(comment_count)s\t%(description)s` (parse
+  `NA`→undefined); `ScrapeItem` + `views/likes/comments/description`.
+- IPC `analytics:export` → tulis `analytics-YYYY-MM-DD.csv` di folder Unduhan.
+- UI: toggle "Ekspor Data Analitik ke CSV" di kartu Akun/Halaman (persist di
+  config `analyticsExport`); otomatis mengekspor setelah "Ambil Daftar" + toast
+  path. E2E: roundtrip config true/false, toggle+hint render.
+
+### Fase 5 — Auto-Watcher
+- **`engine/watcher.ts`**: `WatchedAccount` (url,label,lastSeenId,
+  lastCheckedAt,lastFoundAt); `startWatcher()/stopWatcher()` (setInterval
+  intervalHours, IDEMPOTENT — hanya saat app terbuka, tidak ada tray/auto-start);
+  `checkAccountOnce()` — `scrapeAccount(url, {}, 3)` (fetchLimit kecil),
+  bandingkan `items[0].id` vs `lastSeenId`; tick pertama = set cursor saja
+  (tanpa unduh lama); posting baru → `enqueueBatch(source:'watcher')` →
+  auto-clean `processBatch(...,'metadata')` → native `Notification` +
+  emit `watcher:notify` (toast).
+- `scrapeAccount` mendapat param **`fetchLimit`** (default 200; watcher pakai 3).
+- IPC: `watcher:add/remove/list/setEnabled/setInterval/checkNow`; event
+  `watcher:notify`. Config berubah → `startWatcher()` (restart interval).
+- UI `WatcherPanel.tsx` di mode Akun/Halaman: toggle aktif, input interval (jam),
+  tambah akun (URL+label), daftar akun (label/platform/url/status waktu + badge),
+  tombol "Cek Sekarang" (semua/per akun), hapus akun. E2E: add→list→remove
+  roundtrip OK; panel + semua kontrol render (tanpa overflow).
+
+### Validasi & E2E (2026-08-15)
+- `npm run typecheck` (node+web) PASS; `npx eslint src/ electron/` EXIT:0;
+  `npm run build` PASS.
+- E2E via CDP ke window Electron nyata (port 9222): seluruh `window.api` +
+  metode baru (config/history/proxy/hw/analytics/watcher) ada; config roundtrip;
+  `detectEncoders`→`['videotoolbox']`; watcher add/list/remove; UI mode
+  Akun/Halaman merender WatcherPanel + toggle CSV + kartu; modal Pengaturan
+  menampilkan Hardware (VideoToolbox) + Proxy (Manajer/Rotasi); **tanpa
+  overflow horizontal & tanpa emoji** (anti AI-slop dipertahankan).
+- **Operasional**: dev server dijalankan dgn `env -u ELECTRON_RUN_AS_NODE npm
+  run dev` (env sandbox menyuntik `ELECTRON_RUN_AS_NODE=1` → electron jalan sbg
+  node → `protocol` undefined). Launch Electron CDP: `npx electron .
+  --remote-debugging-port=9222 --user-data-dir="$TMPDIR/rs-omniclip-cdp"`
+  (unsandboxed).
+
 ## Status Rilis v1.3.4 (SEDANG DIKERJAKAN) — redesign UI + prior fixes
 
 - **Branch**: `release/v1.3.4` (BELUM di-push ke remote; menunggu persetujuan

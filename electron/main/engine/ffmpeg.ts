@@ -362,3 +362,42 @@ export function runFfmpeg(options: RunFfmpegOptions): Promise<void> {
     })
   })
 }
+
+/** Id encoder hardware yang didukung aplikasi. */
+export type EncoderId = 'videotoolbox' | 'nvenc' | 'amf'
+
+let encodersCache: EncoderId[] | null = null
+
+/**
+ * Mendeteksi encoder hardware yang TERSEDIA pada build ffmpeg ini
+ * (h264_videotoolbox / h264_nvenc / h264_amf). Hasil di-cache sekali per sesi.
+ * Build ffmpeg standar mungkin tidak memuat NVENC/AMF → UI hanya menawarkan
+ * encoder yang benar-benar ada (diperiksa via `ffmpeg -encoders`).
+ */
+export async function detectEncoders(): Promise<EncoderId[]> {
+  if (encodersCache) return encodersCache
+  try {
+    const { ffmpeg } = await ensureFfmpeg()
+    encodersCache = await new Promise<EncoderId[]>((resolve) => {
+      const proc = spawn(ffmpeg, ['-encoders'])
+      let out = ''
+      proc.stdout.on('data', (d: Buffer) => (out += d.toString()))
+      proc.on('error', () => resolve([]))
+      proc.on('close', () => {
+        const found: EncoderId[] = []
+        if (/h264_videotoolbox/.test(out)) found.push('videotoolbox')
+        if (/h264_nvenc/.test(out)) found.push('nvenc')
+        if (/h264_amf/.test(out)) found.push('amf')
+        resolve(found)
+      })
+    })
+  } catch {
+    encodersCache = []
+  }
+  return encodersCache
+}
+
+/** Reset cache deteksi encoder (dipakai bila binary ffmpeg diganti). */
+export function resetEncodersCache(): void {
+  encodersCache = null
+}
