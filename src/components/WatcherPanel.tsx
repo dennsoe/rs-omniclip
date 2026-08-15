@@ -402,7 +402,7 @@ export default function WatcherPanel({
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ type: 'spring', bounce: 0.2, duration: 0.35 }}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 px-3 py-2.5"
+                className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 px-3 py-2.5 transition-colors hover:border-violet-300 hover:bg-white dark:hover:border-violet-700 dark:hover:bg-slate-800/60"
               >
                 {acc.avatar ? (
                   <img

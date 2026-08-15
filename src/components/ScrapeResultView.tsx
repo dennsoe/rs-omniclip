@@ -186,13 +186,13 @@ export default function ScrapeResultView({
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: Math.min(item.index * 0.01, 0.3), duration: 0.2 }}
           onClick={() => onPreview(item)}
-          className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-2 text-left shadow-sm transition-all hover:border-blue-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-700"
+          className="group flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-2 pr-3 text-left shadow-sm transition-all hover:border-blue-300 hover:shadow-md dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-700"
         >
-          <div className="w-28 shrink-0 sm:w-36">
+          <div className="w-24 shrink-0 min-[480px]:w-28 sm:w-32">
             <Thumb item={item} src={thumbs[item.url] ?? item.thumbnail} showPlay />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">{item.title}</p>
+            <p className="truncate text-sm font-medium text-slate-700 transition-colors group-hover:text-blue-600 dark:text-slate-200 dark:group-hover:text-blue-400">{item.title}</p>
             <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
               {guessPlatform(item.url)}
               {item.duration != null && item.duration > 0 && (

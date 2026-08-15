@@ -30,3 +30,34 @@ export function guessPlatform(url: string): string {
 export function mediaUrlForFile(filePath: string): string {
   return `media://local/${encodeURIComponent(filePath)}`
 }
+
+/** Memformat byte menjadi teks ringkas (mis. "12.3 MB"). */
+export function formatBytes(bytes?: number): string {
+  if (!bytes || bytes <= 0) return ''
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let i = 0
+  let n = bytes
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024
+    i++
+  }
+  return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+/** Memformat kecepatan unduh (byte/detik) menjadi teks. */
+export function formatSpeed(bytesPerSec?: number): string {
+  return bytesPerSec && bytesPerSec > 0 ? `${formatBytes(bytesPerSec)}/dtk` : ''
+}
+
+/** Memformat estimasi sisa waktu (detik) menjadi teks. */
+export function formatEta(seconds?: number): string {
+  if (seconds === undefined || seconds < 0) return ''
+  const s = Math.round(seconds)
+  if (s < 60) return `${s} dtk`
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  if (m < 60) return `${m} mnt ${sec} dtk`
+  const h = Math.floor(m / 60)
+  const mm = m % 60
+  return `${h} jam ${mm} mnt`
+}

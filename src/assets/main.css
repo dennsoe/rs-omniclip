@@ -21,6 +21,33 @@
     -webkit-user-select: text;
     user-select: text;
   }
+  /* Scrollbar ramping — warna & desain menyesuaikan tema (terang/gelap). */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(148 163 184 / 0.55) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(148 163 184 / 0.55);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(100 116 139 / 0.75);
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: rgb(71 85 105 / 0.7);
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(100 116 139 / 0.85);
+  }
 }
 
 @layer utilities {

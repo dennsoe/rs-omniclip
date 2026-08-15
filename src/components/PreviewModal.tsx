@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { PlayCircle, XCircle } from 'lucide-react'
 import type { FileItem } from '@lib/types'
 import VideoPlayer from './VideoPlayer'
@@ -21,17 +21,23 @@ export default function PreviewModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [previewFile, onClose])
 
-  // Tanpa AnimatePresence: exit motion 12 macet di StrictMode (modal tetap di DOM).
-  return previewFile ? (
+  return (
+    <AnimatePresence>
+    {previewFile && (
     <motion.div
+      key="preview"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
       className="fixed inset-0 z-70 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 transition-colors"
       onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.95 }}
         animate={{ scale: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ type: 'spring', bounce: 0.2, duration: 0.35 }}
         className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden max-w-4xl w-full relative shadow-2xl flex flex-col transition-colors"
         onClick={(e) => e.stopPropagation()}
       >
@@ -62,5 +68,7 @@ export default function PreviewModal({
         </div>
       </motion.div>
     </motion.div>
-  ) : null
+    )}
+    </AnimatePresence>
+  )
 }

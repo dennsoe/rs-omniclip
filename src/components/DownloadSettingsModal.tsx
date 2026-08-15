@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { Settings, XCircle, RotateCcw, Globe, MonitorDown, MonitorUp, Info, KeyRound } from 'lucide-react'
 import FloatingSelect from './ui/FloatingSelect'
 import { FloatingTextarea } from './ui/FloatingField'
@@ -101,8 +101,6 @@ export default function DownloadSettingsModal({
       ? hwMode
       : 'auto'
 
-  if (!open) return null
-
   const set = (patch: Partial<DownloadSettings>): void => onChange(patch)
   const isCustom = (): boolean =>
     settings.maxHeight !== SETTINGS_DEFAULT.maxHeight ||
@@ -111,15 +109,22 @@ export default function DownloadSettingsModal({
     settings.parallel !== SETTINGS_DEFAULT.parallel
 
   return (
+    <AnimatePresence>
+    {open && (
     <motion.div
+      key="settings"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
       className="fixed inset-0 z-70 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm p-4 transition-colors"
       onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.95 }}
         animate={{ scale: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ type: 'spring', bounce: 0.2, duration: 0.35 }}
         className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden max-w-lg w-full relative shadow-2xl transition-colors flex flex-col max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
@@ -243,5 +248,7 @@ export default function DownloadSettingsModal({
         </div>
       </motion.div>
     </motion.div>
+    )}
+    </AnimatePresence>
   )
 }

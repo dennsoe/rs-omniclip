@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   Loader2,
   UploadCloud,
@@ -73,6 +73,8 @@ import PreviewModal from '@components/PreviewModal'
 import ScrapePreviewModal from '@components/ScrapePreviewModal'
 import ScrapeResultView from '@components/ScrapeResultView'
 import DownloadSettingsModal from '@components/DownloadSettingsModal'
+import DownloadQueue from '@components/DownloadQueue'
+import ScrapeDownloadProgress from '@components/ScrapeDownloadProgress'
 import HistoryView from '@components/HistoryView'
 import MediaPreviewModal, { type LocalMediaFile } from '@components/MediaPreviewModal'
 import WatcherPanel from '@components/WatcherPanel'
@@ -82,38 +84,11 @@ import FloatingSelect, { type SelectOption } from '@components/ui/FloatingSelect
 import { FloatingInput, FloatingTextarea } from '@components/ui/FloatingField'
 import Toggle from '@components/ui/Toggle'
 
-/** Satu item antrean unduhan (kontrak window.api.onDownloadProgress). */
-type DownloadItem = DownloadProgress
-
-/** Memformat byte menjadi teks ringkas (mis. "12.3 MB"). */
-function formatBytes(bytes?: number): string {
-  if (!bytes || bytes <= 0) return ''
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let i = 0
-  let n = bytes
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024
-    i++
-  }
-  return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`
-}
-
-/** Memformat kecepatan unduh (byte/detik) menjadi teks. */
-function formatSpeed(bytesPerSec?: number): string {
-  return bytesPerSec && bytesPerSec > 0 ? `${formatBytes(bytesPerSec)}/dtk` : ''
-}
-
-/** Memformat estimasi sisa waktu (detik) menjadi teks. */
-function formatEta(seconds?: number): string {
-  if (seconds === undefined || seconds < 0) return ''
-  const s = Math.round(seconds)
-  if (s < 60) return `${s} dtk`
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  if (m < 60) return `${m} mnt ${sec} dtk`
-  const h = Math.floor(m / 60)
-  const mm = m % 60
-  return `${h} jam ${mm} mnt`
+/** Satu item antrean unduhan di renderer — kontrak onDownloadProgress + asal tab.
+ *  `source` memisahkan progres per tab: Banyak Link vs Akun/Halaman. */
+interface DownloadItem extends DownloadProgress {
+  /** Asal unduhan: 'links' (tab Banyak Link) / 'scrape' (tab Akun·Halaman). */
+  source: 'links' | 'scrape'
 }
 
 export default function App(): React.ReactElement {
@@ -175,8 +150,6 @@ export default function App(): React.ReactElement {
   // Ekspor data analitik (CSV) otomatis setelah ambil daftar (Fase 4).
   const [analyticsExport, setAnalyticsExport] = useState(false)
   const analyticsExportRef = useRef(false)
-  // Jumlah akun terpantau Auto-Watcher (badge tab Pantau Akun).
-  const [watcherAccountCount, setWatcherAccountCount] = useState(0)
   const [isDownloading, setIsDownloading] = useState(false)
   // Pengaturan unduhan (kualitas, cookies browser, paralel) — dipersist ke localStorage.
   const [downloadMaxHeight, setDownloadMaxHeight] = usePersistentState<number>(
@@ -269,6 +242,17 @@ export default function App(): React.ReactElement {
   const selectedUrls = useMemo(
     () => (scrapeItems ?? []).filter((it) => scrapeSelected[it.url]).map((it) => it.url),
     [scrapeItems, scrapeSelected]
+  )
+
+  // Unduhan per-tab: setiap tab punya komponen progres sendiri.
+  // Item lama tanpa source dianggap dari Banyak Link (perilaku asli).
+  const linksDownloads = useMemo(
+    () => downloads.filter((d) => (d.source ?? 'links') === 'links'),
+    [downloads]
+  )
+  const scrapeDownloads = useMemo(
+    () => downloads.filter((d) => d.source === 'scrape'),
+    [downloads]
   )
 
   // Hasil scrape yang difilter oleh pencarian judul.
@@ -637,11 +621,11 @@ export default function App(): React.ReactElement {
     }
   }, [addToast])
 
-  const startBatchDownload = (urls: string[]): void => {
+  const startBatchDownload = (urls: string[], source: 'links' | 'scrape'): void => {
     if (urls.length === 0 || isDownloading) return
     setIsDownloading(true)
     setDownloads((prev) => [
-      ...urls.map((url) => ({ id: url, url, percent: 0, status: 'downloading' as const })),
+      ...urls.map((url) => ({ id: url, url, source, percent: 0, status: 'downloading' as const })),
       ...prev
     ])
     if (window.api?.startDownloadBatch) {
@@ -687,6 +671,21 @@ export default function App(): React.ReactElement {
     }
   }
 
+  const clearDownloads = (source?: 'links' | 'scrape'): void => {
+    setDownloads((prev) => (source ? prev.filter((d) => d.source !== source) : []))
+  }
+
+  const clearScrape = (): void => {
+    setScrapeItems(null)
+    setScrapeSelected({})
+    setScrapeError(null)
+    setScrapeQuery('')
+    setScrapeUrl('')
+    setScrapeThumbs({})
+    scrapeThumbsCache.current = {}
+    setDownloads((prev) => prev.filter((d) => d.source !== 'scrape'))
+  }
+
   const toggleScrapeItem = (url: string): void => {
     setScrapeSelected((prev) => ({ ...prev, [url]: !prev[url] }))
   }
@@ -707,10 +706,6 @@ export default function App(): React.ReactElement {
           analyticsExportRef.current = cfg.analyticsExport
         }
       })
-      .catch(() => {})
-    window.api
-      ?.getWatcherConfig?.()
-      .then((cfg) => setWatcherAccountCount(cfg?.accounts?.length ?? 0))
       .catch(() => {})
   }, [])
 
@@ -949,15 +944,20 @@ export default function App(): React.ReactElement {
           }}
         />
 
-        {/* MOBILE OVERLAY — tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
+        {/* MOBILE OVERLAY */}
+        <AnimatePresence>
         {isMobile && isSidebarOpen && (
           <motion.div
+            key="mobile-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             onClick={() => setIsSidebarOpen(false)}
             className="absolute inset-0 bg-black/40 dark:bg-black/60 z-30 backdrop-blur-sm"
           />
         )}
+        </AnimatePresence>
 
         {/* 1. LEFT SIDEBAR */}
         <motion.div
@@ -1141,11 +1141,14 @@ export default function App(): React.ReactElement {
         >
           <input {...getInputProps()} />
 
-          {/* DRAG ACTIVE OVERLAY — tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
+          {/* DRAG ACTIVE OVERLAY */}
+          <AnimatePresence>
           {isDragActive && (
             <motion.div
+              key="drag-overlay"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
               className="absolute inset-4 z-50 flex items-center justify-center bg-blue-500/5 dark:bg-blue-500/10 backdrop-blur-[2px] border-2 border-dashed border-blue-400 dark:border-blue-500 rounded-3xl pointer-events-none"
             >
@@ -1160,6 +1163,7 @@ export default function App(): React.ReactElement {
               </motion.div>
             </motion.div>
           )}
+          </AnimatePresence>
 
           {/* MOBILE MENU BUTTON — left-20 (80px) agar tidak menimpa traffic light macOS (berakhir ±68px) */}
           {isMobile && !isSidebarOpen && (
@@ -1269,12 +1273,14 @@ export default function App(): React.ReactElement {
 
               {/* 4. KONTEN UTAMA (state kosong ATAU antrean) */}
               <div className="flex-1 min-h-0 relative z-10 px-4 sm:px-6 md:px-8 pb-24">
-                {/* 4a. EMPTY STATE — tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
+                {/* 4a. EMPTY STATE ↔ QUEUE LIST */}
+                <AnimatePresence mode="wait">
                 {files.length === 0 ? (
                   <motion.div
                     key="empty"
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.3 }}
                     onClick={() => {
                       // Hanya area drop-zone ini yang membuka dialog import.
@@ -1301,6 +1307,7 @@ export default function App(): React.ReactElement {
                     layout
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
                     transition={{ type: 'spring', bounce: 0.1, duration: 0.5 }}
                       className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl overflow-hidden flex flex-col h-full min-h-0 transition-colors"
                     >
@@ -1372,6 +1379,7 @@ export default function App(): React.ReactElement {
                       </div>
                   </motion.div>
                 )}
+                </AnimatePresence>
               </div>
 
               {/* 5. ACTION BUTTON */}
@@ -1430,89 +1438,85 @@ export default function App(): React.ReactElement {
               transition={{ duration: 0.3 }}
               className="flex-1 flex flex-col min-h-0 relative z-10"
             >
-              {/* Header: judul + badge + toggle mode animasi */}
+              {/* Tab mode — desain konsisten dgn Pembersih (rounded-xl, tema); tanpa header teks */}
               <div className="relative z-10 pt-16 md:pt-8 px-4 sm:px-6 md:px-8 pb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 transition-colors">
-                    Unduh Video
-                  </h2>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                      {downloaderMode === 'links'
-                        ? `${validLinks.length} link`
-                        : downloaderMode === 'scrape'
-                          ? `${scrapeItems?.length ?? 0} video`
-                          : downloaderMode === 'watcher'
-                            ? `${watcherAccountCount} akun`
-                            : `${history.length} riwayat`}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setIsDownloadSettingsOpen(true)
-                      }}
-                      aria-label="Pengaturan Unduhan"
-                      title="Pengaturan Unduhan"
-                      className="relative p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm transition-all"
-                    >
-                      <Settings className="w-4 h-4" />
-                      {downloadSettingsCount > 0 && (
-                        <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center shadow shadow-blue-600/40">
-                          {downloadSettingsCount}
-                        </span>
-                      )}
-                    </button>
+                <div className="relative flex items-center justify-center mb-6">
+                  <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-900">
+                    {[
+                      { id: 'links', label: 'Banyak Link', Icon: LinkIcon },
+                      { id: 'scrape', label: 'Akun / Halaman', Icon: ListVideo },
+                      { id: 'watcher', label: 'Pantau Akun', Icon: RadioTower },
+                      { id: 'history', label: 'Riwayat', Icon: History }
+                    ].map((m) => {
+                      const isActive = downloaderMode === m.id
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDownloaderMode(m.id as 'links' | 'scrape' | 'watcher' | 'history')
+                          }}
+                          className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-colors sm:px-5 ${
+                            isActive
+                              ? 'text-white'
+                              : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                          }`}
+                        >
+                          {isActive && (
+                            <motion.span
+                              layoutId="downloader-mode-pill"
+                              className="absolute inset-0 bg-blue-600 rounded-lg shadow-md shadow-blue-600/30"
+                              transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+                            />
+                          )}
+                          <m.Icon className="relative z-10 h-4 w-4" />
+                          <span className="relative z-10">{m.label}</span>
+                        </button>
+                      )
+                    })}
                   </div>
-                </div>
-                <div className="relative inline-flex bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-full p-1 transition-colors">
-                  {[
-                    { id: 'links', label: 'Banyak Link', Icon: LinkIcon },
-                    { id: 'scrape', label: 'Akun / Halaman', Icon: ListVideo },
-                    { id: 'watcher', label: 'Pantau Akun', Icon: RadioTower },
-                    { id: 'history', label: 'Riwayat', Icon: History }
-                  ].map((m) => {
-                    const isActive = downloaderMode === m.id
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDownloaderMode(m.id as 'links' | 'scrape' | 'watcher' | 'history')
-                        }}
-                        className={`relative px-4 py-2 text-xs font-semibold rounded-full transition-colors flex items-center gap-1.5 ${
-                          isActive
-                            ? 'text-white'
-                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                        }`}
-                      >
-                        {isActive && (
-                          <motion.span
-                            layoutId="downloader-mode-pill"
-                            className="absolute inset-0 bg-blue-600 rounded-full shadow-md shadow-blue-600/25"
-                            transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
-                          />
-                        )}
-                        <m.Icon className="w-3.5 h-3.5 relative z-10" />
-                        <span className="relative z-10">{m.label}</span>
-                      </button>
-                    )
-                  })}
+                  {/* Tombol Pengaturan Unduhan — pojok kanan atas, sejajar tab (tanpa header) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsDownloadSettingsOpen(true)
+                    }}
+                    aria-label="Pengaturan Unduhan"
+                    title="Pengaturan Unduhan"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm transition-all"
+                  >
+                    <Settings className="w-4 h-4" />
+                    {downloadSettingsCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center shadow shadow-blue-600/40">
+                        {downloadSettingsCount}
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
 
               {/* Konten mode (animasi) + antrean unduhan */}
-              <div className="flex-1 min-h-0 relative z-10 px-4 sm:px-6 md:px-8 pb-24 overflow-y-auto">
+              <div className="flex-1 min-h-0 relative z-10 px-4 sm:px-6 md:px-8 pb-4 overflow-hidden flex flex-col">
                 {downloaderMode === 'links' ? (
                   <motion.div
                     key="links-mode"
                     initial={{ opacity: 0, y: 16, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                    className="mb-4"
+                    className="flex-1 min-h-0 mb-4 overflow-hidden flex flex-col"
                   >
-                      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
+                      <AnimatePresence>
+                      {!isDownloading && downloads.length === 0 && (
+                      <motion.div
+                        key="paste-card"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -12 }}
+                        transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+                        className="shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors"
+                      >
                         <div className="flex items-center gap-2.5">
                           <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
                             <LinkIcon className="w-4 h-4" />
@@ -1537,7 +1541,7 @@ export default function App(): React.ReactElement {
                               onClick={(e) => {
                                 e.preventDefault()
                                 e.stopPropagation()
-                                startBatchDownload(validLinks)
+                                startBatchDownload(validLinks, 'links')
                               }}
                               disabled={validLinks.length === 0 || isDownloading}
                               className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1551,7 +1555,22 @@ export default function App(): React.ReactElement {
                             </button>
                           }
                         />
-                      </div>
+                      </motion.div>
+                      )}
+                      </AnimatePresence>
+
+                      {/* Antrean unduhan — KHUSUS tab "Banyak Link" (source: links) */}
+                      <AnimatePresence>
+                      {linksDownloads.length > 0 && (
+                        <DownloadQueue
+                          downloads={linksDownloads}
+                          isDownloading={isDownloading}
+                          onClear={() => clearDownloads('links')}
+                          onPreview={(dl) => setPreviewLocal({ filePath: dl.filePath ?? '', title: dl.title })}
+                          onOpenFolder={(p) => window.api?.showItemInFolder?.(p)}
+                        />
+                      )}
+                      </AnimatePresence>
                     </motion.div>
                   ) : downloaderMode === 'scrape' ? (
                     <motion.div
@@ -1559,9 +1578,11 @@ export default function App(): React.ReactElement {
                       initial={{ opacity: 0, y: 16, scale: 0.98 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                      className="mb-4"
+                      className="flex-1 min-h-0 mb-4 overflow-y-auto"
                     >
                       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
+                        {(!isScraping && !scrapeItems) && (
+                          <>
                         <div className="flex flex-wrap items-center gap-2.5">
                           <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
                             <ListVideo className="w-4 h-4" />
@@ -1619,6 +1640,34 @@ export default function App(): React.ReactElement {
                             </button>
                           }
                         />
+                          </>
+                        )}
+                        {(isScraping || scrapeItems) && (
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {isScraping ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-blue-500 shrink-0" />
+                            ) : (
+                              <ListVideo className="w-4 h-4 text-blue-500 shrink-0" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                {isScraping ? 'Mengambil daftar video...' : 'Hasil Akun / Halaman'}
+                              </p>
+                              <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">{scrapeUrl}</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={clearScrape}
+                            disabled={isScraping}
+                            className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:text-slate-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Bersihkan
+                          </button>
+                        </div>
+                        )}
 
                         {scrapeError && (
                           <p className="text-xs text-rose-500 dark:text-rose-400 flex items-center gap-1.5">
@@ -1696,7 +1745,7 @@ export default function App(): React.ReactElement {
                                 onClick={(e) => {
                                   e.preventDefault()
                                   e.stopPropagation()
-                                  startBatchDownload(selectedUrls)
+                                  startBatchDownload(selectedUrls, 'scrape')
                                 }}
                                 disabled={selectedUrls.length === 0 || isDownloading}
                                 className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
@@ -1718,6 +1767,17 @@ export default function App(): React.ReactElement {
                             />
                           </div>
                         )}
+
+                        {/* Progres unduhan — KHUSUS tab "Akun / Halaman" (source: scrape) */}
+                        <AnimatePresence>
+                        {scrapeDownloads.length > 0 && (
+                          <ScrapeDownloadProgress
+                            downloads={scrapeDownloads}
+                            isDownloading={isDownloading}
+                            onClear={() => clearDownloads('scrape')}
+                          />
+                        )}
+                        </AnimatePresence>
                       </div>
                     </motion.div>
                   ) : downloaderMode === 'watcher' ? (
@@ -1726,12 +1786,11 @@ export default function App(): React.ReactElement {
                       initial={{ opacity: 0, y: 16, scale: 0.98 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                      className="mb-4"
+                      className="flex-1 min-h-0 mb-4 overflow-y-auto"
                     >
                       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
                         <WatcherPanel
                           onNotify={(title, body) => addToast(`${title} — ${body}`, 'success')}
-                          onChange={(list) => setWatcherAccountCount(list.length)}
                         />
                       </div>
                     </motion.div>
@@ -1741,7 +1800,7 @@ export default function App(): React.ReactElement {
                       initial={{ opacity: 0, y: 16, scale: 0.98 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                      className="mb-4"
+                      className="flex-1 min-h-0 mb-4"
                     >
                       <HistoryView
                         history={history}
@@ -1750,134 +1809,6 @@ export default function App(): React.ReactElement {
                       />
                     </motion.div>
                   )}
-
-              {downloads.length > 0 && (
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl overflow-hidden flex flex-col relative z-10 transition-colors">
-                  <div className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 p-3 flex items-center transition-colors">
-                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400 pl-2">Antrean Unduhan</span>
-                    <span className="ml-auto text-[11px] text-slate-400 dark:text-slate-500 pr-2">
-                      {downloads.filter((d) => d.status === 'success').length} selesai ·{' '}
-                      {downloads.filter((d) => d.status === 'failed').length} gagal
-                    </span>
-                  </div>
-                  <div className="overflow-y-auto max-h-[50vh] p-0">
-                    {downloads.map((dl) => (
-                      <div
-                        key={dl.id}
-                        className="relative border-b border-slate-100 dark:border-slate-700/50 last:border-0 p-3 sm:p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                      >
-                        <div className="flex items-start gap-2 sm:gap-3">
-                          {dl.status === 'success' && dl.thumbnail ? (
-                            <img
-                              src={dl.thumbnail}
-                              alt=""
-                              className="w-16 h-16 rounded-lg object-cover shrink-0 bg-slate-100 dark:bg-slate-900/60"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 rounded-lg shrink-0 flex items-center justify-center bg-blue-50 dark:bg-slate-900/60 text-blue-600 dark:text-blue-400">
-                              <LinkIcon className="w-6 h-6" />
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-                              {dl.title || dl.url}
-                            </p>
-                            {dl.title && dl.url !== dl.title && (
-                              <p className="truncate text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                                {dl.url}
-                              </p>
-                            )}
-                            {dl.description && dl.status === 'success' && (
-                              <p className="line-clamp-2 text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                                {dl.description}
-                              </p>
-                            )}
-                            {dl.status === 'failed' && dl.error && (
-                              <p className="text-xs text-rose-500 dark:text-rose-400 mt-1 leading-snug" title={dl.error}>
-                                {dl.error}
-                              </p>
-                            )}
-
-                            {dl.status === 'downloading' && (
-                              <>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-900/60 overflow-hidden">
-                                    <div
-                                      className="h-full rounded-full bg-blue-600 transition-[width] duration-300"
-                                      style={{ width: `${Math.max(2, Math.min(100, dl.percent))}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-xs tabular-nums text-slate-600 dark:text-slate-300 shrink-0 w-10 text-right">
-                                    {Math.round(dl.percent)}%
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 mt-1 flex-wrap">
-                                  {dl.phase === 'merging' && <span>Menggabungkan...</span>}
-                                  {dl.phase === 'retrying' && <span>Mencoba ulang...</span>}
-                                  {dl.speedBytesPerSec && dl.speedBytesPerSec > 0 && (
-                                    <span>{formatSpeed(dl.speedBytesPerSec)}</span>
-                                  )}
-                                  {dl.etaSeconds !== undefined && <span>± {formatEta(dl.etaSeconds)}</span>}
-                                  {dl.sizeBytes ? <span>{formatBytes(dl.sizeBytes)}</span> : null}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                          <div className="flex flex-col items-end gap-1.5 shrink-0">
-                            {dl.status === 'downloading' && (
-                              <span className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-full text-[11px] font-medium border border-blue-200/50 dark:border-blue-500/20">
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                Mengunduh
-                              </span>
-                            )}
-                            {dl.status === 'success' && (
-                              <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full text-[11px] font-medium">
-                                Selesai
-                              </span>
-                            )}
-                            {dl.status === 'failed' && (
-                              <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 px-2.5 py-1 rounded-full text-[11px] font-medium">
-                                Gagal
-                              </span>
-                            )}
-                            {dl.status === 'success' && dl.filePath && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setPreviewLocal({
-                                      filePath: dl.filePath ?? '',
-                                      title: dl.title
-                                    })
-                                  }}
-                                  title="Putar video"
-                                  className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95"
-                                >
-                                  <PlayCircle className="w-3 h-3" />
-                                  Putar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    window.api?.showItemInFolder?.(dl.filePath ?? '')
-                                  }}
-                                  title="Buka di folder"
-                                  className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400"
-                                >
-                                  <FolderOpen className="w-3.5 h-3.5" />
-                                  Buka folder
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
               </div>
             </motion.div>
           ) : (

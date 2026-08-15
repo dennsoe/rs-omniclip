@@ -201,6 +201,68 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
   (cleanMetadata=false/aac192)→1080×1920 **metadata PERTAHAN**, privacy+archive
   (aac256)→640×360 audio aac. typecheck/eslint/build PASS.
 
+### Konsistensi UI Halaman Pengunduh (2026-08-15, belum commit)
+- Header teks **"Unduh Video" + badge jumlah DIHAPUS** — halaman Pengunduh kini
+  konsisten dgn Pembersih (tanpa header teks; dimulai langsung dari tab).
+- Tab mode Pengunduh (Banyak Link / Akun·Halaman / Pantau Akun / Riwayat)
+  dirombak mengikuti **desain tab Pembersih**: track `rounded-xl` mengikuti
+  tema (`bg-slate-100 dark:bg-slate-900`), tombol `rounded-lg` `text-sm`,
+  pill aktif **biru `bg-blue-600` geser** (`layoutId downloader-mode-pill`),
+  ikon `h-4 w-4`.
+- Tombol **Pengaturan Unduhan** (gear) dipindah ke pojok kanan atas, sejajar
+  tab (tetap berfungsi + badge).
+- State `watcherAccountCount` + chain `getWatcherConfig` dihapus (hanya dipakai
+  badge lama yang dibuang). E2E CDP: `hasTitle false`, `badgeText false`,
+  tab `rounded-xl`/`text-sm`/ikon `[1,1,1,1]`, pill geser (`moved true`),
+  `hasGear true`. typecheck/eslint/build PASS.
+
+### Fokus Proses Halaman Pengunduh (2026-08-15, belum commit)
+- Saat **download / ambil data (scrape) diproses**, bagian input disembunyikan —
+  hanya tampilan proses yang terlihat:
+  - **Tab Banyak Link**: kartu "Tempel Banyak Tautan" disembunyikan saat
+    `isDownloading || downloads.length > 0` (fokus ke "Antrean Unduhan").
+  - **Tab Akun / Halaman**: header + input "Ambil Video dari Akun" disembunyikan
+    saat `isScraping || scrapeItems`; diganti header ringkas "Mengambil daftar
+    video..." / "Hasil Akun / Halaman" + tombol **Bersihkan**.
+- **Tombol "Bersihkan"** (ikon `Trash2`) mengosongkan hasil dan mengembalikan
+  bagian input: `clearDownloads()` (antrean) & `clearScrape()` (hasil scrape +
+  antrean + error + query). Nonaktif saat proses masih berjalan (`isDownloading`/
+  `isScraping`).
+- **E2E**: fresh state → input links & scrape tampil; saat download → input
+  tersembunyi + antrean + Bersihkan tampil (terverifikasi). typecheck/eslint/
+  build PASS.
+
+### UI Antrean Unduhan + Scrollbar Ramping (2026-08-15, belum commit)
+- **Aksi antrean (Putar, Buka folder) jadi icon-only horizontal** — tombol teks
+  diganti ikon (`PlayCircle`/`FolderOpen`) dengan tooltip (`title` + `aria-label`),
+  disusun sejajar (flex row) di kanan kartu. 
+- **Klik judul = putar otomatis** — judul item sukses kini `<button>` (hover
+  biru); klik membuka `MediaPreviewModal` (`setPreviewLocal`) yang auto-play
+  (`VideoPlayer` sudah `autoPlay`). 
+- **Scrollbar global didesain ulang** (`src/assets/main.css`, `@layer base`):
+  `scrollbar-width: thin` (Firefox) + `::-webkit-scrollbar` 8px, thumb rounded
+  (`border-radius 9999px`, `background-clip: content-box`), warna mengikuti
+  tema: light `rgb(148 163 184 / .55)` (slate-400), dark `.dark ::-webkit-
+  scrollbar-thumb` `rgb(71 85 105 / .7)` (slate-600), + hover.
+- **E2E**: scrollbar tervalidasi via computed style (lebar 8px, thumb slate-400
+  light / slate-600 dark); unduhan YouTube nyata sukses dgn kode baru
+  (download flow OK); typecheck/eslint/build PASS. (Verifikasi DOM item antrean
+  dibatasi CDP flaky + HMR reset state in-memory.)
+
+### Redesain Tabel/Daftar Premium + Responsif (2026-08-15, belum commit)
+- Semua daftar baris ("tabel") dibuat konsisten & premium, responsif thd ukuran
+  aplikasi: **Antrean Unduhan** (App.tsx), **Riwayat** (HistoryView),
+  **Hasil Akun list** (ScrapeResultView), **Pantau Akun** (WatcherPanel).
+- Pola: header ber-**icon chip + judul + jumlah** (`bg-slate-50/80` +
+  `dark:bg-slate-900/40`, `px-4 py-3`); baris `px-4 py-3` + hover
+  (`hover:bg-slate-50 dark:hover:bg-slate-700/40`); **thumbnail responsif**
+  (`h-12 w-12 sm:h-14 sm:w-14`, `hidden min-[420px]:block` = sembunyi di layar
+  sangat sempit) + **overlay play saat hover** (named group `group/thumb`);
+  judul hover biru; progress gradien (`bg-linear-to-r from-blue-500 to-blue-600`);
+  aksi icon-only horizontal.
+- **E2E**: Riwayat header premium tampil; **tanpa overflow horizontal di lebar
+  480px** (`scrollWidth == innerWidth`). typecheck/eslint/build PASS.
+
 ### Perbaikan Audit Forensik (2026-08-15)
 0. **Batasan klik-import dropzone** — sebelumnya `getRootProps()` dipasang di
    SELURUH area utama kanan + `noClick: activeMenu!=='cleaner' || files.length>0`
