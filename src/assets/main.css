@@ -6,6 +6,23 @@
   --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
+@layer base {
+  /* Rasa aplikasi desktop: tanpa underline link & tanpa seleksi teks UI.
+     Field form (input/textarea) tetap bisa diedit/dipilih teksnya. */
+  a {
+    text-decoration: none;
+  }
+  * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input,
+  textarea {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -13,6 +30,14 @@
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+  /* Region drag jendela (rasa desktop): .app-drag untuk area yang bisa
+     men-drag window; .app-no-drag untuk elemen interaktif di dalamnya. */
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+  .app-no-drag {
+    -webkit-app-region: no-drag;
   }
 }
 

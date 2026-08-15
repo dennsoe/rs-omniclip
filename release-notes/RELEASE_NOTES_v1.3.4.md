@@ -158,7 +158,25 @@ siap disalin ke **detail release GitHub** (mis. `gh release create v1.3.4
     `text-xs py-1.5` = 28px) disamakan dengan "Ambil Daftar" (`text-sm py-2
     px-3.5 gap-2 icon h-4`, = 36px) dan "Simpan" (trim) ikut disamakan — semua
     tombol primer rounded-lg identik. Terverifikasi E2E: tinggi/font/padding/
-    radius/weight IDENTIK (36px / 14px / 8-14px / 8px / 600).- **Switch animasi (Toggle)** — menggantikan checkbox boolean:
+    radius/weight IDENTIK (36px / 14px / 8-14px / 8px / 600).
+  - **Rasa aplikasi desktop (2026-08-15)** — tiga penyempurnaan:
+    - Tanpa underline: hapus `hover:underline` dari tombol teks-link
+      (Bersihkan, Pilih Semua/Kosongkan Pilihan, Buka folder) + pengaman
+      `a { text-decoration: none }`.
+    - Window bisa di-drag seperti aplikasi desktop: strip `-webkit-app-region:
+      drag` di area atas (36px, z-30); tombol menu mobile `no-drag` + z-40.
+    - Tidak bisa select text UI: `user-select: none` global; `input`/`textarea`
+      tetap bisa diedit (`user-select: text`).
+    - Terverifikasi E2E Electron nyata (appRegion: drag; body none, input/ta
+      text; underlinedTotal 0).
+  - **Fix warning CSS Tailwind v4 di editor (2026-08-15)** — VS Code tidak
+    mengenali at-rule `@theme`/`@custom-variant` (warning `unknownAtRules`).
+    FIX: daftarkan at-rule via `css.customData`
+    (`.vscode/tailwind.css-data.json` + `settings.json`) — bukan mematikan
+    semua cek unknownAtRules. Sekaligus perbarui setting TS deprecated
+    (`typescript.tsdk` → `js/ts.tsdk.path`;
+    `typescript.enablePromptUseWorkspaceTsdk` →
+    `js/ts.tsdk.promptToUseWorkspaceVersion`).- **Switch animasi (Toggle)** — menggantikan checkbox boolean:
   - "Unduh 2 sekaligus" di Pengaturan Unduhan → toggle animasi.
   - "Mode Gelap" di halaman Tentang &amp; Update → toggle animasi (tetap sinkron
     dengan tombol di sidebar).
@@ -227,3 +245,5 @@ siap disalin ke **detail release GitHub** (mis. `gh release create v1.3.4
 | 2026-08-15 | UI | Textarea kompak: mulai setinggi input (rows=1, ~48px, label placeholder di tengah) + auto-resize naik/turun sesuai isi; padding py-3.5 | `src/components/ui/FloatingField.tsx`, `src/App.tsx`, `src/components/DownloadSettingsModal.tsx` |
 | 2026-08-15 | UI | Tombol aksi di dalam field: "Unduh Semua" di dalam textarea (kanan-bawah, padding adaptif via ResizeObserver) + "Ambil Daftar" di dalam input (kanan, center vertikal) — prop `action` baru | `src/components/ui/FloatingField.tsx`, `src/App.tsx` |
 | 2026-08-15 | Fix | Konsistensi tombol primer: "Unduh Semua" disamakan dengan "Ambil Daftar" (text-sm py-2 px-3.5 gap-2 icon h-4) + "Simpan" trim ikut disamakan — identik (E2E) | `src/App.tsx`, `src/components/SortableFileItem.tsx` |
+| 2026-08-15 | UI | Rasa desktop: hapus underline tombol teks-link + `a{text-decoration:none}`; strip drag window (`-webkit-app-region:drag`, 36px, z-30) + tombol menu mobile no-drag/z-40; `user-select:none` global (input/textarea tetap text) | `src/App.tsx`, `src/assets/main.css` |
+| 2026-08-15 | Fix | Warning CSS `@theme`/`@custom-variant` di editor: daftarkan at-rule Tailwind v4 via `css.customData` (`.vscode/tailwind.css-data.json`) + `settings.json`; perbarui setting TS deprecated (`js/ts.tsdk.path`, `js/ts.tsdk.promptToUseWorkspaceVersion`) | `.vscode/settings.json`, `.vscode/tailwind.css-data.json` (baru) |

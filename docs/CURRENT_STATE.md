@@ -159,6 +159,30 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
     - Terverifikasi E2E Electron nyata: tombol di dalam (`btnInside`), gap
       kanan/bawah ~7px, `taPaddingRight` 160px ≈ btnW+18, field tumbuh 50→110px
       saat 4 baris dengan tombol tetap kanan-bawah.
+  - **Rasa aplikasi desktop (2026-08-15)**:
+    - **Tanpa underline** — dihapus `hover:underline` dari tombol teks-link
+      (Bersihkan, Pilih Semua/Kosongkan Pilihan, Buka folder) + pengaman global
+      `a { text-decoration: none }` di main.css.
+    - **Window bisa di-drag** — strip drag `fixed inset-x-0 top-0 z-30 h-9`
+      dengan `-webkit-app-region: drag` (area atas 36px kosong, aman); tombol
+      menu mobile diberi `.app-no-drag` + `z-40` agar tetap bisa diklik.
+      Utility `.app-drag`/`.app-no-drag` di main.css (@layer utilities).
+    - **Tidak bisa select text** — `* { user-select: none }` global; `input` &
+      `textarea` tetap `user-select: text` (untuk mengedit).
+    - Terverifikasi E2E Electron nyata: strip `appRegion: drag` (fixed, 36px,
+      z-30); user-select body/button `none`, input/textarea `text`;
+      `underlinedTotal: 0`.
+  - **Fix warning CSS `@theme`/`@custom-variant` (2026-08-15)**: VS Code CSS
+    language server tidak mengenal at-rule Tailwind v4 → warning
+    `unknownAtRules`. FIX: deklarasikan at-rule via `css.customData` →
+    `.vscode/tailwind.css-data.json` (berisi @tailwind, @apply, @theme,
+    @custom-variant, @variant, @source, @utility) + tautkan di
+    `.vscode/settings.json`. Bukan mematikan semua `unknownAtRules` (tetap
+    mendeteksi at-rule benar-benar asing). Sekaligus perbarui setting TS
+    deprecated (`typescript.tsdk` → `js/ts.tsdk.path`,
+    `typescript.enablePromptUseWorkspaceTsdk` →
+    `js/ts.tsdk.promptToUseWorkspaceVersion`). Terverifikasi: get_errors
+    bersih, JSON valid, build PASS.
     - **PELAJARAN OPERASIONAL (2026-08-15)**: error `No handler registered for
       preview:resolve` + thumbnail tidak muncul = **main process STALE**
       (electron-vite dev TIDAK hot-reload main). Renderer & preload baru dari

@@ -788,6 +788,10 @@ export default function App(): React.ReactElement {
 
   return (
     <div className={`${isDarkMode ? 'dark' : ''} h-dvh flex flex-col overflow-hidden`}>
+      {/* STRIP DRAG JENDELA — area atas (36px) kosong (konten mulai pt-16/pt-12),
+          jadi aman dijadikan region drag agar window bisa dipindah seperti
+          aplikasi desktop. Elemen interaktif di area ini diberi .app-no-drag. */}
+      <div aria-hidden className="app-drag fixed inset-x-0 top-0 z-30 h-9" />
       {/* BANNER STATUS MESIN — non-blocking: app tetap bisa dipakai. "Coba Lagi"
           memicu ulang provisioning (engine:check -> initEngine). */}
       {window.api?.checkEngine && !isAppReady && (
@@ -1039,7 +1043,7 @@ export default function App(): React.ReactElement {
 
           {/* MOBILE MENU BUTTON — left-20 (80px) agar tidak menimpa traffic light macOS (berakhir ±68px) */}
           {isMobile && !isSidebarOpen && (
-            <div className="absolute top-4 left-20 z-10">
+            <div className="app-no-drag absolute top-4 left-20 z-40">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -1119,7 +1123,7 @@ export default function App(): React.ReactElement {
                                 e.stopPropagation()
                                 clearList()
                               }}
-                              className="text-xs font-medium text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-500 hover:underline flex items-center gap-1 transition-colors"
+                              className="text-xs font-medium text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-500 flex items-center gap-1 transition-colors"
                             >
                               <Trash2 className="w-3 h-3" />
                               Bersihkan
@@ -1473,7 +1477,7 @@ export default function App(): React.ReactElement {
                                   e.stopPropagation()
                                   toggleScrapeAll()
                                 }}
-                                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                                className="text-xs font-semibold text-blue-600 dark:text-blue-400"
                               >
                                 {scrapeItems.every((it) => scrapeSelected[it.url])
                                   ? 'Kosongkan Pilihan'
@@ -1606,7 +1610,7 @@ export default function App(): React.ReactElement {
                                   window.api?.showItemInFolder?.(dl.filePath ?? '')
                                 }}
                                 title="Buka di folder"
-                                className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                                className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400"
                               >
                                 <FolderOpen className="w-3.5 h-3.5" />
                                 Buka folder
