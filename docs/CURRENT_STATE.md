@@ -3,9 +3,15 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
 
-## Status Rilis v1.4 (SEDANG DIKERJAKAN) — 5 Fitur Besar
+## Status Rilis v1.4.1 (DALAM PROSES RILIS) — 5 Fitur Besar
 
-- **Branch**: `release/v1.3.4` (BELUM di-push; menunggu persetujuan commit/push user).
+- **Branch**: `release/v1.4.1` (baru, dari `release/v1.3.4`). Commit `91d05be`
+  "feat: rilis v1.4.1 — 5 fitur besar". **Sudah di-push** + **PR #26** ke `main`
+  (open, BELUM di-merge).
+- **Versi**: `1.3.4` → **`1.4.1`** (package.json + package-lock.json).
+- **Catatan rilis**: `release-notes/RELEASE_NOTES_v1.4.1.md`.
+- **Belum dilakukan** (tunggu instruksi user): merge PR (merge commit), build
+  artefak mac+win, tag `v1.4.1`, GitHub Release.
 - **Referensi pengerjaan**: `docs/IMPLEMENTATION_v1.4.md` (semua keputusan teknis).
 - **Semua 5 fitur SELESAI diimplementasi & DIVALIDASI** (tsc/lint/build PASS +
   E2E Electron+CDP nyata). File baru: `electron/main/config.ts`, `media.ts`,
