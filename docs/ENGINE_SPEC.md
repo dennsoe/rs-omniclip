@@ -66,7 +66,7 @@ ffprobe -v error -print_format json -show_format -show_streams <file>
 ```
 
 Menghasilkan `{ duration, width, height, hasVideo, hasAudio }`. `duration`
-dipakai untuk menghitung persentase kemajuan dan bitrate kompresor WhatsApp.
+dipakai untuk menghitung persentase kemajuan.
 
 ## 5. Eksekusi FFmpeg — `runFfmpeg(options)`
 
@@ -80,76 +80,77 @@ dipakai untuk menghitung persentase kemajuan dan bitrate kompresor WhatsApp.
 
 ## 6. Preset Pemrosesan (`processor.ts`)
 
-`processBatch(files, preset, onProgress)` memproses file berurutan, non-destruktif,
-ke folder `[CLEANED] - YYYY-MM-DD`, nama file dipertahankan (ekstensi `.mp4`).
-Setiap preset menghasilkan `outputPath = <outputFolder>/<nama-asli>.mp4`.
+`processBatch(files, preset, onProgress, options)` memproses file berurutan,
+non-destruktif, ke folder `[CLEANED] - YYYY-MM-DD`, nama file dipertahankan
+(ekstensi `.mp4`). Setiap preset menghasilkan
+`outputPath = <outputFolder>/<nama-asli>.mp4`.
 
 **Anti-timpa hasil**: jika nama output sudah ada di folder (mis. diproses ulang
 hari yang sama), engine otomatis menambahkan akhiran `(n)` — hasil lama tidak
 pernah ditimpa, berkas asli dan hasil sebelumnya tetap aman.
 
-Semua preset memakai `-map_metadata -1` (hapus metadata) dan
-`-movflags +faststart` (siap streaming).
+`options: ProcessOptions { hwAccel?, processingMode?: 'privacy' | 'enhance',
+cleanMetadata?, quality?: 'auto'|'best'|'balanced'|'compact',
+audio?: 'original'|'aac128'|'aac192'|'aac256' }`.
+Metadata dibuang bila `cleanMetadata` (default true) → `-map_metadata -1`;
+selalu `-movflags +faststart` (siap streaming). `quality` memetakan preset
+x264 + CRF (`crfForQuality`/`x264QualityArgs`); `audio` memetakan
+`audioModeArgs` (original = `-c:a copy`).
 
-### 6.1 `metadata` — Hapus Metadata (lossless)
+### 6.1 `metadata` — Hapus Metadata (lossless, khusus Auto-Watcher auto-clean)
 
 Set utama (remux lossless):
 ```
 ffmpeg -y -i <in> -map_metadata -1 -c copy -movflags +faststart <out>
 ```
-
 Remux tanpa re-encode — sangat cepat, kualitas tidak berubah.
 
-**Fallback**: jika codec tidak dapat diremux ke `.mp4` (mis. audio PCM, ProRes,
-HEVC dengan parameter tertentu), engine otomatis mencoba ulang dengan encode
-minimal agar preset tetap berhasil (metadata tetap dihapus):
+**Fallback**: jika codec tidak dapat diremux ke `.mp4`, engine mencoba ulang
+dengan encode minimal (metadata tetap dihapus):
 ```
 libx264 -preset veryfast -crf 23 -pix_fmt yuv420p, audio aac 128k
 ```
 
-### 6.2 `hd` (720p), `fullhd` (1080p), `uhd` (4K) — Peningkat Video
+### 6.2 Mode `privacy` — Privasi Cepat (Tanpa Efek)
 
-`buildEnhance(common, target, output)` dengan `target` = 720 / 1080 / 2160.
+Mode dipilih via tab di UI (ikon `ShieldCheck`; pill aktif biru geser). Tanpa
+filter berat (denoise/CAS/eq); encode mengikuti `quality` (default `auto` =
+`libx264 -preset veryfast -crf 20`):
 
-Filter video:
+- `archive` (Kualitas Asli) → `-c copy` (audio original) / `-c:v copy` +
+  re-encode audio (audio != original) — instan, tanpa re-encode video.
+- `hd`/`fullhd`/`uhd` → `scale='if(gt(iw,ih),-2,T)':'if(gt(iw,ih),T,-2)'`
+  (short-side = target: 720p→1280×720, 1080p→1920×1080, 2160p→3840×2160;
+  otomatis genap via `-2`) + `libx264 veryfast`.
+- `vertical` → `VERTICAL_PAD_BLUR` (lihat 6.4) + `libx264 veryfast`.
+
+### 6.3 Mode `enhance` — Penjernihan Maksimal (default)
+
+Mode dipilih via tab di UI (ikon `Focus`; pill aktif biru geser). Wajib
+re-encode + pipeline jernih:
 ```
-scale='if(gt(iw,ih),<target>,-2)':'if(gt(iw,ih),-2,<target>)':flags=lanczos,
-unsharp=5:5:0.6:5:5:0.0
+atadenoise=0a=0.04:0b=0.04 → [scale long-side + flags=lanczos] → cas=0.7 → eq(saturation=1.15:contrast=1.04)
 ```
+- `archive` → pipeline tanpa scale, encoder mengikuti `quality`.
+- `hd`/`fullhd`/`uhd` → `buildEnhance` (pipeline + scale lanczos), encoder
+  mengikuti `quality` (hwAccel-aware: videotoolbox/nvenc/amf, fallback x264).
+- `vertical` → `buildEnhance` (pipeline + pad-blur 9:16).
+- Audio mengikuti `audio` (original → `-c:a copy` tanpa filter; selainnya
+  AAC + `afftdn=nr=12:nf=-30`, dgn fallback tanpa filter audio).
 
-- Upscale sumbu panjang ke target (landscape → lebar target; portrait → tinggi
-  target), menjaga rasio aspek.
-- `unsharp` untuk penajaman AI-like.
-- Filter audio `afftdn=nr=12:nf=-30` (reduksi noise).
-- Encode: `libx264 -preset veryfast -crf 20 -pix_fmt yuv420p`, audio `aac 192k`.
-- **Fallback**: jika set utama gagal (mis. codec audio tidak kompatibel dengan
-  filter), otomatis mencoba ulang tanpa filter audio.
+### 6.4 `vertical` — Vertikal 9:16 Story/Shorts/Reels
 
-### 6.3 `archive` — Arsip Kualitas Maks
-
+Output 1080×1920. Transformasi "pad-blur" (konten utuh di tengah, latar blur
+bukan hitam):
 ```
-libx264 -preset slow -crf 18 -pix_fmt yuv420p, audio aac 256k
+split=2[fg][bg];
+[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=0.25:contrast=1.0[bg2];
+[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg2];
+[bg2][fg2]overlay=(W-w)/2:(H-h)/2
 ```
-
-Resolusi asli, kualitas terbaik.
-
-### 6.4 `whatsapp` — Kompresi WhatsApp
-
-Bitrate video dihitung agar ukuran akhir mendekati **target 16 MB**:
-
-```
-duration = probe.duration (default 60 jika tidak diketahui)
-totalBits      = 16 * 8 * 1024 * 1024
-audioBits      = 128 * 1024 * duration
-videoBits      = max(totalBits - audioBits, 256 * 1024 * duration)
-videoBitrate_k = round(videoBits / 1024 / duration)
-```
-
-Command:
-```
-libx264 -preset medium -b:v <vb>k -maxrate <vb*1.5>k -bufsize <vb*2>k
--pix_fmt yuv420p, audio aac 128k
-```
+`crop=1080:1920` memaksa latar ke dimensi genap agar kompatibel dengan
+libx264 yuv420p. Tidak memotong konten utama. Mode privacy: `libx264 veryfast`;
+mode enhance: pipeline jernih + encoder CRF.
 
 ### 6.5 Catatan Watermark (`drawtext`) — TIDAK TERSEDIA
 

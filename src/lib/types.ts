@@ -1,4 +1,10 @@
-export type PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'whatsapp'
+export type PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'vertical'
+/** Mode pemrosesan: 'privacy' (cepat, tanpa efek) / 'enhance' (penjernihan maksimal). */
+export type ProcessingMode = 'privacy' | 'enhance'
+/** Kualitas encode (memetakan preset x264 + CRF). */
+export type QualityLevel = 'auto' | 'best' | 'balanced' | 'compact'
+/** Penanganan audio keluaran. */
+export type AudioMode = 'original' | 'aac128' | 'aac192' | 'aac256'
 export type FileStatus = 'pending' | 'processing' | 'success' | 'failed'
 
 export interface FileItem {
@@ -21,6 +27,10 @@ export interface FileItem {
 export interface ProcessingPayload {
   files: FileItem[]
   preset: PresetType
+  processingMode?: ProcessingMode
+  cleanMetadata?: boolean
+  quality?: QualityLevel
+  audio?: AudioMode
 }
 
 /** Satu item video hasil scrape akun/halaman (yt-dlp --flat-playlist). */

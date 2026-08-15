@@ -9,6 +9,8 @@ import { iconCls } from './floating-classes'
 export interface SelectOption {
   value: string
   label: string
+  /** Deskripsi opsional — ditampilkan sebagai baris kedua pada opsi dropdown. */
+  description?: string
 }
 
 interface PanelRect {
@@ -153,13 +155,27 @@ export default function FloatingSelect({
                     setOpen(false)
                   }}
                   className={clsx(
-                    'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors',
+                    'flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
                     o.value === value
                       ? 'bg-blue-50 font-semibold text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'
                       : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-700'
                   )}
                 >
-                  {o.label}
+                  <span className="flex min-w-0 flex-col items-start">
+                    <span className="truncate">{o.label}</span>
+                    {o.description && (
+                      <span
+                        className={clsx(
+                          'mt-0.5 w-full truncate text-[11px] font-normal leading-tight',
+                          o.value === value
+                            ? 'text-blue-500/80 dark:text-blue-300/80'
+                            : 'text-slate-400 dark:text-slate-400'
+                        )}
+                      >
+                        {o.description}
+                      </span>
+                    )}
+                  </span>
                   {o.value === value && <Check className="h-4 w-4 shrink-0" />}
                 </button>
               </div>

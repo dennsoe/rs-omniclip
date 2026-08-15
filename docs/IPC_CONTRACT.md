@@ -50,7 +50,11 @@ interface Window {
 
     startProcessing: (payload: {
       files: FileItem[]
-      preset: 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'whatsapp'
+      preset: 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'vertical'
+      processingMode?: 'privacy' | 'enhance'
+      cleanMetadata?: boolean
+      quality?: 'auto' | 'best' | 'balanced' | 'compact'
+      audio?: 'original' | 'aac128' | 'aac192' | 'aac256'
     }) => void
 
     onProcessingProgress: (

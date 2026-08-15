@@ -49,7 +49,7 @@ Dokumen ini adalah **sumber catatan rilis** untuk release v1.4.1. Bagian
 - Pengaturan "Pemrosesan Hardware" hanya menampilkan encoder yang **benar-benar
   tersedia** di perangkat; mode "Otomatis" memakai CPU (libx264).
 - **Fallback berjenjang**: bila encode GPU gagal, otomatis turun ke CPU — hasil
-  tetap sesuai prasetel (HD/FullHD/UHD/WhatsApp).
+  tetap sesuai prasetel (HD/FullHD/UHD/Vertikal).
 
 ### 5. Pemutar Pratinjau Internal + Riwayat
 - **Pratinjau inline**: klik "Putar" pada baris antrean unduhan → video diputar
@@ -58,6 +58,22 @@ Dokumen ini adalah **sumber catatan rilis** untuk release v1.4.1. Bagian
   untuk memutar ulang, tombol "Bersihkan Riwayat".
 - Riwayat & semua pengaturan baru tersimpan **di main process** (aman, bukan
   localStorage).
+
+### 6. Perombakan Total Preset — 2 Tab + Select Detail + Toggle Metadata
+- Grid kartu prasetel dihapus. Kini **2 tab mode tanpa ikon** ("Privasi Cepat
+  (Tanpa Efek)" / "Penjernihan Maksimal") dan di dalamnya **beberapa select
+  detail**: **Prasetel** (opsi berubah sesuai tab, judul + deskripsi rinci),
+  **Kualitas** (Otomatis/Terbaik/Seimbang/Kompak), **Audio** (Pertahankan
+  Asli/AAC 128/192/256), plus **Toggle "Hapus Metadata & GPS"** (Ya/Tidak).
+- Ikon petir & AI dihapus; mode kini independen dari resolusi.
+- **Mode Privasi** (cepat): Kualitas Asli → salin instan; resolusi → skala
+  cepat; vertikal → format 9:16 cepat.
+- **Mode Penjernihan** (default): pipeline `atadenoise → scale(lanczos) →
+  cas → eq` untuk video lebih tajam, bersih, warna hidup.
+- Prasetel: Kualitas Asli, HD 720p, Full HD 1080p, 4K UHD, **Vertikal 9:16**
+  (Story/Shorts/Reels, 1080×1920, latar blur — bukan hitam).
+- Preset **Kompresi WhatsApp dihapus**; preset "Hapus Metadata" di belakang
+  (tetap dipakai Auto-Watcher).
 
 ### Penyempurnaan v1.3.4 (termasuk dalam rilis ini)
 - Floating field gaya Google (label outlined + notch), video player sinematik,

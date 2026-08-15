@@ -208,8 +208,10 @@ async function initEngine(): Promise<void> {
 async function handleProcessing(payload: {
   files: ProcessFileInput[]
   preset: PresetType
+  processingMode?: 'privacy' | 'enhance'
   cleanMetadata?: boolean
-  enhanceQuality?: boolean
+  quality?: 'auto' | 'best' | 'balanced' | 'compact'
+  audio?: 'original' | 'aac128' | 'aac192' | 'aac256'
 }): Promise<void> {
   if (
     !payload ||
@@ -233,8 +235,10 @@ async function handleProcessing(payload: {
       emit('processing:progress', p)
     }, {
       hwAccel: getConfig().hwAccel?.mode ?? 'auto',
+      processingMode: payload.processingMode ?? 'enhance',
       cleanMetadata: payload.cleanMetadata !== false,
-      enhanceQuality: payload.enhanceQuality !== false
+      quality: payload.quality ?? 'auto',
+      audio: payload.audio ?? 'original'
     })
     emit('processing:complete', { outputFolder })
   } catch (err) {

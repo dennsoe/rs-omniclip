@@ -132,8 +132,10 @@ const api = {
   startProcessing: (payload: {
     files: unknown[]
     preset: string
+    processingMode?: string
     cleanMetadata?: boolean
-    enhanceQuality?: boolean
+    quality?: string
+    audio?: string
   }): void => {
     ipcRenderer.send('processing:start', payload)
   },

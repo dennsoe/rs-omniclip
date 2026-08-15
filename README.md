@@ -11,8 +11,12 @@ desktop **Electron-Vite** dengan backend Node.js asli. Kode lama tersimpan di
 
 ## Fitur
 
-1. **Pembersih Metadata Massal** — Menghapus EXIF/GPS via FFmpeg (remux lossless).
-2. **Peningkat Video & Normalisasi Audio** — Upscale 1080p (sumbu panjang) + penajaman AI-like (`unsharp`) + reduksi noise audio (`afftdn`).
+1. **Pembersih Video & Peningkat Kualitas** — Pilih **mode** via Segmented
+   Control: **"Privasi Cepat (Tanpa Efek)"** (bersihkan metadata/GPS + format
+   cepat) atau **"Penjernihan Maksimal"** (pipeline `atadenoise → scale(lanczos)
+   → cas → eq` untuk video lebih tajam, bersih, warna hidup). Lalu pilih
+   **resolusi**: Kualitas Asli, HD 720p, Full HD 1080p, 4K UHD, atau
+   **Vertikal 9:16** (Story/Shorts/Reels, latar blur). Metadata selalu dibuang.
 3. **Pengunduh Video Universal** — unduh banyak link sekaligus (batch) atau ambil
    daftar video dari satu akun/halaman lalu pilih yang ingin diunduh, via `yt-dlp`
    (YouTube, TikTok, Instagram, dll). TikTok memakai jalur **API TikWM (5 key,
@@ -27,8 +31,7 @@ desktop **Electron-Vite** dengan backend Node.js asli. Kode lama tersimpan di
 4. **Pemotong Video Inline** — Potong lossless (stream copy) tanpa re-encode.
 5. **Watermark & Auto-Caption** — Di roadmap (build FFmpeg saat ini tidak
    mendukung filter `drawtext`).
-6. **Kompresor WhatsApp** — Target ukuran file otomatis (~16 MB) untuk berbagi via WhatsApp.
-7. **Pembaruan GRATIS** — Tombol "Periksa Update" (cek rilis terbaru dari
+6. **Pembaruan GRATIS** — Tombol "Periksa Update" (cek rilis terbaru dari
    GitHub tanpa biaya), versi tampil di footer + halaman "Tentang & Update",
    dan perbarui resource mesin (FFmpeg/yt-dlp) via manifest `resources.json`.
    Rilis otomatis via GitHub Actions saat tag `v*` di-push.
@@ -117,14 +120,24 @@ window.api = {
 
 ## Preset Pemrosesan (FFmpeg)
 
-| Preset | Perintah inti |
-|---|---|
-| `metadata` (Hapus Metadata) | remux lossless `-map_metadata -1 -c copy -movflags +faststart` (+ fallback re-encode minimal) |
-| `hd` (HD 720p) | upscale 720p + `unsharp` + `afftdn`, `libx264`, audio 192k |
-| `fullhd` (Full HD 1080p) | upscale 1080p + `unsharp` + `afftdn`, `libx264`, audio 192k (default) |
-| `uhd` (4K UHD) | upscale 2160p + `unsharp` + `afftdn` |
-| `archive` (Kualitas Maks) | `libx264 preset slow crf 18`, audio 256k |
-| `whatsapp` (Kompresi WA) | bitrate dihitung dari target 16 MB dan durasi video |
+**Mode** (2 tab dengan ikon + pill aktif biru): `privacy` (cepat, tanpa
+ efek) / `enhance` (penjernihan maksimal, default). Pilih lewat dropdown
+detail: **Prasetel** (judul + deskripsi), **Kualitas**
+(Otomatis/Terbaik/Seimbang/Kompak), dan **Audio** (Pertahankan Asli/AAC),
+semua berikon sesuai. Metadata dibuang lewat toggle **"Hapus Metadata &
+GPS"** (Ya/Tidak, default ya).
+
+| Preset | Mode `privacy` | Mode `enhance` |
+|---|---|---|
+| `archive` (Kualitas Asli) | `-c copy -movflags +faststart` (instan) | `atadenoise→cas→eq`, `libx264 crf 18` (tanpa scale) |
+| `hd` (HD 720p) | scale 720p + `libx264 veryfast` | `atadenoise→scale(720,lanczos)→cas→eq`, encoder CRF 20 |
+| `fullhd` (Full HD 1080p) | scale 1080p + `libx264 veryfast` (default) | pipeline jernih 1080p, encoder CRF 20 |
+| `uhd` (4K UHD) | scale 2160p + `libx264 veryfast` | pipeline jernih 2160p, encoder CRF 20 |
+| `vertical` (Vertikal 9:16) | pad-blur 1080×1920 + `libx264 veryfast` | pipeline jernih + pad-blur 1080×1920 |
+
+Encode GPU didukung (VideoToolbox/NVENC/AMF) dengan fallback otomatis ke
+`libx264`. Preset `metadata` (remux lossless) tetap ada di backend untuk
+Auto-Watcher (auto-clean privasi).
 
 ## Provisioning Binary (Pertama Kali Dijalankan)
 

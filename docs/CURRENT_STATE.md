@@ -149,27 +149,67 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
   off (Periksa/Cek/tambah form tersembunyi); error TikTok kini pesan ramah
   (bukan kriptik). typecheck/eslint/build PASS.
 
-### Pembersih Video — 2 Saklar Global + Pipeline "Jernih" (2026-08-15, belum commit)
-- **2 saklar global** di atas grid "Pilih Prasetel" (halaman Pembersih Video):
-  1. **"Hapus Data Privasi (Metadata & GPS)"** (default ON) — mengontrol `-map_metadata -1`.
-  2. **"Tingkatkan Kualitas & Jernihkan"** (default ON) — mengontrol pipeline peningkatan.
-- **Logika**: bila "Jernihkan" OFF → prasetel HD/Full HD/4K menjadi `disabled`
-  (redup), dan tombol Proses HANYA membuang metadata (cepat, `-c copy`); bila
-  OFF saat prasetel peningkat aktif → otomatis pindah ke "Hapus Metadata".
-  Bila "Hapus Data Privasi" OFF → metadata dipertahankan.
-- **Pipeline jernih baru** (`buildEnhance`, menggantikan lanczos+unsharp):
-  `atadenoise → scale(lanczos) → cas=0.7 → eq(saturation=1.25:contrast=1.04)`.
-- **Backend**: `ProcessOptions { hwAccel, cleanMetadata, enhanceQuality }` di
-  `processBatch`; `buildArgSets` branch `!enhanceQuality` → metadata-only.
-  IPC `processing:start` payload diperluas (`cleanMetadata`, `enhanceQuality`).
-  `ProcessFileInput` tetap. Preferensi baru: `omni.cleanMetadata`, `omni.enhanceQuality`.
-- **E2E terverifikasi**: 2 saklar render + default ON; enhance OFF → HD/4K
-  disabled + auto-switch ke "Hapus Metadata"; hidup lagi → aktif kembali.
-  Pemrosesan nyata: enhance ON (fullhd) → output **1080x608** (upscaled, ~2.1
-  Mbps); enhance OFF → output **640x360** (resolusi asli, `-c copy` cepat).
-  typecheck/eslint/build PASS.
+### Perombakan Total Preset — 2 Tab + Beberapa Select Detail + Toggle Metadata (2026-08-15, belum commit)
+- **UI baru (anti-ambigu)**: grid kartu prasetel DIHAPUS. Kini ada **2 tab
+  mode** ("Privasi Cepat (Tanpa Efek)" ikon `ShieldCheck` / "Penjernihan
+  Maksimal" ikon `Focus`) dengan **pill aktif BIRU yang GESER** (layoutId
+  `cleaner-mode-pill`, spring) — desain TETAP khas Pembersih (track
+  `rounded-xl` mengikuti tema, tombol `rounded-lg` `text-sm`), hanya EFEK
+  GESER yang diadopsi dari tab Pengunduh. Tab Pengunduh nantinya akan
+  mengikuti desain tab Pembersih ini. Di dalamnya **beberapa select detail**
+  (semua berikon sesuai: Prasetel `MonitorUp`, Kualitas `Gem`, Audio
+  `AudioLines`):
+  1. **Prasetel** — opsi berubah sesuai tab (mode): tab Cepat → "Kualitas
+     Asli (Salin)", "HD 720p (Cepat)", dst. (deskripsi: tanpa efek/cepat);
+     tab Jernih → "Kualitas Asli (Jernih)", "HD 720p (Jernih)", dst.
+     (deskripsi: penajaman & perbaikan warna). Semua opsi menampilkan
+     **judul + deskripsi rinci** (FloatingSelect diperluas: `description`).
+  2. **Kualitas** — Otomatis (Seimbang) / Kualitas Terbaik / Seimbang /
+     Kompak (File Kecil) → memetakan preset x264 + CRF.
+  3. **Audio** — Pertahankan Asli / AAC 128 / 192 / 256 kbps.
+  4. **Toggle "Hapus Metadata & GPS"** (Ya/Tidak, default ON) — opsi eksplisit
+     buang metadata/GPS (sebelumnya selalu dibuang tanpa kontrol).
+- **Ikon petir (`Zap`) & AI (`Sparkles`) DIHAPUS** dari tab; komponen kartu
+  `PresetSelector.tsx` dihapus (kode mati).
+- **Backend**: `ProcessOptions { hwAccel, processingMode, cleanMetadata,
+  quality, audio }` di `processBatch`; `buildArgSets(preset, input, output,
+  info, hwAccel, processingMode, cleanMetadata, quality, audio)`.
+  `common = -y -i <in> [+ -map_metadata -1 bila cleanMetadata]`. Helper baru:
+  `crfForQuality`, `x264QualityArgs`, `audioModeArgs`. Kualitas Asli privacy +
+  audio original → `-c copy`; audio diubah → re-encode audio saja (`-c:v copy`).
+  Helper WhatsApp dihapus. Preferensi baru: `omni.processingMode`,
+  `omni.cleanMetadata`, `omni.cleanerQuality`, `omni.cleanerAudio`.
+- **Mode `privacy`** (cepat, tanpa filter berat): Kualitas Asli → `-c copy`
+  (instan); HD/FullHD/4K → `scale` (short-side=target, contoh 720p→1280×720)
+  + `libx264 veryfast`; Vertikal → pad-blur 9:16 + `libx264 veryfast`.
+- **Mode `enhance`** (wajib re-encode, pipeline jernih):
+  `atadenoise=0a=0.04:0b=0.04 → [scale long-side + lanczos] → cas=0.7 →
+  eq(saturation=1.15:contrast=1.04)`; encoder CRF (hwAccel-aware, fallback
+  x264), kualitas/audio ikut select.
+- **Vertikal 9:16 pad-blur** (`VERTICAL_PAD_BLUR`): konten utuh di tengah,
+  latar blur (bukan hitam). Termasuk `crop=1080:1920` agar dimensi genap
+  (libx264 yuv420p) — diverifikasi langsung dgn ffmpeg.
+- **E2E terverifikasi (CDP 9222)**: 2 tab berikon (`iconPerTab [1,1]` —
+  ShieldCheck/Focus, bukan Zap/Sparkles), pill aktif biru `bg-blue-600`
+  bergeser antar tab (`layoutId cleaner-mode-pill`, verifikasi posisi pill
+  pindah saat switch), 3 select berikon (`selectIconCounts [2,2,2]` =
+  ikon+chevron), toggle Hapus Metadata tampil, grid kartu hilang;
+  opsi Prasetel BENAR-BENAR berbeda antar tab (Jernih vs Salin/Cepat); dark
+  mode: track slate-900 + panel slate-800. 5 job nyata PASS: privacy+archive
+  (auto/original)→640×360 copy, privacy+fullhd (compact/aac128)→1920×1080,
+  enhance+fullhd (best/original)→1920×1080, enhance+vertical
+  (cleanMetadata=false/aac192)→1080×1920 **metadata PERTAHAN**, privacy+archive
+  (aac256)→640×360 audio aac. typecheck/eslint/build PASS.
 
 ### Perbaikan Audit Forensik (2026-08-15)
+0. **Batasan klik-import dropzone** — sebelumnya `getRootProps()` dipasang di
+   SELURUH area utama kanan + `noClick: activeMenu!=='cleaner' || files.length>0`
+   → klik di mana pun di halaman Pembersih (termasuk tab, select, toggle) membuka
+   dialog import. FIX: `noClick: true` SELALU (root tidak pernah membuka dialog),
+   dialog file hanya dari **area drop-zone (empty state)** via `open()`
+   (role=button, cursor-pointer, onClick → open). Drag tetap di seluruh area
+   utama (noDrag hanya di halaman lain). E2E: klik drop-zone → file input click=1;
+   klik tab/select/switch/panel/area → click=0.
 1. **CSP `font-src 'self' data:`** (`src/index.html`) — subset Cyrillic font
    Plus Jakarta Sans di-inline Vite sbg `data:font/woff2` → font-src default
    (`default-src 'self'`) memblokirnya → error konsol. Kini font termuat; error
@@ -806,8 +846,8 @@ Aplikasi berfungsi end-to-end dan telah di-push ke GitHub.
 | Peningkat Video HD 720p (`hd`) | Selesai & terverifikasi (upscale + penajaman + denoise) |
 | Peningkat Video FullHD 1080p (`fullhd`) | Selesai & terverifikasi |
 | Peningkat Video UHD 4K (`uhd`) | Selesai & terverifikasi |
-| Arsip Kualitas Maks (`archive`) | Selesai & terverifikasi |
-| Kompresor WhatsApp (`whatsapp`) | Selesai & terverifikasi |
+| Arsip Kualitas Maks (`archive`) | Selesai & terverifikasi (mode privacy = `-c copy` instan; mode enhance = CRF 18 + jernih) |
+| Vertikal 9:16 Story/Shorts/Reels (`vertical`) | Selesai & terverifikasi (pad-blur 1080×1920; menggantikan Kompresor WhatsApp) |
 | Pengunduh Universal (yt-dlp) | Selesai — multi-link batch + ambil daftar akun/halaman (scrape), kualitas/cookies/paralel, progress realtime + ETA + metadata video, retry otomatis, tombol buka folder |
 | Pemotong Inline (lossless) | Selesai & terverifikasi |
 | Monitor System (CPU/RAM) | Selesai — pemakaian aplikasi nyata & realtime (`system:stats`, via `procmon` + `ps`, termasuk FFmpeg/yt-dlp) |
@@ -822,7 +862,7 @@ Aplikasi berfungsi end-to-end dan telah di-push ke GitHub.
 | `npm run lint` | PASS |
 | `npm run build` | PASS (main, preload, renderer) |
 | `get_errors` (seluruh workspace) | No errors found |
-| Smoke test mesin | 11/11 PASS (metadata, HD, FullHD, 4K, archive, WhatsApp, trim) |
+| Smoke test mesin | 11/11 PASS (metadata, HD, FullHD, 4K, archive, vertical, trim) |
 
 ## Audit Forensik & Perbaikan (2026-08-13)
 
@@ -842,8 +882,10 @@ Detail lengkap: `docs/ENGINE_SPEC.md` dan `docs/IPC_CONTRACT.md`.
 
 ## Perombakan Fitur & UI (2026-08-13)
 
-- **Preset diperjelas** → `metadata`, `hd` (720p), `fullhd` (1080p), `uhd` (4K),
-  `archive`, `whatsapp`. Default `fullhd`. Semua terverifikasi via smoke test 11/11.
+- **Preset diperjelas** → `metadata` (khusus Auto-Watcher auto-clean),
+  `hd` (720p), `fullhd` (1080p), `uhd` (4K), `archive`, `vertical` 9:16.
+  Default `fullhd`. Mode `privacy`/`enhance` via Segmented Control
+  (lihat bagian perombakan preset di atas).
 - **Preset dipindah ke halaman Pembersih Video** — kartu prasetel kini tampil di
   area utama (komponen `src/components/PresetSelector.tsx`), bukan di sidebar;
   pilihan aktif selalu terlihat (antrean kosong maupun terisi).

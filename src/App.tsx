@@ -4,11 +4,8 @@ import { motion } from 'motion/react'
 import {
   Loader2,
   UploadCloud,
-  Eraser,
+  ShieldCheck,
   MonitorUp,
-  Monitor,
-  Tv,
-  Archive,
   Clapperboard,
   PlayCircle,
   Trash2,
@@ -18,7 +15,6 @@ import {
   Wand2,
   DownloadCloud,
   Link as LinkIcon,
-  MessageCircle,
   XCircle,
   FolderOpen,
   History,
@@ -35,9 +31,9 @@ import {
   List,
   FileSpreadsheet,
   RadioTower,
-  ShieldCheck,
-  Sparkles,
-  type LucideIcon
+  Focus,
+  Gem,
+  AudioLines
 } from 'lucide-react'
 import {
   DndContext,
@@ -57,6 +53,9 @@ import {
 import type {
   FileItem,
   PresetType,
+  ProcessingMode,
+  QualityLevel,
+  AudioMode,
   FileStatus,
   ScrapeItem,
   UpdateInfo,
@@ -79,7 +78,7 @@ import MediaPreviewModal, { type LocalMediaFile } from '@components/MediaPreview
 import WatcherPanel from '@components/WatcherPanel'
 import SystemMonitor from '@components/SystemMonitor'
 import SortableFileItem from '@components/SortableFileItem'
-import PresetSelector from '@components/PresetSelector'
+import FloatingSelect, { type SelectOption } from '@components/ui/FloatingSelect'
 import { FloatingInput, FloatingTextarea } from '@components/ui/FloatingField'
 import Toggle from '@components/ui/Toggle'
 
@@ -201,14 +200,23 @@ export default function App(): React.ReactElement {
 
   const [files, setFiles] = useState<FileItem[]>([])
   const [preset, setPreset] = usePersistentState<PresetType>(PREF_KEYS.preset, PREF_DEFAULTS.preset)
-  // Opsi pemrosesan global (halaman Pembersih Video).
+  // Mode pemrosesan global (halaman Pembersih Video).
+  const [processingMode, setProcessingMode] = usePersistentState<ProcessingMode>(
+    PREF_KEYS.processingMode,
+    PREF_DEFAULTS.processingMode
+  )
+  // Opsi pembersih: hapus metadata + kualitas/audio (halaman Pembersih Video).
   const [cleanMetadata, setCleanMetadata] = usePersistentState<boolean>(
     PREF_KEYS.cleanMetadata,
     PREF_DEFAULTS.cleanMetadata
   )
-  const [enhanceQuality, setEnhanceQuality] = usePersistentState<boolean>(
-    PREF_KEYS.enhanceQuality,
-    PREF_DEFAULTS.enhanceQuality
+  const [cleanerQuality, setCleanerQuality] = usePersistentState<QualityLevel>(
+    PREF_KEYS.cleanerQuality,
+    PREF_DEFAULTS.cleanerQuality
+  )
+  const [cleanerAudio, setCleanerAudio] = usePersistentState<AudioMode>(
+    PREF_KEYS.cleanerAudio,
+    PREF_DEFAULTS.cleanerAudio
   )
   const [isProcessing, setIsProcessing] = useState(false)
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null)
@@ -719,15 +727,6 @@ export default function App(): React.ReactElement {
     )
   }
 
-  // Saat saklar "Jernihkan" dimatikan, prasetel peningkat (HD/Full HD/4K)
-  // dinonaktifkan; otomatis beralih ke "Hapus Metadata" bila sedang aktif.
-  const handleEnhanceToggle = (v: boolean): void => {
-    setEnhanceQuality(v)
-    if (!v && (preset === 'hd' || preset === 'fullhd' || preset === 'uhd')) {
-      setPreset('metadata')
-    }
-  }
-
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       if (isProcessing) return
@@ -750,17 +749,19 @@ export default function App(): React.ReactElement {
     [isProcessing, addToast]
   )
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: {
       'video/mp4': ['.mp4'],
       'video/quicktime': ['.mov']
     },
     disabled: isProcessing,
-    // Klik & drag hanya aktif di halaman Pembersih (saat antrean kosong).
-    // Di halaman Pengunduh, klik TIDAK boleh membuka dialog file — input URL
-    // dan tombol harus tetap berfungsi normal.
-    noClick: activeMenu !== 'cleaner' || files.length > 0,
+    // Klik TIDAK pernah membuka dialog dari root (noClick selalu true) —
+    // dialog file HANYA dibuka dari area drop-zone (empty state) via open().
+    // Dengan begitu klik di panel prasetel/tab/toggle tidak memicu import.
+    // Drag tetap aktif di area utama halaman Pembersih (noDrag hanya di
+    // halaman lain).
+    noClick: true,
     noDrag: activeMenu !== 'cleaner'
   })
 
@@ -795,8 +796,10 @@ export default function App(): React.ReactElement {
       setDownloadDouyinCookie(PREF_DEFAULTS.downloadDouyinCookie)
       setDownloadParallel(PREF_DEFAULTS.downloadParallel)
       setPreset(PREF_DEFAULTS.preset)
+      setProcessingMode(PREF_DEFAULTS.processingMode)
       setCleanMetadata(PREF_DEFAULTS.cleanMetadata)
-      setEnhanceQuality(PREF_DEFAULTS.enhanceQuality)
+      setCleanerQuality(PREF_DEFAULTS.cleanerQuality)
+      setCleanerAudio(PREF_DEFAULTS.cleanerAudio)
       setIsDarkMode(PREF_DEFAULTS.darkMode)
       addToast('Semua preferensi direset ke default.', 'info')
     } else if (confirmAction.type === 'clearHistory') {
@@ -840,7 +843,14 @@ export default function App(): React.ReactElement {
     batchStartRef.current = Date.now()
     totalBytesRef.current = files.reduce((acc, f) => acc + f.size, 0)
 
-    window.api.startProcessing({ files, preset, cleanMetadata, enhanceQuality })
+    window.api.startProcessing({
+      files,
+      preset,
+      processingMode,
+      cleanMetadata,
+      quality: cleanerQuality,
+      audio: cleanerAudio
+    })
   }
 
   const formatTime = (seconds: number): string => {
@@ -863,18 +873,36 @@ export default function App(): React.ReactElement {
   // memblokir seluruh aplikasi di layar "Menyiapkan Mesin Video". Status mesin
   // ditampilkan sebagai banner non-blocking (lihat di bawah) sehingga aplikasi
   // tetap bisa dipakai meski provisioning masih berjalan / sempat gagal.
-  const presetsList: Array<{
-    id: PresetType
-    title: string
-    desc: string
-    icon: LucideIcon
-  }> = [
-    { id: 'metadata', title: 'Hapus Metadata', desc: 'Bersihkan metadata/GPS, kualitas asli.', icon: Eraser },
-    { id: 'hd', title: 'HD 720p', desc: 'Tingkatkan ke HD 720p + penajaman + audio.', icon: MonitorUp },
-    { id: 'fullhd', title: 'Full HD 1080p', desc: 'Tingkatkan ke Full HD 1080p + penajaman + audio.', icon: Monitor },
-    { id: 'uhd', title: '4K UHD', desc: 'Tingkatkan ke 4K (2160p) + penajaman + audio.', icon: Tv },
-    { id: 'archive', title: 'Kualitas Asli', desc: 'Resolusi asli, CRF 18.', icon: Archive },
-    { id: 'whatsapp', title: 'Kompresi WhatsApp', desc: 'Ukuran pas untuk dikirim via WA.', icon: MessageCircle }
+  // Opsi prasetel per mode (deskripsi berbeda sesuai tab Cepat/Jernih).
+  const presetOptions: SelectOption[] =
+    processingMode === 'privacy'
+      ? [
+          { value: 'archive', label: 'Kualitas Asli (Salin)', description: 'Tanpa re-encode, paling cepat, kualitas terjaga.' },
+          { value: 'hd', label: 'HD 720p (Cepat)', description: 'Ubah ukuran ke 1280×720, encode cepat, tanpa efek.' },
+          { value: 'fullhd', label: 'Full HD 1080p (Cepat)', description: 'Ubah ukuran ke 1920×1080, encode cepat, tanpa efek.' },
+          { value: 'uhd', label: '4K UHD (Cepat)', description: 'Ubah ukuran ke 3840×2160, encode cepat, tanpa efek.' },
+          { value: 'vertical', label: 'Vertikal 9:16 (Cepat)', description: 'Format Story/Shorts/Reels 1080×1920, latar blur.' }
+        ]
+      : [
+          { value: 'archive', label: 'Kualitas Asli (Jernih)', description: 'Penajaman & perbaikan warna, resolusi asli.' },
+          { value: 'hd', label: 'HD 720p (Jernih)', description: 'Upscale 720p + penajaman + perbaikan warna.' },
+          { value: 'fullhd', label: 'Full HD 1080p (Jernih)', description: 'Upscale 1080p + penajaman + perbaikan warna.' },
+          { value: 'uhd', label: '4K UHD (Jernih)', description: 'Upscale 2160p + penajaman + perbaikan warna.' },
+          { value: 'vertical', label: 'Vertikal 9:16 (Jernih)', description: 'Format vertikal 1080×1920 + penajaman & warna.' }
+        ]
+
+  const qualityOptions: SelectOption[] = [
+    { value: 'auto', label: 'Otomatis (Seimbang)', description: 'Pilihan terbaik untuk sebagian besar video.' },
+    { value: 'best', label: 'Kualitas Terbaik', description: 'Kualitas maksimal, proses lebih lama.' },
+    { value: 'balanced', label: 'Seimbang', description: 'Kualitas baik dengan kecepatan sedang.' },
+    { value: 'compact', label: 'Kompak (File Kecil)', description: 'Ukuran file kecil, cocok untuk berbagi.' }
+  ]
+
+  const audioOptions: SelectOption[] = [
+    { value: 'original', label: 'Pertahankan Asli', description: 'Salin audio tanpa perubahan (paling cepat).' },
+    { value: 'aac128', label: 'AAC 128 kbps', description: 'Ukuran kecil, cukup untuk suara biasa.' },
+    { value: 'aac192', label: 'AAC 192 kbps', description: 'Seimbang untuk suara jernih.' },
+    { value: 'aac256', label: 'AAC 256 kbps', description: 'Kualitas audio tinggi.' }
   ]
 
   return (
@@ -1156,59 +1184,87 @@ export default function App(): React.ReactElement {
               transition={{ duration: 0.3 }}
               className="flex-1 flex flex-col min-h-0 relative"
             >
-              {/* 3. PRASETEL — berada di halaman Pembersih Video (bukan sidebar) */}
+              {/* 3. PRASETEL — halaman Pembersih Video: tab mode + beberapa select detail */}
               <div className="relative z-10 pt-16 md:pt-8 px-4 sm:px-6 md:px-8 pb-4">
-                {/* Opsi pemrosesan global */}
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 mb-4 transition-colors">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="p-2 bg-emerald-50 dark:bg-slate-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0 transition-colors">
-                        <ShieldCheck className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 leading-tight">
-                          Hapus Data Privasi (Metadata & GPS)
-                        </p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Buang metadata & lokasi GPS dari video.
-                        </p>
-                      </div>
-                    </div>
-                    <Toggle checked={cleanMetadata} onChange={setCleanMetadata} />
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
-                        <Sparkles className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 leading-tight">
-                          Tingkatkan Kualitas &amp; Jernihkan
-                        </p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Upscale + penajaman + warna. Matikan untuk hanya membersihkan metadata (cepat).
-                        </p>
-                      </div>
-                    </div>
-                    <Toggle checked={enhanceQuality} onChange={handleEnhanceToggle} />
+                {/* Tab mode — desain khas Pembersih (rounded-xl, tema) + efek geser pill biru */}
+                <div className="flex justify-center mb-6">
+                  <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-900">
+                    {[
+                      { id: 'privacy', label: 'Privasi Cepat (Tanpa Efek)', Icon: ShieldCheck },
+                      { id: 'enhance', label: 'Penjernihan Maksimal', Icon: Focus }
+                    ].map((m) => {
+                      const isActive = processingMode === m.id
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setProcessingMode(m.id as 'privacy' | 'enhance')}
+                          disabled={isProcessing}
+                          className={`relative flex items-center gap-1.5 rounded-lg px-5 py-2 text-sm font-semibold transition-colors sm:px-6 ${
+                            isActive
+                              ? 'text-white'
+                              : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                          }`}
+                        >
+                          {isActive && (
+                            <motion.span
+                              layoutId="cleaner-mode-pill"
+                              className="absolute inset-0 bg-blue-600 rounded-lg shadow-md shadow-blue-600/30"
+                              transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+                            />
+                          )}
+                          <m.Icon className="relative z-10 h-4 w-4" />
+                          <span className="relative z-10">{m.label}</span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 transition-colors">
-                    Pilih Prasetel
-                  </h2>
-                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                    {presetsList.find((p) => p.id === preset)?.title ?? ''}
-                  </span>
+                {/* Panel pengaturan — beberapa select dengan opsi detail */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800 sm:p-5">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <FloatingSelect
+                      label="Prasetel"
+                      value={preset}
+                      options={presetOptions}
+                      onChange={(v) => setPreset(v as PresetType)}
+                      disabled={isProcessing}
+                      icon={<MonitorUp className="h-4 w-4" />}
+                    />
+                    <FloatingSelect
+                      label="Kualitas"
+                      value={cleanerQuality}
+                      options={qualityOptions}
+                      onChange={(v) => setCleanerQuality(v as QualityLevel)}
+                      disabled={isProcessing}
+                      icon={<Gem className="h-4 w-4" />}
+                    />
+                    <FloatingSelect
+                      label="Audio"
+                      value={cleanerAudio}
+                      options={audioOptions}
+                      onChange={(v) => setCleanerAudio(v as AudioMode)}
+                      disabled={isProcessing}
+                      icon={<AudioLines className="h-4 w-4" />}
+                    />
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-700/60">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-slate-900/60 dark:text-emerald-400">
+                        <ShieldCheck className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Hapus Metadata &amp; GPS</p>
+                        <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                          Buang data privasi (EXIF/GPS/lokasi) dari hasil video.
+                        </p>
+                      </div>
+                    </div>
+                    <Toggle checked={cleanMetadata} onChange={setCleanMetadata} aria-label="Hapus Metadata" />
+                  </div>
                 </div>
-                <PresetSelector
-                  presets={presetsList}
-                  value={preset}
-                  onChange={setPreset}
-                  disabled={isProcessing}
-                  disabledIds={enhanceQuality ? [] : ['hd', 'fullhd', 'uhd']}
-                />
               </div>
 
               {/* 4. KONTEN UTAMA (state kosong ATAU antrean) */}
@@ -1220,7 +1276,13 @@ export default function App(): React.ReactElement {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.3 }}
-                    className="h-full flex flex-col items-center justify-center pointer-events-none"
+                    onClick={() => {
+                      // Hanya area drop-zone ini yang membuka dialog import.
+                      if (!isProcessing) open()
+                    }}
+                    role="button"
+                    aria-label="Pilih video untuk diimpor"
+                    className="h-full flex cursor-pointer flex-col items-center justify-center"
                   >
                       <div className="p-6 bg-blue-50 dark:bg-slate-800/50 text-blue-500 rounded-full mb-6 transition-colors">
                         <UploadCloud className="w-12 h-12" />

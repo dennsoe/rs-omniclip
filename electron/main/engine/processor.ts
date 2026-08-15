@@ -4,7 +4,9 @@ import { ensureFfmpeg, probe, runFfmpeg, type ProbeResult } from './ffmpeg'
 import { createOutputFolderForBatch } from './paths'
 import type { HwAccelMode } from '../config'
 
-export type PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'whatsapp'
+export type PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'vertical'
+/** Mode pemrosesan: 'privacy' (cepat, tanpa filter berat) / 'enhance' (pipeline jernih). */
+export type ProcessingMode = 'privacy' | 'enhance'
 
 export interface ProcessFileInput {
   id: string
@@ -20,20 +22,115 @@ export interface ProcessProgress {
   error?: string
 }
 
-/** Opsi pemrosesan global (dari 2 saklar di halaman Pembersih Video). */
+/** Kualitas encode (memetakan preset x264 + CRF). */
+export type QualityLevel = 'auto' | 'best' | 'balanced' | 'compact'
+/** Penanganan audio keluaran. */
+export type AudioMode = 'original' | 'aac128' | 'aac192' | 'aac256'
+
+/** Opsi pemrosesan global (mode + hardware + kualitas/audio/metadata). */
 export interface ProcessOptions {
   hwAccel?: HwAccelMode
+  /** Mode pemrosesan (default 'enhance'). */
+  processingMode?: ProcessingMode
   /** Hapus metadata/GPS (default true). */
   cleanMetadata?: boolean
-  /** Terapkan pipeline peningkatan kualitas & jernih (default true). */
-  enhanceQuality?: boolean
+  /** Kualitas encode (default 'auto'). */
+  quality?: QualityLevel
+  /** Penanganan audio (default 'original'). */
+  audio?: AudioMode
 }
 
 /** Target resolusi sumbu panjang (piksel). */
 type ScaleTarget = 720 | 1080 | 2160
 
-/** Target ukuran file WhatsApp dalam MB (batas umum berbagi video WA). */
-const WHATSAPP_TARGET_MB = 16
+/** Resolusi 9:16 vertikal (Story/Shorts/Reels). */
+const VERTICAL_W = 1080
+const VERTICAL_H = 1920
+
+/**
+ * Filter skala ke sisi TERPANJANG = `target` (aman untuk landscape & portrait).
+ * Bila `lanczos` true, gunakan interpolasi lanczos (mode penjernihan).
+ */
+function scaleLongSide(target: number, lanczos = false): string {
+  const flags = lanczos ? ':flags=lanczos' : ''
+  return `scale='if(gt(iw,ih),-2,${target})':'if(gt(iw,ih),${target},-2)'${flags}`
+}
+
+/**
+ * Transformasi 9:16 "pad-blur": konten utuh di tengah, latar terisi blur
+ * (bukan hitam) — tidak memotong konten. `crop` memaksa latar ke 1080×1920
+ * genap agar kompatibel dengan yuv420p/libx264.
+ */
+const VERTICAL_PAD_BLUR =
+  `split=2[fg][bg];` +
+  `[bg]scale=${VERTICAL_W}:${VERTICAL_H}:force_original_aspect_ratio=increase,crop=${VERTICAL_W}:${VERTICAL_H},boxblur=20:5,eq=brightness=0.25:contrast=1.0[bg2];` +
+  `[fg]scale=${VERTICAL_W}:${VERTICAL_H}:force_original_aspect_ratio=decrease[fg2];` +
+  `[bg2][fg2]overlay=(W-w)/2:(H-h)/2`
+
+/** CRF dasar sesuai tingkat kualitas. */
+function crfForQuality(quality: QualityLevel): number {
+  switch (quality) {
+    case 'best':
+      return 18
+    case 'balanced':
+      return 20
+    case 'compact':
+      return 26
+    default:
+      return 20
+  }
+}
+
+/** Preset x264 sesuai tingkat kualitas (kecepatan vs kompresi). */
+function x264QualityArgs(quality: QualityLevel): string[] {
+  switch (quality) {
+    case 'best':
+      return ['-preset', 'slow']
+    case 'balanced':
+      return ['-preset', 'medium']
+    default:
+      return ['-preset', 'veryfast']
+  }
+}
+
+/** Argumen audio keluaran sesuai mode (original = salin tanpa ubah). */
+function audioModeArgs(audio: AudioMode): string[] {
+  switch (audio) {
+    case 'aac128':
+      return ['-c:a', 'aac', '-b:a', '128k']
+    case 'aac192':
+      return ['-c:a', 'aac', '-b:a', '192k']
+    case 'aac256':
+      return ['-c:a', 'aac', '-b:a', '256k']
+    default:
+      return ['-c:a', 'copy']
+  }
+}
+
+/** Encode cepat mode privacy (libx264 + kualitas/audio) — fallback tanpa filter bila gagal. */
+function privacyEncode(
+  common: string[],
+  vf: string | null,
+  output: string,
+  quality: QualityLevel = 'auto',
+  audio: AudioMode = 'original'
+): string[] {
+  return [
+    ...common,
+    ...(vf ? ['-vf', vf] : []),
+    '-c:v',
+    'libx264',
+    ...x264QualityArgs(quality),
+    '-crf',
+    String(crfForQuality(quality)),
+    '-pix_fmt',
+    'yuv420p',
+    ...audioModeArgs(audio),
+    '-movflags',
+    '+faststart',
+    output
+  ]
+}
 
 /**
  * Memproses sekumpulan video secara berurutan (batch) sesuai prasetel.
@@ -52,8 +149,10 @@ export async function processBatch(
     throw new Error('Tidak ada video untuk diproses.')
   }
   const hwAccel = options.hwAccel ?? 'auto'
+  const processingMode: ProcessingMode = options.processingMode ?? 'enhance'
   const cleanMetadata = options.cleanMetadata !== false
-  const enhanceQuality = options.enhanceQuality !== false
+  const quality: QualityLevel = options.quality ?? 'auto'
+  const audio: AudioMode = options.audio ?? 'original'
 
   const { ffmpeg, ffprobe } = await ensureFfmpeg()
   const outputFolder = createOutputFolderForBatch(files[0].path)
@@ -68,8 +167,10 @@ export async function processBatch(
         outputPath,
         info,
         hwAccel,
+        processingMode,
         cleanMetadata,
-        enhanceQuality
+        quality,
+        audio
       )
       const totalDuration = info.duration || 0
 
@@ -138,16 +239,18 @@ function buildArgSets(
   preset: PresetType,
   input: string,
   output: string,
-  info: ProbeResult,
+  _info: ProbeResult,
   hwAccel: HwAccelMode = 'auto',
+  processingMode: ProcessingMode = 'enhance',
   cleanMetadata = true,
-  enhanceQuality = true
+  quality: QualityLevel = 'auto',
+  audio: AudioMode = 'original'
 ): string[][] {
+  // Metadata dibuang sesuai saklar "Hapus Metadata" (default dibuang).
   const common = ['-y', '-i', input, ...(cleanMetadata ? ['-map_metadata', '-1'] : [])]
 
-  // Mode "hanya bersihkan": buang metadata saja (cepat, -c copy). Aktif bila
-  // saklar "Tingkatkan Kualitas & Jernihkan" dimatikan di UI — apapun prasetel.
-  if (!enhanceQuality) {
+  // Preset 'metadata' (khusus Auto-Watcher auto-clean): remux lossless.
+  if (preset === 'metadata') {
     return [
       [...common, '-c', 'copy', '-movflags', '+faststart', output],
       [
@@ -166,160 +269,102 @@ function buildArgSets(
     ]
   }
 
-  switch (preset) {
-    case 'metadata': {
-      // Hanya menghapus metadata - remux lossless, tanpa re-encode.
-      return [
-        [...common, '-c', 'copy', '-movflags', '+faststart', output],
-        // Fallback: codec tidak dapat diremux ke .mp4 -> encode minimal.
-        [
-          ...common,
-          ...encoderCrfArgs(hwAccel, 23),
-          '-pix_fmt',
-          'yuv420p',
-          '-c:a',
-          'aac',
-          '-b:a',
-          '128k',
-          '-movflags',
-          '+faststart',
-          output
+  // --- Mode PRIVACY: cepat, tanpa filter berat (denoise/CAS/eq). ---
+  if (processingMode === 'privacy') {
+    // Kualitas Asli → salin instan (tanpa re-encode video).
+    if (preset === 'archive') {
+      if (audio === 'original') {
+        return [
+          [...common, '-c', 'copy', '-movflags', '+faststart', output],
+          privacyEncode(common, null, output, quality, 'aac192')
         ]
+      }
+      // Audio diubah → re-encode audio saja (video tetap salin, cepat).
+      return [
+        [...common, '-c:v', 'copy', ...audioModeArgs(audio), '-movflags', '+faststart', output],
+        privacyEncode(common, null, output, quality, audio)
       ]
     }
+    // Vertikal 9:16 → pad-blur + encode cepat.
+    if (preset === 'vertical') {
+      return [
+        privacyEncode(common, VERTICAL_PAD_BLUR, output, quality, audio),
+        privacyEncode(common, null, output, quality, audio)
+      ]
+    }
+    // Resolusi (hd/fullhd/uhd) → scale biasa + encode cepat.
+    const target: ScaleTarget = preset === 'hd' ? 720 : preset === 'fullhd' ? 1080 : 2160
+    return [
+      privacyEncode(common, scaleLongSide(target), output, quality, audio),
+      privacyEncode(common, null, output, quality, audio)
+    ]
+  }
 
+  // --- Mode ENHANCE: wajib re-encode + pipeline jernih ---
+  const enhanceFilter = (extra: string): string =>
+    `atadenoise=0a=0.04:0b=0.04${extra ? `,${extra}` : ''},cas=0.7,eq=saturation=1.15:contrast=1.04`
+
+  switch (preset) {
+    case 'archive':
+      return buildEnhance(common, enhanceFilter(''), output, hwAccel, quality, audio)
+    case 'vertical':
+      return buildEnhance(common, enhanceFilter(VERTICAL_PAD_BLUR), output, hwAccel, quality, audio)
     case 'hd':
-      return buildEnhance(common, 720, output, hwAccel)
+      return buildEnhance(common, enhanceFilter(scaleLongSide(720, true)), output, hwAccel, quality, audio)
     case 'fullhd':
-      return buildEnhance(common, 1080, output, hwAccel)
+      return buildEnhance(common, enhanceFilter(scaleLongSide(1080, true)), output, hwAccel, quality, audio)
     case 'uhd':
-      return buildEnhance(common, 2160, output, hwAccel)
-
-    case 'archive': {
-      // Arsip kualitas maks: resolusi asli + CRF 18. HW dulu, lalu fallback x264.
-      const sets: string[][] = []
-      if (hwAccel !== 'auto') {
-        sets.push([
-          ...common,
-          ...encoderCrfArgs(hwAccel, 18),
-          '-pix_fmt',
-          'yuv420p',
-          '-c:a',
-          'aac',
-          '-b:a',
-          '256k',
-          '-movflags',
-          '+faststart',
-          output
-        ])
-      }
-      sets.push([
-        ...common,
-        '-c:v',
-        'libx264',
-        '-preset',
-        'slow',
-        '-crf',
-        '18',
-        '-pix_fmt',
-        'yuv420p',
-        '-c:a',
-        'aac',
-        '-b:a',
-        '256k',
-        '-movflags',
-        '+faststart',
-        output
-      ])
-      return sets
-    }
-
-    case 'whatsapp': {
-      // Kompresi WhatsApp: hitung bitrate dari target ukuran dan durasi.
-      const videoBitrate = computeWhatsappVideoBitrate(info)
-      const maxrate = Math.round(videoBitrate * 1.5)
-      const bufsize = Math.round(videoBitrate * 2)
-      const sets: string[][] = []
-      if (hwAccel !== 'auto') {
-        sets.push([
-          ...common,
-          ...encoderBitrateArgs(hwAccel, videoBitrate, maxrate, bufsize),
-          '-pix_fmt',
-          'yuv420p',
-          '-c:a',
-          'aac',
-          '-b:a',
-          '128k',
-          '-movflags',
-          '+faststart',
-          output
-        ])
-      }
-      sets.push([
-        ...common,
-        '-c:v',
-        'libx264',
-        '-preset',
-        'medium',
-        '-b:v',
-        `${videoBitrate}k`,
-        '-maxrate',
-        `${maxrate}k`,
-        '-bufsize',
-        `${bufsize}k`,
-        '-pix_fmt',
-        'yuv420p',
-        '-c:a',
-        'aac',
-        '-b:a',
-        '128k',
-        '-movflags',
-        '+faststart',
-        output
-      ])
-      return sets
-    }
-
+      return buildEnhance(common, enhanceFilter(scaleLongSide(2160, true)), output, hwAccel, quality, audio)
     default:
       throw new Error(`Prasetel tidak dikenal: ${preset}`)
   }
 }
 
 /**
- * Set argumen preset "peningkat": upscale ke target sumbu panjang +
- * penajaman + denoise audio (dengan fallback tanpa filter audio).
- * Bila hwAccel != auto: set HW dicoba lebih dulu, lalu fallback x264.
+ * Set argumen encode mode "enhance": filter jernih (atadenoise → scale →
+ * cas → eq) + encoder CRF. Bila hwAccel != auto: set HW dicoba dulu,
+ * lalu fallback x264 (dengan & tanpa denoise audio).
  */
 function buildEnhance(
   common: string[],
-  target: ScaleTarget,
+  filter: string,
   output: string,
-  hwAccel: HwAccelMode = 'auto'
+  hwAccel: HwAccelMode = 'auto',
+  quality: QualityLevel = 'auto',
+  audio: AudioMode = 'original'
 ): string[][] {
-  const filter = `atadenoise=0a=0.03:0b=0.03,scale='if(gt(iw,ih),${target},-2)':'if(gt(iw,ih),-2,${target})':flags=lanczos,cas=0.7,eq=saturation=1.25:contrast=1.04`
+  const crf = crfForQuality(quality)
   const x264VideoArgs = [
     ...common,
     '-vf',
     filter,
     '-c:v',
     'libx264',
-    '-preset',
-    'veryfast',
+    ...x264QualityArgs(quality),
     '-crf',
-    '20',
+    String(crf),
     '-pix_fmt',
     'yuv420p'
   ]
-  const audioArgs = ['-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
+  const useAudioFilter = audio !== 'original'
+  const audioArgs = [...audioModeArgs(audio), '-movflags', '+faststart']
 
   const sets: string[][] = []
   if (hwAccel !== 'auto') {
-    const hwVideoArgs = [...common, '-vf', filter, ...encoderCrfArgs(hwAccel, 20), '-pix_fmt', 'yuv420p']
-    sets.push([...hwVideoArgs, '-af', 'afftdn=nr=12:nf=-30', ...audioArgs, output])
-    sets.push([...hwVideoArgs, ...audioArgs, output])
+    const hwVideoArgs = [...common, '-vf', filter, ...encoderCrfArgs(hwAccel, crf), '-pix_fmt', 'yuv420p']
+    if (useAudioFilter) {
+      sets.push([...hwVideoArgs, '-af', 'afftdn=nr=12:nf=-30', ...audioArgs, output])
+      sets.push([...hwVideoArgs, ...audioArgs, output])
+    } else {
+      sets.push([...hwVideoArgs, ...audioArgs, output])
+    }
   }
-  sets.push([...x264VideoArgs, '-af', 'afftdn=nr=12:nf=-30', ...audioArgs, output])
-  sets.push([...x264VideoArgs, ...audioArgs, output])
+  if (useAudioFilter) {
+    sets.push([...x264VideoArgs, '-af', 'afftdn=nr=12:nf=-30', ...audioArgs, output])
+    sets.push([...x264VideoArgs, ...audioArgs, output])
+  } else {
+    sets.push([...x264VideoArgs, ...audioArgs, output])
+  }
   return sets
 }
 
@@ -335,36 +380,4 @@ function encoderCrfArgs(hwAccel: HwAccelMode, crf: number): string[] {
     default:
       return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf)]
   }
-}
-
-/** Argumen encoder hardware utk mode "bitrate target" (WhatsApp). */
-function encoderBitrateArgs(
-  hwAccel: HwAccelMode,
-  bitrateK: number,
-  maxrateK: number,
-  bufsizeK: number
-): string[] {
-  const base = ['-b:v', `${bitrateK}k`, '-maxrate', `${maxrateK}k`, '-bufsize', `${bufsizeK}k`]
-  switch (hwAccel) {
-    case 'videotoolbox':
-      return ['-c:v', 'h264_videotoolbox', ...base]
-    case 'nvenc':
-      return ['-c:v', 'h264_nvenc', '-preset', 'p4', ...base]
-    case 'amf':
-      return ['-c:v', 'h264_amf', '-quality', 'speed', ...base]
-    default:
-      return ['-c:v', 'libx264', '-preset', 'medium', ...base]
-  }
-}
-
-/**
- * Menghitung bitrate video (kbps) agar ukuran akhir mendekati target WhatsApp.
- * Bitrate audio diasumsikan 128 kbps.
- */
-function computeWhatsappVideoBitrate(info: ProbeResult): number {
-  const duration = info.duration > 0 ? info.duration : 60
-  const totalBits = WHATSAPP_TARGET_MB * 8 * 1024 * 1024
-  const audioBits = 128 * 1024 * duration
-  const videoBits = Math.max(totalBits - audioBits, 256 * 1024 * duration)
-  return Math.round(videoBits / 1024 / duration)
 }

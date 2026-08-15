@@ -1,6 +1,9 @@
 import type {
   FileItem,
   PresetType,
+  ProcessingMode,
+  QualityLevel,
+  AudioMode,
   ScrapeItem,
   UpdateInfo,
   ResourceInfo,
@@ -25,8 +28,10 @@ declare global {
       startProcessing: (payload: {
         files: FileItem[]
         preset: PresetType
+        processingMode?: ProcessingMode
         cleanMetadata?: boolean
-        enhanceQuality?: boolean
+        quality?: QualityLevel
+        audio?: AudioMode
       }) => void
       onProcessingProgress: (
         cb: (data: {

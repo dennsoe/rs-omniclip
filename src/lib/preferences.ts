@@ -1,5 +1,5 @@
 import { clearPersistedValue } from '../hooks/use-persistent-state'
-import type { PresetType } from './types'
+import type { PresetType, ProcessingMode, QualityLevel, AudioMode } from './types'
 
 /**
  * Preferensi pengguna yang dipersist ke localStorage (per instalasi).
@@ -10,8 +10,10 @@ export const PREF_KEYS = {
   preset: 'omni.preset',
   activeMenu: 'omni.activeMenu',
   downloaderMode: 'omni.downloaderMode',
+  processingMode: 'omni.processingMode',
   cleanMetadata: 'omni.cleanMetadata',
-  enhanceQuality: 'omni.enhanceQuality',
+  cleanerQuality: 'omni.cleanerQuality',
+  cleanerAudio: 'omni.cleanerAudio',
   downloadMaxHeight: 'omni.download.maxHeight',
   downloadCookiesBrowser: 'omni.download.cookiesBrowser',
   downloadDouyinCookie: 'omni.download.douyinCookie',
@@ -24,8 +26,10 @@ export const PREF_DEFAULTS = {
   preset: 'fullhd' as PresetType,
   activeMenu: 'cleaner' as const,
   downloaderMode: 'links' as const,
+  processingMode: 'enhance' as ProcessingMode,
   cleanMetadata: true,
-  enhanceQuality: true,
+  cleanerQuality: 'auto' as QualityLevel,
+  cleanerAudio: 'original' as AudioMode,
   downloadMaxHeight: 0,
   downloadCookiesBrowser: '',
   downloadDouyinCookie: '',

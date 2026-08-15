@@ -67,8 +67,9 @@
 - `downloadTikTokVideo(url, outDir, onPhase)` — resolve via TikWM + unduh `data.play` CDN (dgn UA+Referer TikTok).
 
 ### electron/main/engine/processor.ts
-- `PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'whatsapp'`.
-- `processBatch(files, preset, onProgress)` → outputFolder; `buildArgSets(preset, input, output, info)` → `string[][]` (set[0] utama, sisanya fallback); `buildEnhance(common, target, output)`.
+- `PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'vertical'`
+  (v1.4.1: `whatsapp` dihapus, ditambah `vertical` 9:16; lihat Bagian 9).
+- `processBatch(files, preset, onProgress, options)` → outputFolder; `buildArgSets(preset, input, output, info, hwAccel, processingMode)` → `string[][]` (set[0] utama, sisanya fallback); `buildEnhance(common, filter, output, hwAccel)`.
 - **Semua encode `libx264`** — titik sisip hardware accel ada di sini. Preset `metadata` = `-c copy` (tanpa encode, tak terpengaruh).
 
 ### electron/main/engine/ffmpeg.ts
@@ -215,7 +216,7 @@ export async function detectEncoders(): Promise<EncoderId[]>   // spawn ffmpeg -
 ### 6.2 `processor.ts` — peta parameter per encoder + fallback
 - `buildArgSets(preset, input, output, info, hwAccel: HwAccelConfig)`:
   - `metadata` → tak berubah (`-c copy`).
-  - Encode presets (`hd/fullhd/uhd/archive/whatsapp` + fallback enhance) — ganti `-c:v libx264 ... -crf X` menjadi:
+  - Encode presets (`hd/fullhd/uhd/archive/vertical` + fallback enhance) — ganti `-c:v libx264 ... -crf X` menjadi:
     - `videotoolbox`: `-c:v h264_videotoolbox -q:v 65` (atau `-b:v`); preset scale/unsharp tetap.
     - `nvenc`: `-c:v h264_nvenc -preset p4 -cq 20` (+ `-rc vbr` bila perlu).
     - `amf`: `-c:v h264_amf -quality speed -qp_i 20 -qp_p 20` (+ `-usage transcoding` bila perlu).
@@ -333,3 +334,96 @@ export async function checkAccountOnce(acc: WatchedAccount): Promise<{ newItems:
 - CSV: scrape + unduh → `analytics-*.csv` terbuka di Excel/Number (RFC4180 benar; quote caption dgn koma).
 - Watcher: akun nyata → tick pertama set cursor (tanpa unduh); posting baru → terdeteksi, terunduh, ter-clean, notifikasi muncul; interval tidak dobel (idempotent).
 - Preview/Riwayat: klik baris unduhan → video putar + bisa seek; tab Riwayat tampil + persist setelah restart.
+
+---
+
+## 9. Perombakan Total Preset (v1.4.1) — 2 Tab + Select Detail + Toggle Metadata
+
+### 9.1 Konsep: anti-ambigu
+- Grid kartu prasetel DIHAPUS; komponen `PresetSelector.tsx` dihapus (kode mati).
+- **2 tab mode** (ikon `ShieldCheck` / `Focus`) dengan **pill aktif BIRU yang
+  GESER** (layoutId `cleaner-mode-pill`, spring). Desain tetap khas Pembersih:
+  track `rounded-xl` mengikuti tema, tombol `rounded-lg` `text-sm`; hanya
+  efek geser yang diadopsi dari tab Pengunduh (tab Pengunduh nantinya
+  mengikuti desain ini). **"Privasi Cepat (Tanpa Efek)"** →
+  `processingMode = 'privacy'`; **"Penjernihan Maksimal"** →
+  `processingMode = 'enhance'` (default, persist `omni.processingMode`).
+- Di dalamnya **beberapa select detail** (`FloatingSelect` diperluas dengan
+  `description` per opsi):
+  1. **Prasetel** — opsi BERUBAH sesuai tab (mode): tab Cepat → "Kualitas
+     Asli (Salin)", "HD 720p (Cepat)", dst.; tab Jernih → "Kualitas Asli
+     (Jernih)", "HD 720p (Jernih)", dst. Setiap opsi = judul + deskripsi rinci.
+  2. **Kualitas** — `auto` Otomatis (Seimbang) / `best` Terbaik / `balanced`
+     Seimbang / `compact` Kompak (File Kecil) → preset x264 + CRF.
+  3. **Audio** — `original` Pertahankan Asli / `aac128` / `aac192` / `aac256`.
+  4. **Toggle "Hapus Metadata & GPS"** (Ya/Tidak, default ON) — kontrol
+     eksplisit `cleanMetadata`.
+- Ikon petir (`Zap`) & AI (`Sparkles`) DIHAPUS dari tab.
+
+### 9.2 State renderer (`src/App.tsx` + `src/lib/preferences.ts`)
+```ts
+const [processingMode, setProcessingMode] = usePersistentState<ProcessingMode>(
+  PREF_KEYS.processingMode, PREF_DEFAULTS.processingMode) // 'enhance'
+const [cleanMetadata, setCleanMetadata] = usePersistentState<boolean>(
+  PREF_KEYS.cleanMetadata, PREF_DEFAULTS.cleanMetadata) // true
+const [cleanerQuality, setCleanerQuality] = usePersistentState<QualityLevel>(
+  PREF_KEYS.cleanerQuality, PREF_DEFAULTS.cleanerQuality) // 'auto'
+const [cleanerAudio, setCleanerAudio] = usePersistentState<AudioMode>(
+  PREF_KEYS.cleanerAudio, PREF_DEFAULTS.cleanerAudio) // 'original'
+```
+- Kunci: `omni.processingMode`, `omni.cleanMetadata`, `omni.cleanerQuality`,
+  `omni.cleanerAudio`. Reset handler menyetel keempatnya.
+
+### 9.3 Backend (`electron/main/engine/processor.ts`)
+- Tipe: `PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' |
+  'vertical'`; `ProcessingMode`; `QualityLevel = 'auto'|'best'|'balanced'|
+  'compact'`; `AudioMode = 'original'|'aac128'|'aac192'|'aac256'`.
+- `ProcessOptions { hwAccel?, processingMode?, cleanMetadata?, quality?,
+  audio? }`.
+- `common = ['-y','-i',input, ...(cleanMetadata ? ['-map_metadata','-1'] : [])]`.
+- `buildArgSets(preset, input, output, info, hwAccel, processingMode,
+  cleanMetadata, quality, audio)`:
+  - `metadata` → `-c copy` (remux) + fallback encode minimal (Auto-Watcher).
+  - **privacy**: `archive` + audio original → `-c copy`; `archive` + audio !=
+    original → `-c:v copy` + re-encode audio; resolusi → `scale(short-side)`
+    + `privacyEncode(common, vf, output, quality, audio)`; `vertical` →
+    pad-blur + `privacyEncode`.
+  - **enhance**: pipeline `atadenoise → [scale long-side + lanczos] → cas →
+    eq` via `buildEnhance(common, filter, output, hwAccel, quality, audio)`
+    (hwAccel-aware, fallback x264; audio original → `-c:a copy` tanpa filter,
+    selainnya AAC + `afftdn`).
+- Helper baru: `crfForQuality`, `x264QualityArgs`, `audioModeArgs`.
+  Helper WhatsApp dihapus. `VERTICAL_PAD_BLUR` + `scaleLongSide` +
+  `privacyEncode` dipertahankan.
+
+### 9.4 Vertikal 9:16 pad-blur
+```
+split=2[fg][bg];
+[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=0.25:contrast=1.0[bg2];
+[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg2];
+[bg2][fg2]overlay=(W-w)/2:(H-h)/2
+```
+`crop=1080:1920` memaksa latar ke dimensi genap (kompatibel yuv420p/libx264).
+Konten utama tidak dipotong; latar blur (bukan hitam).
+
+### 9.5 IPC & preload
+- `processing:start` payload: `{ files, preset, processingMode, cleanMetadata,
+  quality, audio }`.
+- `electron/main/index.ts` `handleProcessing` → `processBatch(..., { hwAccel,
+  processingMode, cleanMetadata, quality, audio })` dengan default aman.
+- `preload` + `global.d.ts` `startProcessing(payload { files, preset,
+  processingMode?, cleanMetadata?, quality?, audio? })`.
+
+### 9.6 Validasi v1.4.1 (E2E CDP 9222)
+- 2 tab berikon (`iconPerTab [1,1]` — ShieldCheck/Focus); pill aktif biru
+  `bg-blue-600` bergeser saat switch (`layoutId cleaner-mode-pill`); 3 select
+  berikon (`selectIconCounts [2,2,2]`); toggle "Hapus Metadata & GPS" tampil;
+  grid kartu hilang (`hasCardGrid false`);
+  opsi Prasetel BENAR-BENAR berbeda antar tab (Jernih vs Salin/Cepat) —
+  verifikasi isi dropdown di kedua tab.
+- 5 job nyata PASS: privacy+archive (auto/original)→640×360 `-c copy`;
+  privacy+fullhd (compact/aac128)→1920×1080; enhance+fullhd (best/original)→
+  1920×1080; enhance+vertical (cleanMetadata=false/aac192)→1080×1920 **metadata
+  PERTAHAN**; privacy+archive (aac256)→640×360 audio AAC.
+- Dark mode: track slate-900, panel slate-800. Light mode: track terang,
+  pill putih. typecheck/lint/build PASS; `get_errors` bersih.
