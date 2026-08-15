@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import { ChevronDown, Check, Search, X } from 'lucide-react'
 import { clsx } from 'clsx'
+import { FieldShine, FloatingLabel } from './FloatingShared'
+import { iconCls } from './floating-classes'
 
 export interface MultiSelectOption {
   value: string
@@ -105,17 +107,17 @@ export default function FloatingMultiSelect({
           aria-haspopup="listbox"
           aria-expanded={open}
           className={clsx(
-            'relative flex w-full items-center rounded-xl border bg-white text-left transition-all dark:bg-slate-900/60',
+            'relative flex w-full items-center rounded-xl border bg-white text-left transition-all duration-200 dark:bg-slate-900',
             open
-              ? 'border-blue-500 shadow-sm ring-2 ring-blue-500/20'
+              ? 'border-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.12),0_12px_32px_-12px_rgba(59,130,246,0.45)] dark:border-blue-400'
               : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600',
             disabled && 'cursor-not-allowed opacity-50'
           )}
         >
-          {icon && <span className="ml-3 shrink-0 text-slate-400 dark:text-slate-500">{icon}</span>}
+          {icon && <span className={clsx('ml-3 shrink-0', iconCls(open))}>{icon}</span>}
           <span
             className={clsx(
-              'flex-1 truncate px-3.5 pb-1.5 pt-5 text-sm',
+              'flex-1 truncate px-3.5 py-3.5 text-sm',
               selected.length > 0
                 ? 'text-slate-800 dark:text-slate-100'
                 : 'text-slate-400 dark:text-slate-500'
@@ -129,22 +131,15 @@ export default function FloatingMultiSelect({
           </span>
           <ChevronDown
             className={clsx(
-              'mr-3 h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200',
-              open && 'rotate-180'
+              'mr-3 h-4 w-4 shrink-0 transition-all duration-200',
+              open ? 'rotate-180 text-blue-500 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'
             )}
           />
+          {open && <FieldShine />}
         </button>
-        <label
-          className={clsx(
-            'pointer-events-none absolute transition-all duration-200',
-            icon ? 'left-9' : 'left-3.5',
-            floated
-              ? 'top-2 text-[10px] font-bold uppercase tracking-wider text-blue-500'
-              : 'top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500'
-          )}
-        >
+        <FloatingLabel floated={floated} focused={open} icon={icon}>
           {label}
-        </label>
+        </FloatingLabel>
 
         {selected.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-3.5 pb-2">

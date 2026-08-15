@@ -187,7 +187,7 @@ export default function SortableFileItem({
                   handleSaveTrim()
                 }}
                 disabled={isTrimmingPending}
-                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 w-full sm:w-auto"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 w-full sm:w-auto"
               >
                 {isTrimmingPending ? 'Memotong...' : 'Simpan'}
               </button>

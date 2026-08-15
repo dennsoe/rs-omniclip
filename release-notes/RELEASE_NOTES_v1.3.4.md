@@ -113,8 +113,52 @@ siap disalin ke **detail release GitHub** (mis. `gh release create v1.3.4
     **menyesuaikan tinggi otomatis dengan isi** (`scrollHeight`, `overflow`
     hidden) — tidak pernah scroll. Padding atas ditambah (`pt-6`→`pt-7`)
     sehingga **label mengambang tidak lagi menimpa baris teks pertama**
-    (sebelumnya overlap; terverifikasi `collisionPx: -3` = bebas tabrakan).
-- **Switch animasi (Toggle)** — menggantikan checkbox boolean:
+    (sebelumnya overlap; terverifikasi `collisionPx: -3` = bebas tabrakan).  - **Redesign floating label gaya Google (outlined) (2026-08-15)** — semua
+    inputan floating label (`FloatingInput`, `FloatingTextarea`,
+    `FloatingSelect`, `FloatingMultiSelect`) didesain ulang meniru field Google
+    login:
+    - Label saat kosong duduk di tengah field sebagai placeholder; saat
+      terisi/fokus **naik mengangkang di atas border** dengan efek **notch**
+      (latar label senada field sehingga border tampak terpotong di belakang
+      label) — bukan lagi `uppercase` kecil di dalam field.
+    - Warna label: biru saat fokus, netral saat terisi (blur), merah saat error.
+    - Efek & animasi: **glow biru lembut** saat fokus, **shine sweep** halus
+      menyapu field sekali saat fokus, **caret biru**, ikon kiri berubah biru
+      saat aktif, chevron dropdown berputar + biru saat terbuka.
+    - Field dibuat **opak** (`dark:bg-slate-900`) agar patch notch label
+      menyatu sempurna (terverifikasi identik di light & dark — tanpa seam).
+    - Primitive bersama: `FloatingLabel`, `FieldShine`, `fieldShell`, `iconCls`
+      (fungsi dipisah agar fast-refresh bersih).
+  - **Fix alignment ikon–teks (2026-08-15)** — audit forensik atas screenshot
+    user menemukan & memperbaiki 2 bug layout:
+    - Input tautan akun/halaman (gambar 1): shell `FloatingInput` kehilangan
+      `flex items-center` saat redesign → ikon & input terpisah ke dua baris →
+      field sangat tinggi & berantakan. Kini shell input `flex items-center`,
+      ikon `shrink-0`, input `min-w-0 flex-1` → satu baris kompak (50px).
+    - Select Kualitas/Cookies & input (gambar 2): teks tidak sejajar ikon
+      karena padding asimetris (`pt-5 pb-1.5`) mendorong teks ~7px ke bawah.
+      Kini padding simetris `py-3.5` → teks & ikon sejajar sempurna (delta 0,
+      terukur di Electron nyata).
+  - **Textarea kompak + auto-resize (2026-08-15)** — semua textarea
+    (`FloatingTextarea`: Tempel Banyak Tautan & Cookie Douyin) kini **mulai
+    setinggi input teks biasa** (`rows={1}`, ~48px, label placeholder di tengah
+    seperti input) lalu **auto-resize membesar sesuai isi** dan menyusut
+    kembali saat dikosongkan — tidak pernah scroll. Padding `pt-7` → `py-3.5`
+    (label gaya Google hanya ~5,5px masuk field, tak butuh ruang ekstra).
+    `rows={5}`/`rows={2}` dihapus dari pemakaian.
+  - **Tombol aksi di dalam field (2026-08-15)** — tombol "Unduh Semua" & "Ambil
+    Daftar" kini berada DI DALAM input/textarea (bukan di bawahnya):
+    - Prop baru `action` pada `FloatingInput`/`FloatingTextarea`.
+    - Input: tombol di kanan, ter-center vertikal (flex child).
+    - Textarea: tombol di kanan-bawah (absolute) + padding-kanan ADAPTIF
+      mengikuti lebar tombol (ResizeObserver) — teks tak tertimpa; posisi tetap
+      kanan-bawah saat textarea auto-resize membesar.
+    - Tombol ringkas agar pas di dalam field.
+  - **Konsistensi tombol primer (2026-08-15)** — "Unduh Semua" (sebelumnya
+    `text-xs py-1.5` = 28px) disamakan dengan "Ambil Daftar" (`text-sm py-2
+    px-3.5 gap-2 icon h-4`, = 36px) dan "Simpan" (trim) ikut disamakan — semua
+    tombol primer rounded-lg identik. Terverifikasi E2E: tinggi/font/padding/
+    radius/weight IDENTIK (36px / 14px / 8-14px / 8px / 600).- **Switch animasi (Toggle)** — menggantikan checkbox boolean:
   - "Unduh 2 sekaligus" di Pengaturan Unduhan → toggle animasi.
   - "Mode Gelap" di halaman Tentang &amp; Update → toggle animasi (tetap sinkron
     dengan tombol di sidebar).
@@ -178,3 +222,8 @@ siap disalin ke **detail release GitHub** (mis. `gh release create v1.3.4
 | 2026-08-15 | Fix | Icon play kartu grid di-center tepat di area video (bukan seluruh kartu) | `src/components/ScrapeResultView.tsx` |
 | 2026-08-15 | UI | Input tautan akun/halaman full-width + tombol Ambil Daftar ringkas & rata kanan; tombol Unduh Semua disamakan gayanya | `src/App.tsx` |
 | 2026-08-15 | Fix | Textarea auto-resize (tinggi ikut isi, tanpa scroll) + padding atas cukup agar label floating tidak menabrak teks | `src/components/ui/FloatingField.tsx` |
+| 2026-08-15 | Redesign | Floating label gaya Google (outlined): label naik ke border + notch, glow fokus + shine sweep + caret/ikon biru, field opak agar patch notch menyatu | `src/components/ui/FloatingShared.tsx` (baru), `floating-classes.ts` (baru), `FloatingField.tsx`, `FloatingSelect.tsx`, `FloatingMultiSelect.tsx` |
+| 2026-08-15 | Fix | Alignment ikon–teks floating field: shell input kembali `flex items-center` (field kompak 1 baris) + padding span/input simetris `py-3.5` (teks sejajar ikon, delta 0) | `src/components/ui/FloatingField.tsx`, `FloatingSelect.tsx`, `FloatingMultiSelect.tsx` |
+| 2026-08-15 | UI | Textarea kompak: mulai setinggi input (rows=1, ~48px, label placeholder di tengah) + auto-resize naik/turun sesuai isi; padding py-3.5 | `src/components/ui/FloatingField.tsx`, `src/App.tsx`, `src/components/DownloadSettingsModal.tsx` |
+| 2026-08-15 | UI | Tombol aksi di dalam field: "Unduh Semua" di dalam textarea (kanan-bawah, padding adaptif via ResizeObserver) + "Ambil Daftar" di dalam input (kanan, center vertikal) — prop `action` baru | `src/components/ui/FloatingField.tsx`, `src/App.tsx` |
+| 2026-08-15 | Fix | Konsistensi tombol primer: "Unduh Semua" disamakan dengan "Ambil Daftar" (text-sm py-2 px-3.5 gap-2 icon h-4) + "Simpan" trim ikut disamakan — identik (E2E) | `src/App.tsx`, `src/components/SortableFileItem.tsx` |

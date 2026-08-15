@@ -144,7 +144,6 @@ export default function DownloadSettingsModal({
               icon={<KeyRound className="h-4 w-4" />}
               value={settings.douyinCookie}
               onChange={(e) => set({ douyinCookie: e.target.value })}
-              rows={2}
               helper="Khusus Douyin (anti-bot ketat, wajib cookie sesi). Cara ambil: buka douyin.com di Chrome → login → F12 → Application → Cookies → https://www.douyin.com → salin seluruh header Cookie. Disimpan lokal & dipakai yt-dlp."
             />
           </div>

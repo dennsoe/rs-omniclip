@@ -1,18 +1,19 @@
 # Kondisi Terkini — RS OmniClip
 
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
-ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
+ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
 
 ## Status Rilis v1.3.4 (SEDANG DIKERJAKAN) — redesign UI + prior fixes
 
 - **Branch**: `release/v1.3.4` (BELUM di-push ke remote; menunggu persetujuan
   commit/push dari user).
-- **Sudah di-commit lokal** (4 commit):
+- **Sudah di-commit lokal** (5 commit):
   - `1bad086` — Fix scrape 429 + Pengaturan Unduhan modal + konsistensi modal.
   - `d3a03a5` — Pindah release note ke folder `release-notes/`.
   - `8afae46` — Responsivitas (grid prasetel 1/2/3, trim flex-wrap, toast, sidebar).
   - `3aacb32` — Penyimpanan lokal preferensi + modal konfirmasi reset.
-- **BELUM di-commit** (redesign tahap 1–7 selesai di working tree):
+  - `2b510ad` — Redesign UI v1.3.4 (semua fitur daftar di bawah ini).
+- **Redesign v1.3.4** (terkomit di `2b510ad`; rincian di bawah):
   - **Font premium**: Plus Jakarta Sans (variable) via
     `@fontsource-variable/plus-jakarta-sans`; import di `src/main.tsx` + `@theme`
     di `src/assets/main.css`. Build terverifikasi meng-bundle 3 file woff2.
@@ -98,6 +99,66 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
       item, durasi tampil, thumbnail otomatis, preview memutar video.
       CATATAN MOCK: id/url mock harus < 2^53 (angka besar runtuh presisi → semua
       URL identik → seleksi tampak "semua terpilih" — artefak mock, bukan bug).
+- **BELUM di-commit (2026-08-15, sesudah `2b510ad`)** — Redesign floating label
+  gaya Google (outlined text field), meniru field Google login:
+  - Semua inputan floating label (`FloatingInput`, `FloatingTextarea`,
+    `FloatingSelect`, `FloatingMultiSelect`) kini: label saat kosong duduk di
+    tengah field sebagai placeholder; saat terisi/fokus **naik mengangkang di
+    atas border** dengan efek **notch** — latar label senada field sehingga
+    border tampak terpotong di belakang label (sebelumnya label kecil
+    `uppercase` di dalam field).
+  - Warna label: biru saat fokus, netral saat terisi (blur), merah saat error.
+  - Efek & animasi: **glow biru lembut** saat fokus (ring 3px + bayangan
+    `0_12px_32px`), **shine sweep** halus menyapu field sekali saat fokus,
+    **caret biru**, ikon kiri berubah biru saat aktif, chevron dropdown
+    berputar + biru saat terbuka.
+  - Field dibuat **opak** (`dark:bg-slate-900`) agar patch notch label menyatu
+    sempurna (terverifikasi: light `rgb(255,255,255)`, dark `oklch(0.208...)`
+    identik dengan bg field — tanpa seam).
+  - File baru: `src/components/ui/FloatingShared.tsx` (komponen `FloatingLabel`
+    & `FieldShine`) + `floating-classes.ts` (fungsi `fieldShell` & `iconCls` —
+    dipisah agar fast-refresh bersih). Diperbarui: `FloatingField.tsx`,
+    `FloatingSelect.tsx`, `FloatingMultiSelect.tsx`.
+  - Terverifikasi E2E Electron+CDP nyata: textarea fokus → label delta 1px
+    (mengangkang border, patch putih), blur terisi → netral; select
+    Kualitas/Cookies Browser → delta 0 + glow + panel portal tetap terbuka;
+    dark mode → patch identik bg field. tsc/lint/build PASS (0 warning).
+  - **Fix alignment ikon–teks (2026-08-15)** — audit forensik atas screenshot
+    user menemukan & memperbaiki 2 bug layout:
+    (1) Shell `FloatingInput` kehilangan `flex items-center` saat redesign →
+    ikon + input terpisah ke dua baris → field SANGAT TINGGI & berantakan
+    (gambar 1). FIX: shell input `flex items-center`, ikon `ml-3 shrink-0`,
+    input `min-w-0 flex-1` (textarea tetap block).
+    (2) Span nilai select & teks input memakai padding asimetris `pt-5 pb-1.5`
+    → teks turun ~7px di bawah pusat ikon (`items-center` men-center ikon;
+    gambar 2). FIX: padding simetris `py-3.5` → teks sejajar ikon.
+    Terverifikasi E2E Electron nyata: `display:flex`, tinggi field 50px
+    kompak, `iconVsText: 0`, `textVsField: 0` untuk input & semua select.
+  - **Textarea kompak + auto-resize (2026-08-15)**: `FloatingTextarea` kini
+    mulai SETINGGI INPUT biasa (`rows={1}`, ~48px, label placeholder di tengah
+    seperti input) lalu **auto-resize membesar sesuai isi** & menyusut saat
+    dikosongkan — tidak pernah scroll. Padding `pt-7` → `py-3.5` (label gaya
+    Google hanya ~5,5px masuk field, tak butuh ruang ekstra). `rows={5}`/
+    `rows={2}` dihapus dari pemakaian (App.tsx & modal pengaturan).
+    Terverifikasi E2E Electron nyata: 48→108px utk 4 baris, kembali 48px saat
+    dikosongkan; Cookie Douyin 48→88px; tanpa scroll.
+  - **Tombol aksi di dalam field (2026-08-15)**: tombol "Unduh Semua" kini
+    berada DI DALAM textarea (kanan-bawah, `absolute bottom-1.5 right-1.5 z-10`)
+    dan "Ambil Daftar" DI DALAM input (kanan, ter-center vertikal via flex).
+    - Prop baru `action?: React.ReactNode` pada FloatingInput/FloatingTextarea.
+    - Textarea: padding-kanan ADAPTIF mengikuti lebar tombol (ResizeObserver
+      mengukur `actionRef` → `paddingRight = actionW + 18`) sehingga teks tidak
+      tertimpa & menyesuaikan bila jumlah link berubah ("Unduh Semua (N)").
+      Tombol tetap di kanan-bawah saat textarea membesar.
+    - Input: tombol sebagai anak flex (`relative z-10 shrink-0`) → otomatis
+      kanan & center vertikal (E2E `btnCenterVsField: 0`).
+    - Tombol aksi DISAMAKAN (konsisten): "Unduh Semua" & "Ambil Daftar"
+      identik (`text-sm px-3.5 py-2 gap-2 icon h-4 font-semibold shadow-sm`,
+      tinggi 36px); "Simpan" (trim) ikut disamakan. Terverifikasi E2E: kedua
+      tombol IDENTIK (h 36, fs 14px, padding 8/14px, radius 8px, fw 600).
+    - Terverifikasi E2E Electron nyata: tombol di dalam (`btnInside`), gap
+      kanan/bawah ~7px, `taPaddingRight` 160px ≈ btnW+18, field tumbuh 50→110px
+      saat 4 baris dengan tombol tetap kanan-bawah.
     - **PELAJARAN OPERASIONAL (2026-08-15)**: error `No handler registered for
       preview:resolve` + thumbnail tidak muncul = **main process STALE**
       (electron-vite dev TIDAK hot-reload main). Renderer & preload baru dari

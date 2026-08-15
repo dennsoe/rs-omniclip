@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { clsx } from 'clsx'
+import { FieldShine, FloatingLabel } from './FloatingShared'
+import { fieldShell, iconCls } from './floating-classes'
 
 interface FloatingFieldBase {
   /** Label yang mengambang di atas saat terisi/fokus. */
@@ -7,6 +9,9 @@ interface FloatingFieldBase {
   icon?: React.ReactNode
   helper?: string
   error?: string
+  /** Aksi (tombol) yang dirender DI DALAM field: input → kanan (tengah vertikal);
+   *  textarea → kanan bawah (padding-kanan menyesuaikan lebar tombol secara adaptif). */
+  action?: React.ReactNode
 }
 
 /**
@@ -18,6 +23,7 @@ export function FloatingInput({
   icon,
   helper,
   error,
+  action,
   onFocus,
   onBlur,
   ...inputProps
@@ -28,17 +34,8 @@ export function FloatingInput({
   const floated = focused || filled
   return (
     <div className="flex flex-col gap-1">
-      <div
-        className={clsx(
-          'relative flex items-center rounded-xl border bg-white transition-all dark:bg-slate-900/60',
-          error
-            ? 'border-rose-400 dark:border-rose-500/60'
-            : focused
-              ? 'border-blue-500 shadow-sm ring-2 ring-blue-500/20'
-              : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
-        )}
-      >
-        {icon && <span className="ml-3 shrink-0 text-slate-400 dark:text-slate-500">{icon}</span>}
+      <div className={clsx(fieldShell({ error, active: focused }), 'flex items-center')}>
+        {icon && <span className={clsx('ml-3 shrink-0', iconCls(focused))}>{icon}</span>}
         <input
           id={id}
           onFocus={(e) => {
@@ -50,21 +47,17 @@ export function FloatingInput({
             onBlur?.(e)
           }}
           {...inputProps}
-          className="w-full bg-transparent px-3.5 pb-1.5 pt-5 text-sm text-slate-800 outline-none placeholder-transparent transition-colors dark:text-slate-100"
+          className={clsx(
+            'min-w-0 flex-1 bg-transparent py-3.5 text-sm text-slate-800 caret-blue-500 outline-none placeholder-transparent transition-colors dark:text-slate-100',
+            action ? 'pl-3.5 pr-1' : 'px-3.5'
+          )}
           placeholder=" "
         />
-        <label
-          htmlFor={id}
-          className={clsx(
-            'pointer-events-none absolute transition-all duration-200',
-            icon ? 'left-9' : 'left-3.5',
-            floated
-              ? 'top-2 text-[10px] font-bold uppercase tracking-wider text-blue-500'
-              : 'top-1/2 -translate-y-1/2 text-sm text-slate-400 dark:text-slate-500'
-          )}
-        >
+        <FloatingLabel floated={floated} focused={focused} error={error} icon={icon} htmlFor={id}>
           {label}
-        </label>
+        </FloatingLabel>
+        {action && <span className="relative z-10 shrink-0 pl-1 pr-2">{action}</span>}
+        {focused && <FieldShine />}
       </div>
       {error ? (
         <p className="px-1 text-[11px] text-rose-500">{error}</p>
@@ -77,22 +70,25 @@ export function FloatingInput({
 
 /**
  * Textarea dengan floating label (gaya sama dengan FloatingInput).
- * - AUTO-RESIZE: tinggi mengikuti isi (tidak pernah scroll) — diukur via
- *   scrollHeight setiap value berubah.
- * - `pt-7` memberi ruang agar label mengambang (top-2.5) TIDAK menabrak baris
- *   teks pertama (sebelumnya pt-6 → label menimpa teks; terukur overlap).
+ * - KOMPAK: mulai setinggi input teks biasa (1 baris, `rows={1}`) lalu
+ *   AUTO-RESIZE mengikuti isi (tinggi = scrollHeight, tidak pernah scroll).
+ * - Label mengambang di atas border (notch, gaya Google) — padding `py-3.5`
+ *   cukup memberi jarak dari label floated.
  */
 export function FloatingTextarea({
   label,
   icon,
   helper,
   error,
+  action,
   onFocus,
   onBlur,
   ...textareaProps
 }: FloatingFieldBase & Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, 'className'>): React.ReactElement {
   const [focused, setFocused] = useState(false)
   const taRef = useRef<HTMLTextAreaElement>(null)
+  const actionRef = useRef<HTMLDivElement>(null)
+  const [actionW, setActionW] = useState(0)
   const id = useId()
   const value = typeof textareaProps.value === 'string' ? textareaProps.value : ''
   const filled = value.length > 0
@@ -107,19 +103,22 @@ export function FloatingTextarea({
     ta.style.height = `${ta.scrollHeight}px`
   }, [value, filled])
 
+  // Lebar tombol aksi → padding-kanan textarea MENYESUAIKAN lebar tombol
+  // (adaptif, mis. "Unduh Semua (N)" berubah saat jumlah link berubah).
+  useEffect(() => {
+    const el = actionRef.current
+    if (!el) return
+    const update = (): void => setActionW(el.offsetWidth)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [action])
+
   return (
     <div className="flex flex-col gap-1">
-      <div
-        className={clsx(
-          'relative rounded-xl border bg-white transition-all dark:bg-slate-900/60',
-          error
-            ? 'border-rose-400 dark:border-rose-500/60'
-            : focused
-              ? 'border-blue-500 shadow-sm ring-2 ring-blue-500/20'
-              : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'
-        )}
-      >
-        {icon && <span className="absolute left-3 top-3.5 shrink-0 text-slate-400 dark:text-slate-500">{icon}</span>}
+      <div className={fieldShell({ error, active: focused })}>
+        {icon && <span className={clsx('absolute left-3 top-4', iconCls(focused))}>{icon}</span>}
         <textarea
           ref={taRef}
           id={id}
@@ -132,24 +131,23 @@ export function FloatingTextarea({
             onBlur?.(e)
           }}
           {...textareaProps}
+          rows={1}
           className={clsx(
-            'block w-full resize-none overflow-hidden bg-transparent pb-2 pt-7 text-sm text-slate-800 outline-none placeholder-transparent transition-colors dark:text-slate-100',
-            icon ? 'pl-9 pr-3.5' : 'px-3.5'
+            'block w-full resize-none overflow-hidden bg-transparent py-3.5 pr-3.5 text-sm text-slate-800 caret-blue-500 outline-none placeholder-transparent transition-colors dark:text-slate-100',
+            icon ? 'pl-9' : 'pl-3.5'
           )}
+          style={action ? { paddingRight: `${actionW + 18}px` } : undefined}
           placeholder=" "
         />
-        <label
-          htmlFor={id}
-          className={clsx(
-            'pointer-events-none absolute transition-all duration-200',
-            icon ? 'left-9' : 'left-3.5',
-            floated
-              ? 'top-2.5 text-[10px] font-bold uppercase tracking-wider text-blue-500'
-              : 'top-4 text-sm text-slate-400 dark:text-slate-500'
-          )}
-        >
+        <FloatingLabel floated={floated} focused={focused} error={error} icon={icon} htmlFor={id}>
           {label}
-        </label>
+        </FloatingLabel>
+        {action && (
+          <div ref={actionRef} className="absolute bottom-1.5 right-1.5 z-10">
+            {action}
+          </div>
+        )}
+        {focused && <FieldShine />}
       </div>
       {error ? (
         <p className="px-1 text-[11px] text-rose-500">{error}</p>

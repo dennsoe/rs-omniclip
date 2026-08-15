@@ -1330,27 +1330,26 @@ export default function App(): React.ReactElement {
                           icon={<LinkIcon className="h-4 w-4" />}
                           value={linksText}
                           onChange={(e) => setLinksText(e.target.value)}
-                          rows={5}
                           helper="Format: https://www.youtube.com/watch?v=... atau https://www.tiktok.com/@user/video/..."
+                          action={
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                startBatchDownload(validLinks)
+                              }}
+                              disabled={validLinks.length === 0 || isDownloading}
+                              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isDownloading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <DownloadCloud className="h-4 w-4" />
+                              )}
+                              Unduh Semua ({validLinks.length})
+                            </button>
+                          }
                         />
-                        <div className="flex justify-end">
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              startBatchDownload(validLinks)
-                            }}
-                            disabled={validLinks.length === 0 || isDownloading}
-                            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {isDownloading ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <DownloadCloud className="h-4 w-4" />
-                            )}
-                            Unduh Semua ({validLinks.length})
-                          </button>
-                        </div>
                       </div>
                     </motion.div>
                   ) : (
@@ -1375,22 +1374,20 @@ export default function App(): React.ReactElement {
                             </p>
                           </div>
                         </div>
-                        <div className="flex flex-col gap-2.5">
-                          <FloatingInput
-                            type="url"
-                            label="Tautan akun / halaman"
-                            icon={<Search className="h-4 w-4" />}
-                            value={scrapeUrl}
-                            onChange={(e) => setScrapeUrl(e.target.value)}
-                            helper="mis. https://www.tiktok.com/@username"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                handleScrape()
-                              }
-                            }}
-                          />
-                          <div className="flex justify-end">
+                        <FloatingInput
+                          type="url"
+                          label="Tautan akun / halaman"
+                          icon={<Search className="h-4 w-4" />}
+                          value={scrapeUrl}
+                          onChange={(e) => setScrapeUrl(e.target.value)}
+                          helper="mis. https://www.tiktok.com/@username"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              handleScrape()
+                            }
+                          }}
+                          action={
                             <button
                               onClick={(e) => {
                                 e.preventDefault()
@@ -1398,7 +1395,7 @@ export default function App(): React.ReactElement {
                                 handleScrape()
                               }}
                               disabled={!scrapeUrl.trim() || isScraping}
-                              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {isScraping ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1407,8 +1404,8 @@ export default function App(): React.ReactElement {
                               )}
                               Ambil Daftar
                             </button>
-                          </div>
-                        </div>
+                          }
+                        />
 
                         {scrapeError && (
                           <p className="text-xs text-rose-500 dark:text-rose-400 flex items-center gap-1.5">
