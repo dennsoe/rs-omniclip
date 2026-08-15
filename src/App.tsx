@@ -35,6 +35,8 @@ import {
   List,
   FileSpreadsheet,
   RadioTower,
+  ShieldCheck,
+  Sparkles,
   type LucideIcon
 } from 'lucide-react'
 import {
@@ -199,6 +201,15 @@ export default function App(): React.ReactElement {
 
   const [files, setFiles] = useState<FileItem[]>([])
   const [preset, setPreset] = usePersistentState<PresetType>(PREF_KEYS.preset, PREF_DEFAULTS.preset)
+  // Opsi pemrosesan global (halaman Pembersih Video).
+  const [cleanMetadata, setCleanMetadata] = usePersistentState<boolean>(
+    PREF_KEYS.cleanMetadata,
+    PREF_DEFAULTS.cleanMetadata
+  )
+  const [enhanceQuality, setEnhanceQuality] = usePersistentState<boolean>(
+    PREF_KEYS.enhanceQuality,
+    PREF_DEFAULTS.enhanceQuality
+  )
   const [isProcessing, setIsProcessing] = useState(false)
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
@@ -708,6 +719,15 @@ export default function App(): React.ReactElement {
     )
   }
 
+  // Saat saklar "Jernihkan" dimatikan, prasetel peningkat (HD/Full HD/4K)
+  // dinonaktifkan; otomatis beralih ke "Hapus Metadata" bila sedang aktif.
+  const handleEnhanceToggle = (v: boolean): void => {
+    setEnhanceQuality(v)
+    if (!v && (preset === 'hd' || preset === 'fullhd' || preset === 'uhd')) {
+      setPreset('metadata')
+    }
+  }
+
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       if (isProcessing) return
@@ -775,6 +795,8 @@ export default function App(): React.ReactElement {
       setDownloadDouyinCookie(PREF_DEFAULTS.downloadDouyinCookie)
       setDownloadParallel(PREF_DEFAULTS.downloadParallel)
       setPreset(PREF_DEFAULTS.preset)
+      setCleanMetadata(PREF_DEFAULTS.cleanMetadata)
+      setEnhanceQuality(PREF_DEFAULTS.enhanceQuality)
       setIsDarkMode(PREF_DEFAULTS.darkMode)
       addToast('Semua preferensi direset ke default.', 'info')
     } else if (confirmAction.type === 'clearHistory') {
@@ -818,7 +840,7 @@ export default function App(): React.ReactElement {
     batchStartRef.current = Date.now()
     totalBytesRef.current = files.reduce((acc, f) => acc + f.size, 0)
 
-    window.api.startProcessing({ files, preset })
+    window.api.startProcessing({ files, preset, cleanMetadata, enhanceQuality })
   }
 
   const formatTime = (seconds: number): string => {
@@ -1136,6 +1158,42 @@ export default function App(): React.ReactElement {
             >
               {/* 3. PRASETEL — berada di halaman Pembersih Video (bukan sidebar) */}
               <div className="relative z-10 pt-16 md:pt-8 px-4 sm:px-6 md:px-8 pb-4">
+                {/* Opsi pemrosesan global */}
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 mb-4 transition-colors">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="p-2 bg-emerald-50 dark:bg-slate-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0 transition-colors">
+                        <ShieldCheck className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 leading-tight">
+                          Hapus Data Privasi (Metadata & GPS)
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Buang metadata & lokasi GPS dari video.
+                        </p>
+                      </div>
+                    </div>
+                    <Toggle checked={cleanMetadata} onChange={setCleanMetadata} />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 leading-tight">
+                          Tingkatkan Kualitas &amp; Jernihkan
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Upscale + penajaman + warna. Matikan untuk hanya membersihkan metadata (cepat).
+                        </p>
+                      </div>
+                    </div>
+                    <Toggle checked={enhanceQuality} onChange={handleEnhanceToggle} />
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 transition-colors">
                     Pilih Prasetel
@@ -1149,6 +1207,7 @@ export default function App(): React.ReactElement {
                   value={preset}
                   onChange={setPreset}
                   disabled={isProcessing}
+                  disabledIds={enhanceQuality ? [] : ['hd', 'fullhd', 'uhd']}
                 />
               </div>
 

@@ -22,7 +22,12 @@ declare global {
       checkEngine: () => void
       onEngineStatus: (cb: (status: string) => void) => () => void
       onAppReady: (cb: (isReady: boolean) => void) => () => void
-      startProcessing: (payload: { files: FileItem[]; preset: PresetType }) => void
+      startProcessing: (payload: {
+        files: FileItem[]
+        preset: PresetType
+        cleanMetadata?: boolean
+        enhanceQuality?: boolean
+      }) => void
       onProcessingProgress: (
         cb: (data: {
           id: string

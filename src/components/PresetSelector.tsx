@@ -19,6 +19,8 @@ interface PresetSelectorProps {
   onChange: (id: PresetType) => void
   /** Nonaktifkan pemilihan saat batch sedang diproses. */
   disabled?: boolean
+  /** Prasetel yang DILARANG dipilih (mis. prasetel peningkat saat 'jernih' dimatikan). */
+  disabledIds?: PresetType[]
 }
 
 /**
@@ -29,13 +31,15 @@ export default function PresetSelector({
   presets,
   value,
   onChange,
-  disabled
+  disabled,
+  disabledIds
 }: PresetSelectorProps): React.ReactElement {
   return (
     <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
       {presets.map((p) => {
         const Icon = p.icon
         const isActive = value === p.id
+        const isLocked = !!disabledIds?.includes(p.id)
         return (
           <motion.button
             key={p.id}
@@ -43,16 +47,16 @@ export default function PresetSelector({
             layout
             onClick={(e) => {
               e.stopPropagation()
-              if (!disabled) onChange(p.id)
+              if (!disabled && !isLocked) onChange(p.id)
             }}
-            disabled={disabled}
+            disabled={disabled || isLocked}
             aria-pressed={isActive}
             whileTap={{ scale: 0.97 }}
             className={`relative flex items-center gap-2.5 sm:gap-3 p-3 rounded-xl border text-left transition-colors duration-200 ${
               isActive
                 ? 'text-white'
                 : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
-            } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            } ${disabled || isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {isActive && (
               <motion.span

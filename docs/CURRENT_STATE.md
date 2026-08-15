@@ -149,6 +149,26 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
   off (Periksa/Cek/tambah form tersembunyi); error TikTok kini pesan ramah
   (bukan kriptik). typecheck/eslint/build PASS.
 
+### Pembersih Video — 2 Saklar Global + Pipeline "Jernih" (2026-08-15, belum commit)
+- **2 saklar global** di atas grid "Pilih Prasetel" (halaman Pembersih Video):
+  1. **"Hapus Data Privasi (Metadata & GPS)"** (default ON) — mengontrol `-map_metadata -1`.
+  2. **"Tingkatkan Kualitas & Jernihkan"** (default ON) — mengontrol pipeline peningkatan.
+- **Logika**: bila "Jernihkan" OFF → prasetel HD/Full HD/4K menjadi `disabled`
+  (redup), dan tombol Proses HANYA membuang metadata (cepat, `-c copy`); bila
+  OFF saat prasetel peningkat aktif → otomatis pindah ke "Hapus Metadata".
+  Bila "Hapus Data Privasi" OFF → metadata dipertahankan.
+- **Pipeline jernih baru** (`buildEnhance`, menggantikan lanczos+unsharp):
+  `atadenoise → scale(lanczos) → cas=0.7 → eq(saturation=1.25:contrast=1.04)`.
+- **Backend**: `ProcessOptions { hwAccel, cleanMetadata, enhanceQuality }` di
+  `processBatch`; `buildArgSets` branch `!enhanceQuality` → metadata-only.
+  IPC `processing:start` payload diperluas (`cleanMetadata`, `enhanceQuality`).
+  `ProcessFileInput` tetap. Preferensi baru: `omni.cleanMetadata`, `omni.enhanceQuality`.
+- **E2E terverifikasi**: 2 saklar render + default ON; enhance OFF → HD/4K
+  disabled + auto-switch ke "Hapus Metadata"; hidup lagi → aktif kembali.
+  Pemrosesan nyata: enhance ON (fullhd) → output **1080x608** (upscaled, ~2.1
+  Mbps); enhance OFF → output **640x360** (resolusi asli, `-c copy` cepat).
+  typecheck/eslint/build PASS.
+
 ### Perbaikan Audit Forensik (2026-08-15)
 1. **CSP `font-src 'self' data:`** (`src/index.html`) — subset Cyrillic font
    Plus Jakarta Sans di-inline Vite sbg `data:font/woff2` → font-src default

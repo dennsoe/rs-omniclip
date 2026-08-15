@@ -129,7 +129,12 @@ const api = {
     }
   },
 
-  startProcessing: (payload: { files: unknown[]; preset: string }): void => {
+  startProcessing: (payload: {
+    files: unknown[]
+    preset: string
+    cleanMetadata?: boolean
+    enhanceQuality?: boolean
+  }): void => {
     ipcRenderer.send('processing:start', payload)
   },
 

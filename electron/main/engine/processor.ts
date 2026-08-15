@@ -20,6 +20,15 @@ export interface ProcessProgress {
   error?: string
 }
 
+/** Opsi pemrosesan global (dari 2 saklar di halaman Pembersih Video). */
+export interface ProcessOptions {
+  hwAccel?: HwAccelMode
+  /** Hapus metadata/GPS (default true). */
+  cleanMetadata?: boolean
+  /** Terapkan pipeline peningkatan kualitas & jernih (default true). */
+  enhanceQuality?: boolean
+}
+
 /** Target resolusi sumbu panjang (piksel). */
 type ScaleTarget = 720 | 1080 | 2160
 
@@ -37,11 +46,14 @@ export async function processBatch(
   files: ProcessFileInput[],
   preset: PresetType,
   onProgress: (p: ProcessProgress) => void,
-  hwAccel: HwAccelMode = 'auto'
+  options: ProcessOptions = {}
 ): Promise<string> {
   if (!files || files.length === 0) {
     throw new Error('Tidak ada video untuk diproses.')
   }
+  const hwAccel = options.hwAccel ?? 'auto'
+  const cleanMetadata = options.cleanMetadata !== false
+  const enhanceQuality = options.enhanceQuality !== false
 
   const { ffmpeg, ffprobe } = await ensureFfmpeg()
   const outputFolder = createOutputFolderForBatch(files[0].path)
@@ -50,7 +62,15 @@ export async function processBatch(
     const outputPath = uniqueOutputPath(outputFolder, stripExtension(file.name))
     try {
       const info = await probe(file.path, ffprobe)
-      const argSets = buildArgSets(preset, file.path, outputPath, info, hwAccel)
+      const argSets = buildArgSets(
+        preset,
+        file.path,
+        outputPath,
+        info,
+        hwAccel,
+        cleanMetadata,
+        enhanceQuality
+      )
       const totalDuration = info.duration || 0
 
       let processed = false
@@ -119,9 +139,32 @@ function buildArgSets(
   input: string,
   output: string,
   info: ProbeResult,
-  hwAccel: HwAccelMode = 'auto'
+  hwAccel: HwAccelMode = 'auto',
+  cleanMetadata = true,
+  enhanceQuality = true
 ): string[][] {
-  const common = ['-y', '-i', input, '-map_metadata', '-1']
+  const common = ['-y', '-i', input, ...(cleanMetadata ? ['-map_metadata', '-1'] : [])]
+
+  // Mode "hanya bersihkan": buang metadata saja (cepat, -c copy). Aktif bila
+  // saklar "Tingkatkan Kualitas & Jernihkan" dimatikan di UI — apapun prasetel.
+  if (!enhanceQuality) {
+    return [
+      [...common, '-c', 'copy', '-movflags', '+faststart', output],
+      [
+        ...common,
+        ...encoderCrfArgs(hwAccel, 23),
+        '-pix_fmt',
+        'yuv420p',
+        '-c:a',
+        'aac',
+        '-b:a',
+        '128k',
+        '-movflags',
+        '+faststart',
+        output
+      ]
+    ]
+  }
 
   switch (preset) {
     case 'metadata': {
@@ -253,7 +296,7 @@ function buildEnhance(
   output: string,
   hwAccel: HwAccelMode = 'auto'
 ): string[][] {
-  const filter = `scale='if(gt(iw,ih),${target},-2)':'if(gt(iw,ih),-2,${target})':flags=lanczos,unsharp=5:5:0.6:5:5:0.0`
+  const filter = `atadenoise=0a=0.03:0b=0.03,scale='if(gt(iw,ih),${target},-2)':'if(gt(iw,ih),-2,${target})':flags=lanczos,cas=0.7,eq=saturation=1.25:contrast=1.04`
   const x264VideoArgs = [
     ...common,
     '-vf',

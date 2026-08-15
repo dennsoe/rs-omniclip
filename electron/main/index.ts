@@ -208,6 +208,8 @@ async function initEngine(): Promise<void> {
 async function handleProcessing(payload: {
   files: ProcessFileInput[]
   preset: PresetType
+  cleanMetadata?: boolean
+  enhanceQuality?: boolean
 }): Promise<void> {
   if (
     !payload ||
@@ -227,10 +229,13 @@ async function handleProcessing(payload: {
   }
 
   try {
-    const hwAccel = getConfig().hwAccel?.mode ?? 'auto'
     const outputFolder = await processBatch(validFiles, payload.preset, (p: ProcessProgress) => {
       emit('processing:progress', p)
-    }, hwAccel)
+    }, {
+      hwAccel: getConfig().hwAccel?.mode ?? 'auto',
+      cleanMetadata: payload.cleanMetadata !== false,
+      enhanceQuality: payload.enhanceQuality !== false
+    })
     emit('processing:complete', { outputFolder })
   } catch (err) {
     console.error('[RS OmniClip] Gagal memproses batch:', err)
