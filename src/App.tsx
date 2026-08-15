@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { motion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import {
   Loader2,
   UploadCloud,
-  Eraser,
+  ShieldCheck,
   MonitorUp,
-  Monitor,
-  Tv,
-  Archive,
   Clapperboard,
   PlayCircle,
   Trash2,
@@ -18,19 +15,25 @@ import {
   Wand2,
   DownloadCloud,
   Link as LinkIcon,
-  MessageCircle,
   XCircle,
   FolderOpen,
+  History,
   ListVideo,
   Search,
   Info,
   RefreshCw,
+  RotateCcw,
   ExternalLink,
   BadgeCheck,
   CircleAlert,
-  KeyRound,
   Settings,
-  type LucideIcon
+  LayoutGrid,
+  List,
+  FileSpreadsheet,
+  RadioTower,
+  Focus,
+  Gem,
+  AudioLines
 } from 'lucide-react'
 import {
   DndContext,
@@ -50,52 +53,43 @@ import {
 import type {
   FileItem,
   PresetType,
+  ProcessingMode,
+  QualityLevel,
+  AudioMode,
   FileStatus,
   ScrapeItem,
   UpdateInfo,
   ResourceInfo,
-  DownloadProgress
+  DownloadProgress,
+  HistoryEntry
 } from '@lib/types'
 import { useIsMobile } from '@hooks/use-mobile'
+import { usePersistentState } from '@hooks/use-persistent-state'
+import { PREF_KEYS, PREF_DEFAULTS, resetAllPreferences } from '@lib/preferences'
+import { cn } from '@lib/utils'
 import Toasts, { type ToastMessage, type ToastType } from '@components/Toasts'
 import ConfirmModal, { type ConfirmAction } from '@components/ConfirmModal'
 import PreviewModal from '@components/PreviewModal'
+import ScrapePreviewModal from '@components/ScrapePreviewModal'
+import ScrapeResultView from '@components/ScrapeResultView'
+import DownloadSettingsModal from '@components/DownloadSettingsModal'
+import DownloadQueue from '@components/DownloadQueue'
+import ScrapeDownloadProgress from '@components/ScrapeDownloadProgress'
+import Markdown from '@components/Markdown'
+import HistoryView from '@components/HistoryView'
+import MediaPreviewModal, { type LocalMediaFile } from '@components/MediaPreviewModal'
+import WatcherPanel from '@components/WatcherPanel'
 import SystemMonitor from '@components/SystemMonitor'
 import SortableFileItem from '@components/SortableFileItem'
-import PresetSelector from '@components/PresetSelector'
+import FloatingSelect, { type SelectOption } from '@components/ui/FloatingSelect'
+import { FloatingInput, FloatingTextarea } from '@components/ui/FloatingField'
+import Toggle from '@components/ui/Toggle'
 
-/** Satu item antrean unduhan (kontrak window.api.onDownloadProgress). */
-type DownloadItem = DownloadProgress
-
-/** Memformat byte menjadi teks ringkas (mis. "12.3 MB"). */
-function formatBytes(bytes?: number): string {
-  if (!bytes || bytes <= 0) return ''
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let i = 0
-  let n = bytes
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024
-    i++
-  }
-  return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${units[i]}`
-}
-
-/** Memformat kecepatan unduh (byte/detik) menjadi teks. */
-function formatSpeed(bytesPerSec?: number): string {
-  return bytesPerSec && bytesPerSec > 0 ? `${formatBytes(bytesPerSec)}/dtk` : ''
-}
-
-/** Memformat estimasi sisa waktu (detik) menjadi teks. */
-function formatEta(seconds?: number): string {
-  if (seconds === undefined || seconds < 0) return ''
-  const s = Math.round(seconds)
-  if (s < 60) return `${s} dtk`
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  if (m < 60) return `${m} mnt ${sec} dtk`
-  const h = Math.floor(m / 60)
-  const mm = m % 60
-  return `${h} jam ${mm} mnt`
+/** Satu item antrean unduhan di renderer — kontrak onDownloadProgress + asal tab.
+ *  `source` memisahkan progres per tab: Banyak Link vs Akun/Halaman. */
+interface DownloadItem extends DownloadProgress {
+  /** Asal unduhan: 'links' (tab Banyak Link) / 'scrape' (tab Akun·Halaman). */
+  source: 'links' | 'scrape'
 }
 
 export default function App(): React.ReactElement {
@@ -109,8 +103,16 @@ export default function App(): React.ReactElement {
   const isMobile = useIsMobile()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const [activeMenu, setActiveMenu] = useState<'cleaner' | 'downloader' | 'about'>('cleaner')
-  const [downloaderMode, setDownloaderMode] = useState<'links' | 'scrape'>('links')
+  const [activeMenu, setActiveMenu] = usePersistentState<'cleaner' | 'downloader' | 'about'>(
+    PREF_KEYS.activeMenu,
+    PREF_DEFAULTS.activeMenu
+  )
+  const [downloaderMode, setDownloaderMode] = usePersistentState<
+    'links' | 'scrape' | 'watcher' | 'history'
+  >(
+    PREF_KEYS.downloaderMode,
+    PREF_DEFAULTS.downloaderMode
+  )
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
   const [resources, setResources] = useState<ResourceInfo[] | null>(null)
@@ -120,28 +122,82 @@ export default function App(): React.ReactElement {
   const [resourceStatus, setResourceStatus] = useState<string | null>(null)
   const [isUpdatingResources, setIsUpdatingResources] = useState(false)
   const [downloads, setDownloads] = useState<DownloadItem[]>([])
+  // Pratinjau video hasil unduhan lokal (via media://) & riwayat unduhan.
+  const [previewLocal, setPreviewLocal] = useState<LocalMediaFile | null>(null)
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+
+  const refreshHistory = (): void => {
+    window.api?.listHistory
+      ?.()
+      .then((h) => setHistory(h ?? []))
+      .catch(() => {})
+  }
   const [linksText, setLinksText] = useState('')
   const [scrapeUrl, setScrapeUrl] = useState('')
   const [scrapeItems, setScrapeItems] = useState<ScrapeItem[] | null>(null)
   const [scrapeTruncated, setScrapeTruncated] = useState(false)
   const [scrapeSelected, setScrapeSelected] = useState<Record<string, boolean>>({})
+  // Tampilan hasil scrape: grid (kartu) / list (baris) — user memilih.
+  const [scrapeView, setScrapeView] = useState<'grid' | 'list'>('grid')
+  // Pencarian cepat hasil scrape (filter judul).
+  const [scrapeQuery, setScrapeQuery] = useState('')
+  // Thumbnail hasil resolve lazy (per-item) — kunci = url video.
+  const [scrapeThumbs, setScrapeThumbs] = useState<Record<string, string>>({})
+  const scrapeThumbsCache = useRef<Record<string, string>>({})
+  // Item yang sedang dipratinjau (modal preview video).
+  const [scrapePreview, setScrapePreview] = useState<ScrapeItem | null>(null)
   const [isScraping, setIsScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState<string | null>(null)
+  // Ekspor data analitik (CSV) otomatis setelah ambil daftar (Fase 4).
+  const [analyticsExport, setAnalyticsExport] = useState(false)
+  const analyticsExportRef = useRef(false)
   const [isDownloading, setIsDownloading] = useState(false)
-  // Pengaturan unduhan (kualitas, cookies browser, paralel).
-  const [downloadMaxHeight, setDownloadMaxHeight] = useState<number>(0)
-  const [downloadCookiesBrowser, setDownloadCookiesBrowser] = useState<string>('')
-  const [downloadDouyinCookie, setDownloadDouyinCookie] = useState<string>('')
-  const [downloadParallel, setDownloadParallel] = useState(false)
+  // Pengaturan unduhan (kualitas, cookies browser, paralel) — dipersist ke localStorage.
+  const [downloadMaxHeight, setDownloadMaxHeight] = usePersistentState<number>(
+    PREF_KEYS.downloadMaxHeight,
+    PREF_DEFAULTS.downloadMaxHeight
+  )
+  const [downloadCookiesBrowser, setDownloadCookiesBrowser] = usePersistentState<string>(
+    PREF_KEYS.downloadCookiesBrowser,
+    PREF_DEFAULTS.downloadCookiesBrowser
+  )
+  const [downloadDouyinCookie, setDownloadDouyinCookie] = usePersistentState<string>(
+    PREF_KEYS.downloadDouyinCookie,
+    PREF_DEFAULTS.downloadDouyinCookie
+  )
+  const [downloadParallel, setDownloadParallel] = usePersistentState<boolean>(
+    PREF_KEYS.downloadParallel,
+    PREF_DEFAULTS.downloadParallel
+  )
+  // Modal pengaturan unduhan (dibuka dari tombol gear di header halaman Pengunduh).
+  const [isDownloadSettingsOpen, setIsDownloadSettingsOpen] = useState(false)
 
   const [files, setFiles] = useState<FileItem[]>([])
-  const [preset, setPreset] = useState<PresetType>('fullhd')
+  const [preset, setPreset] = usePersistentState<PresetType>(PREF_KEYS.preset, PREF_DEFAULTS.preset)
+  // Mode pemrosesan global (halaman Pembersih Video).
+  const [processingMode, setProcessingMode] = usePersistentState<ProcessingMode>(
+    PREF_KEYS.processingMode,
+    PREF_DEFAULTS.processingMode
+  )
+  // Opsi pembersih: hapus metadata + kualitas/audio (halaman Pembersih Video).
+  const [cleanMetadata, setCleanMetadata] = usePersistentState<boolean>(
+    PREF_KEYS.cleanMetadata,
+    PREF_DEFAULTS.cleanMetadata
+  )
+  const [cleanerQuality, setCleanerQuality] = usePersistentState<QualityLevel>(
+    PREF_KEYS.cleanerQuality,
+    PREF_DEFAULTS.cleanerQuality
+  )
+  const [cleanerAudio, setCleanerAudio] = usePersistentState<AudioMode>(
+    PREF_KEYS.cleanerAudio,
+    PREF_DEFAULTS.cleanerAudio
+  )
   const [isProcessing, setIsProcessing] = useState(false)
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null)
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
-  const [isDarkMode, setIsDarkMode] = useState(false)
+  const [isDarkMode, setIsDarkMode] = usePersistentState<boolean>(PREF_KEYS.darkMode, PREF_DEFAULTS.darkMode)
   const [filter, setFilter] = useState<'all' | 'pending' | 'success' | 'failed'>('all')
   const [outputFolder, setOutputFolder] = useState<string | null>(null)
 
@@ -154,6 +210,14 @@ export default function App(): React.ReactElement {
   useEffect(() => {
     filesRef.current = files
   }, [files])
+
+  // Sinkronkan mode gelap ke <html> — bukan hanya div root — agar konten yang
+  // dirender via PORTAL ke <body> (mis. panel dropdown FloatingSelect /
+  // FloatingMultiSelect) ikut bergaya dark. Sebelumnya .dark hanya di div root
+  // sehingga panel portal selalu berwarna putih di dark mode.
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode)
+  }, [isDarkMode])
 
   const filteredFiles = useMemo(() => {
     return files.filter((f) => {
@@ -180,6 +244,117 @@ export default function App(): React.ReactElement {
     () => (scrapeItems ?? []).filter((it) => scrapeSelected[it.url]).map((it) => it.url),
     [scrapeItems, scrapeSelected]
   )
+
+  // Unduhan per-tab: setiap tab punya komponen progres sendiri.
+  // Item lama tanpa source dianggap dari Banyak Link (perilaku asli).
+  const linksDownloads = useMemo(
+    () => downloads.filter((d) => (d.source ?? 'links') === 'links'),
+    [downloads]
+  )
+  const scrapeDownloads = useMemo(
+    () => downloads.filter((d) => d.source === 'scrape'),
+    [downloads]
+  )
+
+  // Hasil scrape yang difilter oleh pencarian judul.
+  const filteredScrapeItems = useMemo(() => {
+    const q = scrapeQuery.trim().toLowerCase()
+    if (!q) return scrapeItems ?? []
+    return (scrapeItems ?? []).filter((it) => it.title.toLowerCase().includes(q))
+  }, [scrapeItems, scrapeQuery])
+
+  // Resolve SEMUA thumbnail hasil scrape SECARA OTOMATIS begitu daftar selesai
+  // diambil — tanpa menunggu scroll. Flat-playlist tidak menyertakan thumbnail
+  // TikTok (NA) → resolve via IPC (TikWM). Antrean konkuren terbatas + retry +
+  // backoff, lalu SWEEP BERKALA yang mencoba ulang yang masih gagal (mis.
+  // rate-limit sesaat) hingga semua muncul. YouTube memakai URL deterministik
+  // i.ytimg.com (tanpa request). Gagal total → placeholder.
+  useEffect(() => {
+    if (!scrapeItems || scrapeItems.length === 0) return
+    const cache = scrapeThumbsCache.current
+    const next: Record<string, string> = {}
+    const pending: ScrapeItem[] = []
+    for (const it of scrapeItems) {
+      if (it.thumbnail) {
+        next[it.url] = it.thumbnail
+      } else if (/youtube|youtu\.be/i.test(it.url)) {
+        next[it.url] = `https://i.ytimg.com/vi/${it.id}/hqdefault.jpg`
+      } else if (!cache[it.url]) {
+        pending.push(it)
+      }
+    }
+    scrapeThumbsCache.current = { ...cache, ...next }
+    setScrapeThumbs({ ...scrapeThumbsCache.current })
+    if (pending.length === 0) return
+    const resolvePreview = window.api?.resolvePreview
+    if (!resolvePreview) return
+
+    const MAX_CONCURRENT = 4
+    const MAX_ATTEMPTS = 3
+    const SWEEP_GAP_MS = 15000
+    const SWEEP_ROUNDS = 5
+    const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+    let cancelled = false
+    const attempt = async (it: ScrapeItem, n: number): Promise<void> => {
+      if (cancelled || scrapeThumbsCache.current[it.url]) return
+      try {
+        const res = await resolvePreview({ url: it.url })
+        if (res?.thumbnail) {
+          scrapeThumbsCache.current[it.url] = res.thumbnail
+          setScrapeThumbs({ ...scrapeThumbsCache.current })
+        } else if (res?.error && n < MAX_ATTEMPTS) {
+          await sleep(1000 * n)
+          await attempt(it, n + 1)
+        }
+      } catch {
+        if (n < MAX_ATTEMPTS) {
+          await sleep(1000 * n)
+          await attempt(it, n + 1)
+        }
+      }
+    }
+    const runBatch = (list: ScrapeItem[], roundLeft: number): void => {
+      if (cancelled) return
+      let cursor = 0
+      const workers = Array.from({ length: Math.min(MAX_CONCURRENT, list.length) }, () =>
+        (async () => {
+          while (cursor < list.length) {
+            const idx = cursor++
+            await attempt(list[idx], 1)
+          }
+        })()
+      )
+      void Promise.all(workers).then(() => {
+        if (cancelled || roundLeft <= 0) return
+        const missing = pending.filter((it) => !scrapeThumbsCache.current[it.url])
+        if (missing.length === 0) return
+        setTimeout(() => runBatch(missing, roundLeft - 1), SWEEP_GAP_MS)
+      })
+    }
+    runBatch(pending, SWEEP_ROUNDS)
+    return () => {
+      cancelled = true
+    }
+  }, [scrapeItems])
+
+  // Fallback: bila ada kartu yang TAMPAK namun thumbnail-nya belum ada (gagal
+  // resolve otomatis di atas — mis. rate-limit sesaat), retry saat terlihat
+  // (IntersectionObserver di ScrapeResultView). Cache mencegah panggilan ganda.
+  const onThumbVisible = useCallback((url: string): void => {
+    if (!url || scrapeThumbsCache.current[url]) return
+    const resolvePreview = window.api?.resolvePreview
+    if (!resolvePreview) return
+    void resolvePreview({ url })
+      .then((res) => {
+        if (res?.thumbnail && !scrapeThumbsCache.current[url]) {
+          scrapeThumbsCache.current[url] = res.thumbnail
+          setScrapeThumbs({ ...scrapeThumbsCache.current })
+        }
+      })
+      .catch(() => {
+        // Abaikan — placeholder tetap tampil.
+      })
+  }, [])
 
   // PERIKSA UPDATE APLIKASI (via GitHub Releases API, gratis, tanpa token)
   const checkUpdate = useCallback(async (): Promise<void> => {
@@ -273,6 +448,13 @@ export default function App(): React.ReactElement {
   const outdatedResources = resourcesReady ? (resources ?? []).filter((r) => r.outdated) : []
   const updateBadgeCount = (appHasUpdate ? 1 : 0) + outdatedResources.length
   const showUpdateBadge = updateBadgeCount > 0
+
+  // Jumlah pengaturan unduhan non-default (badge indikator pada tombol modal).
+  const downloadSettingsCount =
+    (downloadMaxHeight > 0 ? 1 : 0) +
+    (downloadCookiesBrowser ? 1 : 0) +
+    (downloadDouyinCookie ? 1 : 0) +
+    (downloadParallel ? 1 : 0)
 
   // BUKA HALAMAN RILIS GITHUB (strategi unduh manual macOS — 100% gratis)
   const handleOpenUpdate = (): void => {
@@ -395,6 +577,7 @@ export default function App(): React.ReactElement {
 
     const offDownloadComplete = window.api.onDownloadComplete((data) => {
       setIsDownloading(false)
+      refreshHistory()
       if (data.failed > 0) {
         addToast(`Unduhan selesai: ${data.success} berhasil, ${data.failed} gagal.`, 'error')
       } else {
@@ -418,7 +601,17 @@ export default function App(): React.ReactElement {
       } else {
         setScrapeError(null)
       }
+      // Ekspor data analitik (CSV) otomatis bila toggle aktif (Fase 4).
+      if (analyticsExportRef.current && data.items.length > 0) {
+        window.api
+          ?.exportAnalytics?.({ items: data.items })
+          .then((p) => addToast(`Data analitik diekspor ke ${p}`, 'success'))
+          .catch(() => addToast('Gagal mengekspor data analitik.', 'error'))
+      }
     })
+
+    // Muat riwayat unduhan saat aplikasi siap (dari main process).
+    refreshHistory()
 
     return () => {
       offProgress()
@@ -429,11 +622,11 @@ export default function App(): React.ReactElement {
     }
   }, [addToast])
 
-  const startBatchDownload = (urls: string[]): void => {
+  const startBatchDownload = (urls: string[], source: 'links' | 'scrape'): void => {
     if (urls.length === 0 || isDownloading) return
     setIsDownloading(true)
     setDownloads((prev) => [
-      ...urls.map((url) => ({ id: url, url, percent: 0, status: 'downloading' as const })),
+      ...urls.map((url) => ({ id: url, url, source, percent: 0, status: 'downloading' as const })),
       ...prev
     ])
     if (window.api?.startDownloadBatch) {
@@ -464,12 +657,34 @@ export default function App(): React.ReactElement {
     setScrapeError(null)
     setScrapeItems(null)
     setScrapeSelected({})
+    setScrapeQuery('')
+    setScrapeThumbs({})
+    scrapeThumbsCache.current = {}
     if (window.api?.scrapeAccount) {
-      window.api.scrapeAccount({ id: Math.random().toString(36).substring(7), url })
+      window.api.scrapeAccount({
+        id: Math.random().toString(36).substring(7),
+        url,
+        options: { cookiesBrowser: downloadCookiesBrowser || undefined }
+      })
     } else {
       setIsScraping(false)
       setScrapeError('Ambil daftar hanya berjalan pada aplikasi desktop (Electron).')
     }
+  }
+
+  const clearDownloads = (source?: 'links' | 'scrape'): void => {
+    setDownloads((prev) => (source ? prev.filter((d) => d.source !== source) : []))
+  }
+
+  const clearScrape = (): void => {
+    setScrapeItems(null)
+    setScrapeSelected({})
+    setScrapeError(null)
+    setScrapeQuery('')
+    setScrapeUrl('')
+    setScrapeThumbs({})
+    scrapeThumbsCache.current = {}
+    setDownloads((prev) => prev.filter((d) => d.source !== 'scrape'))
   }
 
   const toggleScrapeItem = (url: string): void => {
@@ -480,6 +695,32 @@ export default function App(): React.ReactElement {
     if (!scrapeItems) return
     const allSelected = scrapeItems.every((it) => scrapeSelected[it.url])
     setScrapeSelected(allSelected ? {} : Object.fromEntries(scrapeItems.map((it) => [it.url, true])))
+  }
+
+  // --- Ekspor data analitik (CSV): muat preferensi + toggle (Fase 4) ---
+  useEffect(() => {
+    window.api
+      ?.getConfig?.()
+      .then((cfg) => {
+        if (typeof cfg?.analyticsExport === 'boolean') {
+          setAnalyticsExport(cfg.analyticsExport)
+          analyticsExportRef.current = cfg.analyticsExport
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const toggleAnalyticsExport = (): void => {
+    const next = !analyticsExportRef.current
+    analyticsExportRef.current = next
+    setAnalyticsExport(next)
+    window.api?.setConfig?.({ analyticsExport: next }).catch(() => {})
+    addToast(
+      next
+        ? 'Ekspor data analitik diaktifkan — CSV akan dibuat otomatis setiap kali ambil daftar akun.'
+        : 'Ekspor data analitik dimatikan — data tidak lagi diekspor ke CSV.',
+      'success'
+    )
   }
 
   const onDrop = useCallback(
@@ -504,17 +745,19 @@ export default function App(): React.ReactElement {
     [isProcessing, addToast]
   )
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: {
       'video/mp4': ['.mp4'],
       'video/quicktime': ['.mov']
     },
     disabled: isProcessing,
-    // Klik & drag hanya aktif di halaman Pembersih (saat antrean kosong).
-    // Di halaman Pengunduh, klik TIDAK boleh membuka dialog file — input URL
-    // dan tombol harus tetap berfungsi normal.
-    noClick: activeMenu !== 'cleaner' || files.length > 0,
+    // Klik TIDAK pernah membuka dialog dari root (noClick selalu true) —
+    // dialog file HANYA dibuka dari area drop-zone (empty state) via open().
+    // Dengan begitu klik di panel prasetel/tab/toggle tidak memicu import.
+    // Drag tetap aktif di area utama halaman Pembersih (noDrag hanya di
+    // halaman lain).
+    noClick: true,
     noDrag: activeMenu !== 'cleaner'
   })
 
@@ -539,6 +782,26 @@ export default function App(): React.ReactElement {
     } else if (confirmAction.type === 'remove' && confirmAction.id) {
       setFiles((prev) => prev.filter((f) => f.id !== confirmAction.id))
       addToast('Video dihapus dari antrean', 'info')
+    } else if (confirmAction.type === 'reset') {
+      // Reset semua preferensi ke default (setelah konfirmasi modal).
+      resetAllPreferences()
+      setActiveMenu(PREF_DEFAULTS.activeMenu)
+      setDownloaderMode(PREF_DEFAULTS.downloaderMode)
+      setDownloadMaxHeight(PREF_DEFAULTS.downloadMaxHeight)
+      setDownloadCookiesBrowser(PREF_DEFAULTS.downloadCookiesBrowser)
+      setDownloadDouyinCookie(PREF_DEFAULTS.downloadDouyinCookie)
+      setDownloadParallel(PREF_DEFAULTS.downloadParallel)
+      setPreset(PREF_DEFAULTS.preset)
+      setProcessingMode(PREF_DEFAULTS.processingMode)
+      setCleanMetadata(PREF_DEFAULTS.cleanMetadata)
+      setCleanerQuality(PREF_DEFAULTS.cleanerQuality)
+      setCleanerAudio(PREF_DEFAULTS.cleanerAudio)
+      setIsDarkMode(PREF_DEFAULTS.darkMode)
+      addToast('Semua preferensi direset ke default.', 'info')
+    } else if (confirmAction.type === 'clearHistory') {
+      window.api?.clearHistory?.()
+      setHistory([])
+      addToast('Riwayat unduhan dibersihkan.', 'info')
     }
     setConfirmAction(null)
   }
@@ -576,7 +839,14 @@ export default function App(): React.ReactElement {
     batchStartRef.current = Date.now()
     totalBytesRef.current = files.reduce((acc, f) => acc + f.size, 0)
 
-    window.api.startProcessing({ files, preset })
+    window.api.startProcessing({
+      files,
+      preset,
+      processingMode,
+      cleanMetadata,
+      quality: cleanerQuality,
+      audio: cleanerAudio
+    })
   }
 
   const formatTime = (seconds: number): string => {
@@ -599,22 +869,44 @@ export default function App(): React.ReactElement {
   // memblokir seluruh aplikasi di layar "Menyiapkan Mesin Video". Status mesin
   // ditampilkan sebagai banner non-blocking (lihat di bawah) sehingga aplikasi
   // tetap bisa dipakai meski provisioning masih berjalan / sempat gagal.
-  const presetsList: Array<{
-    id: PresetType
-    title: string
-    desc: string
-    icon: LucideIcon
-  }> = [
-    { id: 'metadata', title: 'Hapus Metadata', desc: 'Bersihkan metadata/GPS, kualitas asli.', icon: Eraser },
-    { id: 'hd', title: 'HD 720p', desc: 'Tingkatkan ke HD 720p + penajaman + audio.', icon: MonitorUp },
-    { id: 'fullhd', title: 'Full HD 1080p', desc: 'Tingkatkan ke Full HD 1080p + penajaman + audio.', icon: Monitor },
-    { id: 'uhd', title: '4K UHD', desc: 'Tingkatkan ke 4K (2160p) + penajaman + audio.', icon: Tv },
-    { id: 'archive', title: 'Kualitas Asli', desc: 'Resolusi asli, CRF 18.', icon: Archive },
-    { id: 'whatsapp', title: 'Kompresi WhatsApp', desc: 'Ukuran pas untuk dikirim via WA.', icon: MessageCircle }
+  // Opsi prasetel per mode (deskripsi berbeda sesuai tab Cepat/Jernih).
+  const presetOptions: SelectOption[] =
+    processingMode === 'privacy'
+      ? [
+          { value: 'archive', label: 'Kualitas Asli (Salin)', description: 'Tanpa re-encode, paling cepat, kualitas terjaga.' },
+          { value: 'hd', label: 'HD 720p (Cepat)', description: 'Ubah ukuran ke 1280×720, encode cepat, tanpa efek.' },
+          { value: 'fullhd', label: 'Full HD 1080p (Cepat)', description: 'Ubah ukuran ke 1920×1080, encode cepat, tanpa efek.' },
+          { value: 'uhd', label: '4K UHD (Cepat)', description: 'Ubah ukuran ke 3840×2160, encode cepat, tanpa efek.' },
+          { value: 'vertical', label: 'Vertikal 9:16 (Cepat)', description: 'Format Story/Shorts/Reels 1080×1920, latar blur.' }
+        ]
+      : [
+          { value: 'archive', label: 'Kualitas Asli (Jernih)', description: 'Penajaman & perbaikan warna, resolusi asli.' },
+          { value: 'hd', label: 'HD 720p (Jernih)', description: 'Upscale 720p + penajaman + perbaikan warna.' },
+          { value: 'fullhd', label: 'Full HD 1080p (Jernih)', description: 'Upscale 1080p + penajaman + perbaikan warna.' },
+          { value: 'uhd', label: '4K UHD (Jernih)', description: 'Upscale 2160p + penajaman + perbaikan warna.' },
+          { value: 'vertical', label: 'Vertikal 9:16 (Jernih)', description: 'Format vertikal 1080×1920 + penajaman & warna.' }
+        ]
+
+  const qualityOptions: SelectOption[] = [
+    { value: 'auto', label: 'Otomatis (Seimbang)', description: 'Pilihan terbaik untuk sebagian besar video.' },
+    { value: 'best', label: 'Kualitas Terbaik', description: 'Kualitas maksimal, proses lebih lama.' },
+    { value: 'balanced', label: 'Seimbang', description: 'Kualitas baik dengan kecepatan sedang.' },
+    { value: 'compact', label: 'Kompak (File Kecil)', description: 'Ukuran file kecil, cocok untuk berbagi.' }
+  ]
+
+  const audioOptions: SelectOption[] = [
+    { value: 'original', label: 'Pertahankan Asli', description: 'Salin audio tanpa perubahan (paling cepat).' },
+    { value: 'aac128', label: 'AAC 128 kbps', description: 'Ukuran kecil, cukup untuk suara biasa.' },
+    { value: 'aac192', label: 'AAC 192 kbps', description: 'Seimbang untuk suara jernih.' },
+    { value: 'aac256', label: 'AAC 256 kbps', description: 'Kualitas audio tinggi.' }
   ]
 
   return (
     <div className={`${isDarkMode ? 'dark' : ''} h-dvh flex flex-col overflow-hidden`}>
+      {/* STRIP DRAG JENDELA — area atas (36px) kosong (konten mulai pt-16/pt-12),
+          jadi aman dijadikan region drag agar window bisa dipindah seperti
+          aplikasi desktop. Elemen interaktif di area ini diberi .app-no-drag. */}
+      <div aria-hidden className="app-drag fixed inset-x-0 top-0 z-30 h-9" />
       {/* BANNER STATUS MESIN — non-blocking: app tetap bisa dipakai. "Coba Lagi"
           memicu ulang provisioning (engine:check -> initEngine). */}
       {window.api?.checkEngine && !isAppReady && (
@@ -634,16 +926,39 @@ export default function App(): React.ReactElement {
         <Toasts toasts={toasts} />
         <ConfirmModal confirmAction={confirmAction} onClose={() => setConfirmAction(null)} onConfirm={handleConfirm} />
         <PreviewModal previewFile={previewFile} onClose={() => setPreviewFile(null)} />
+        <ScrapePreviewModal item={scrapePreview} onClose={() => setScrapePreview(null)} />
+        <MediaPreviewModal file={previewLocal} onClose={() => setPreviewLocal(null)} />
+        <DownloadSettingsModal
+          open={isDownloadSettingsOpen}
+          onClose={() => setIsDownloadSettingsOpen(false)}
+          settings={{
+            maxHeight: downloadMaxHeight,
+            cookiesBrowser: downloadCookiesBrowser,
+            douyinCookie: downloadDouyinCookie,
+            parallel: downloadParallel
+          }}
+          onChange={(patch) => {
+            if (patch.maxHeight !== undefined) setDownloadMaxHeight(patch.maxHeight)
+            if (patch.cookiesBrowser !== undefined) setDownloadCookiesBrowser(patch.cookiesBrowser)
+            if (patch.douyinCookie !== undefined) setDownloadDouyinCookie(patch.douyinCookie)
+            if (patch.parallel !== undefined) setDownloadParallel(patch.parallel)
+          }}
+        />
 
-        {/* MOBILE OVERLAY — tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
+        {/* MOBILE OVERLAY */}
+        <AnimatePresence>
         {isMobile && isSidebarOpen && (
           <motion.div
+            key="mobile-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             onClick={() => setIsSidebarOpen(false)}
             className="absolute inset-0 bg-black/40 dark:bg-black/60 z-30 backdrop-blur-sm"
           />
         )}
+        </AnimatePresence>
 
         {/* 1. LEFT SIDEBAR */}
         <motion.div
@@ -653,10 +968,10 @@ export default function App(): React.ReactElement {
             x: isMobile ? (isSidebarOpen ? 0 : -280) : 0
           }}
           style={{
-            width: isMobile ? 280 : files.length === 0 ? 260 : 320
+            width: isMobile ? 280 : files.length === 0 ? 260 : 300
           }}
           transition={{ type: 'spring', bounce: 0, duration: 0.8 }}
-          className={`sidebar bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200 dark:border-slate-800/80 flex flex-col h-full shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0 transition-colors overflow-y-auto ${
+          className={`sidebar bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200 dark:border-slate-800/80 flex flex-col h-full shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0 transition-colors overflow-y-auto max-w-[80vw] ${
             isMobile ? 'absolute inset-y-0 left-0 z-40' : 'relative z-20'
           }`}
         >
@@ -827,11 +1142,14 @@ export default function App(): React.ReactElement {
         >
           <input {...getInputProps()} />
 
-          {/* DRAG ACTIVE OVERLAY — tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
+          {/* DRAG ACTIVE OVERLAY */}
+          <AnimatePresence>
           {isDragActive && (
             <motion.div
+              key="drag-overlay"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
               transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
               className="absolute inset-4 z-50 flex items-center justify-center bg-blue-500/5 dark:bg-blue-500/10 backdrop-blur-[2px] border-2 border-dashed border-blue-400 dark:border-blue-500 rounded-3xl pointer-events-none"
             >
@@ -846,10 +1164,11 @@ export default function App(): React.ReactElement {
               </motion.div>
             </motion.div>
           )}
+          </AnimatePresence>
 
           {/* MOBILE MENU BUTTON — left-20 (80px) agar tidak menimpa traffic light macOS (berakhir ±68px) */}
           {isMobile && !isSidebarOpen && (
-            <div className="absolute top-4 left-20 z-10">
+            <div className="app-no-drag absolute top-4 left-20 z-40">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -870,34 +1189,107 @@ export default function App(): React.ReactElement {
               transition={{ duration: 0.3 }}
               className="flex-1 flex flex-col min-h-0 relative"
             >
-              {/* 3. PRASETEL — berada di halaman Pembersih Video (bukan sidebar) */}
+              {/* 3. PRASETEL — halaman Pembersih Video: tab mode + beberapa select detail */}
               <div className="relative z-10 pt-16 md:pt-8 px-4 sm:px-6 md:px-8 pb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 transition-colors">
-                    Pilih Prasetel
-                  </h2>
-                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                    {presetsList.find((p) => p.id === preset)?.title ?? ''}
-                  </span>
+                {/* Tab mode — desain khas Pembersih (rounded-xl, tema) + efek geser pill biru */}
+                <div className="flex justify-center mb-6">
+                  <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-900">
+                    {[
+                      { id: 'privacy', label: 'Privasi Cepat (Tanpa Efek)', Icon: ShieldCheck },
+                      { id: 'enhance', label: 'Penjernihan Maksimal', Icon: Focus }
+                    ].map((m) => {
+                      const isActive = processingMode === m.id
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setProcessingMode(m.id as 'privacy' | 'enhance')}
+                          disabled={isProcessing}
+                          className={`relative flex items-center gap-1.5 rounded-lg px-5 py-2 text-sm font-semibold transition-colors sm:px-6 ${
+                            isActive
+                              ? 'text-white'
+                              : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                          }`}
+                        >
+                          {isActive && (
+                            <motion.span
+                              layoutId="cleaner-mode-pill"
+                              className="absolute inset-0 bg-blue-600 rounded-lg shadow-md shadow-blue-600/30"
+                              transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+                            />
+                          )}
+                          <m.Icon className="relative z-10 h-4 w-4" />
+                          <span className="relative z-10">{m.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-                <PresetSelector
-                  presets={presetsList}
-                  value={preset}
-                  onChange={setPreset}
-                  disabled={isProcessing}
-                />
+
+                {/* Panel pengaturan — beberapa select dengan opsi detail */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800 sm:p-5">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <FloatingSelect
+                      label="Prasetel"
+                      value={preset}
+                      options={presetOptions}
+                      onChange={(v) => setPreset(v as PresetType)}
+                      disabled={isProcessing}
+                      icon={<MonitorUp className="h-4 w-4" />}
+                    />
+                    <FloatingSelect
+                      label="Kualitas"
+                      value={cleanerQuality}
+                      options={qualityOptions}
+                      onChange={(v) => setCleanerQuality(v as QualityLevel)}
+                      disabled={isProcessing}
+                      icon={<Gem className="h-4 w-4" />}
+                    />
+                    <FloatingSelect
+                      label="Audio"
+                      value={cleanerAudio}
+                      options={audioOptions}
+                      onChange={(v) => setCleanerAudio(v as AudioMode)}
+                      disabled={isProcessing}
+                      icon={<AudioLines className="h-4 w-4" />}
+                    />
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-700/60">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-slate-900/60 dark:text-emerald-400">
+                        <ShieldCheck className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Hapus Metadata &amp; GPS</p>
+                        <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                          Buang data privasi (EXIF/GPS/lokasi) dari hasil video.
+                        </p>
+                      </div>
+                    </div>
+                    <Toggle checked={cleanMetadata} onChange={setCleanMetadata} aria-label="Hapus Metadata" />
+                  </div>
+                </div>
               </div>
 
               {/* 4. KONTEN UTAMA (state kosong ATAU antrean) */}
               <div className="flex-1 min-h-0 relative z-10 px-4 sm:px-6 md:px-8 pb-24">
-                {/* 4a. EMPTY STATE — tanpa AnimatePresence: exit motion 12 macet di StrictMode */}
+                {/* 4a. EMPTY STATE ↔ QUEUE LIST */}
+                <AnimatePresence mode="wait">
                 {files.length === 0 ? (
                   <motion.div
                     key="empty"
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.3 }}
-                    className="h-full flex flex-col items-center justify-center pointer-events-none"
+                    onClick={() => {
+                      // Hanya area drop-zone ini yang membuka dialog import.
+                      if (!isProcessing) open()
+                    }}
+                    role="button"
+                    aria-label="Pilih video untuk diimpor"
+                    className="h-full flex cursor-pointer flex-col items-center justify-center"
                   >
                       <div className="p-6 bg-blue-50 dark:bg-slate-800/50 text-blue-500 rounded-full mb-6 transition-colors">
                         <UploadCloud className="w-12 h-12" />
@@ -916,6 +1308,7 @@ export default function App(): React.ReactElement {
                     layout
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
                     transition={{ type: 'spring', bounce: 0.1, duration: 0.5 }}
                       className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl overflow-hidden flex flex-col h-full min-h-0 transition-colors"
                     >
@@ -929,7 +1322,7 @@ export default function App(): React.ReactElement {
                                 e.stopPropagation()
                                 clearList()
                               }}
-                              className="text-xs font-medium text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-500 hover:underline flex items-center gap-1 transition-colors"
+                              className="text-xs font-medium text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-500 flex items-center gap-1 transition-colors"
                             >
                               <Trash2 className="w-3 h-3" />
                               Bersihkan
@@ -987,6 +1380,7 @@ export default function App(): React.ReactElement {
                       </div>
                   </motion.div>
                 )}
+                </AnimatePresence>
               </div>
 
               {/* 5. ACTION BUTTON */}
@@ -1045,159 +1439,85 @@ export default function App(): React.ReactElement {
               transition={{ duration: 0.3 }}
               className="flex-1 flex flex-col min-h-0 relative z-10"
             >
-              {/* Header: judul + badge + toggle mode animasi */}
+              {/* Tab mode — desain konsisten dgn Pembersih (rounded-xl, tema); tanpa header teks */}
               <div className="relative z-10 pt-16 md:pt-8 px-4 sm:px-6 md:px-8 pb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 transition-colors">
-                    Unduh Video
-                  </h2>
-                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                    {downloaderMode === 'links'
-                      ? `${validLinks.length} link`
-                      : `${scrapeItems?.length ?? 0} video`}
-                  </span>
-                </div>
-                <div className="relative inline-flex bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-full p-1 transition-colors">
-                  {[
-                    { id: 'links', label: 'Banyak Link', Icon: LinkIcon },
-                    { id: 'scrape', label: 'Akun / Halaman', Icon: ListVideo }
-                  ].map((m) => {
-                    const isActive = downloaderMode === m.id
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDownloaderMode(m.id as 'links' | 'scrape')
-                        }}
-                        className={`relative px-4 py-2 text-xs font-semibold rounded-full transition-colors flex items-center gap-1.5 ${
-                          isActive
-                            ? 'text-white'
-                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-                        }`}
-                      >
-                        {isActive && (
-                          <motion.span
-                            layoutId="downloader-mode-pill"
-                            className="absolute inset-0 bg-blue-600 rounded-full shadow-md shadow-blue-600/25"
-                            transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
-                          />
-                        )}
-                        <m.Icon className="w-3.5 h-3.5 relative z-10" />
-                        <span className="relative z-10">{m.label}</span>
-                      </button>
-                    )
-                  })}
+                <div className="relative flex items-center justify-center mb-6">
+                  <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-900">
+                    {[
+                      { id: 'links', label: 'Banyak Link', Icon: LinkIcon },
+                      { id: 'scrape', label: 'Akun / Halaman', Icon: ListVideo },
+                      { id: 'watcher', label: 'Pantau Akun', Icon: RadioTower },
+                      { id: 'history', label: 'Riwayat', Icon: History }
+                    ].map((m) => {
+                      const isActive = downloaderMode === m.id
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDownloaderMode(m.id as 'links' | 'scrape' | 'watcher' | 'history')
+                          }}
+                          className={`relative flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition-colors sm:px-5 ${
+                            isActive
+                              ? 'text-white'
+                              : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                          }`}
+                        >
+                          {isActive && (
+                            <motion.span
+                              layoutId="downloader-mode-pill"
+                              className="absolute inset-0 bg-blue-600 rounded-lg shadow-md shadow-blue-600/30"
+                              transition={{ type: 'spring', bounce: 0.2, duration: 0.5 }}
+                            />
+                          )}
+                          <m.Icon className="relative z-10 h-4 w-4" />
+                          <span className="relative z-10">{m.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {/* Tombol Pengaturan Unduhan — pojok kanan atas, sejajar tab (tanpa header) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setIsDownloadSettingsOpen(true)
+                    }}
+                    aria-label="Pengaturan Unduhan"
+                    title="Pengaturan Unduhan"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 dark:hover:border-blue-700 shadow-sm transition-all"
+                  >
+                    <Settings className="w-4 h-4" />
+                    {downloadSettingsCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-blue-600 text-white text-[9px] font-bold flex items-center justify-center shadow shadow-blue-600/40">
+                        {downloadSettingsCount}
+                      </span>
+                    )}
+                  </button>
                 </div>
               </div>
 
               {/* Konten mode (animasi) + antrean unduhan */}
-              <div className="flex-1 min-h-0 relative z-10 px-4 sm:px-6 md:px-8 pb-24 overflow-y-auto">
-                {/* Pengaturan unduhan (kualitas, cookies browser, paralel) */}
-                <div className="mb-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
-                      <Settings className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
-                        Pengaturan Unduhan
-                      </h3>
-                      <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
-                        Kualitas, cookies &amp; kecepatan batch.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
-                        Kualitas
-                      </span>
-                      <select
-                        value={downloadMaxHeight}
-                        onChange={(e) => setDownloadMaxHeight(Number(e.target.value))}
-                        className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                      >
-                        <option value={0}>Terbaik</option>
-                        <option value={2160}>2160p (4K)</option>
-                        <option value={1440}>1440p</option>
-                        <option value={1080}>1080p</option>
-                        <option value={720}>720p</option>
-                        <option value={480}>480p</option>
-                        <option value={360}>360p</option>
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-1.5">
-                      <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase">
-                        Cookies Browser
-                      </span>
-                      <select
-                        value={downloadCookiesBrowser}
-                        onChange={(e) => setDownloadCookiesBrowser(e.target.value)}
-                        className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                      >
-                        <option value="">Tanpa Cookies</option>
-                        <option value="chrome">Chrome</option>
-                        <option value="edge">Edge</option>
-                        <option value="safari">Safari</option>
-                        <option value="firefox">Firefox</option>
-                        <option value="brave">Brave</option>
-                      </select>
-                    </label>
-                    <label className="flex items-end gap-2 cursor-pointer pb-2">
-                      <input
-                        type="checkbox"
-                        checked={downloadParallel}
-                        onChange={(e) => setDownloadParallel(e.target.checked)}
-                        className="accent-blue-600 w-4 h-4 shrink-0"
-                      />
-                      <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                          Unduh 2 sekaligus
-                        </span>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                          Lebih cepat untuk banyak tautan.
-                        </span>
-                      </div>
-                    </label>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1.5">
-                      <KeyRound className="w-3 h-3" />
-                      Cookie Douyin
-                      <span className="normal-case font-normal">(opsional)</span>
-                    </span>
-                    <textarea
-                      value={downloadDouyinCookie}
-                      onChange={(e) => setDownloadDouyinCookie(e.target.value)}
-                      rows={2}
-                      placeholder="Tempel header Cookie dari douyin.com yang sudah login..."
-                      className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all resize-none leading-relaxed"
-                    />
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                      Khusus Douyin (anti-bot ketat, wajib cookie sesi). Cara ambil: buka douyin.com di
-                      Chrome → login → F12 → Application → Cookies → https://www.douyin.com → salin
-                      seluruh header Cookie. Disimpan lokal &amp; dipakai yt-dlp.
-                    </p>
-                  </div>
-                  {downloadCookiesBrowser && (
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
-                      <Info className="w-3 h-3 shrink-0" />
-                      Gunakan browser yang sudah login ke Facebook/Instagram agar unduhan lebih cepat &amp;
-                      jarang gagal. Tutup browser bila muncul error kunci database.
-                    </p>
-                  )}
-                </div>
+              <div className="flex-1 min-h-0 relative z-10 px-4 sm:px-6 md:px-8 pb-4 overflow-hidden flex flex-col">
                 {downloaderMode === 'links' ? (
                   <motion.div
                     key="links-mode"
                     initial={{ opacity: 0, y: 16, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                    className="mb-4"
+                    className="flex-1 min-h-0 mb-4 overflow-hidden flex flex-col"
                   >
-                      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
+                      <AnimatePresence>
+                      {!isDownloading && downloads.length === 0 && (
+                      <motion.div
+                        key="paste-card"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -12 }}
+                        transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+                        className="shrink-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors"
+                      >
                         <div className="flex items-center gap-2.5">
                           <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
                             <LinkIcon className="w-4 h-4" />
@@ -1211,47 +1531,64 @@ export default function App(): React.ReactElement {
                             </p>
                           </div>
                         </div>
-                        <textarea
+                        <FloatingTextarea
+                          label="Tautan (satu per baris)"
+                          icon={<LinkIcon className="h-4 w-4" />}
                           value={linksText}
                           onChange={(e) => setLinksText(e.target.value)}
-                          rows={5}
-                          placeholder={'https://www.youtube.com/watch?v=...\nhttps://www.tiktok.com/@user/video/...'}
-                          className="w-full resize-none bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                          helper="Format: https://www.youtube.com/watch?v=... atau https://www.tiktok.com/@user/video/..."
+                          action={
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                startBatchDownload(validLinks, 'links')
+                              }}
+                              disabled={validLinks.length === 0 || isDownloading}
+                              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isDownloading ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <DownloadCloud className="h-4 w-4" />
+                              )}
+                              Unduh Semua ({validLinks.length})
+                            </button>
+                          }
                         />
-                        <div className="flex justify-end">
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              startBatchDownload(validLinks)
-                            }}
-                            disabled={validLinks.length === 0 || isDownloading}
-                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-5 py-2 text-sm font-semibold flex items-center gap-2 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                          >
-                            {isDownloading ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <DownloadCloud className="w-4 h-4" />
-                            )}
-                            Unduh Semua ({validLinks.length})
-                          </button>
-                        </div>
-                      </div>
+                      </motion.div>
+                      )}
+                      </AnimatePresence>
+
+                      {/* Antrean unduhan — KHUSUS tab "Banyak Link" (source: links) */}
+                      <AnimatePresence>
+                      {linksDownloads.length > 0 && (
+                        <DownloadQueue
+                          downloads={linksDownloads}
+                          isDownloading={isDownloading}
+                          onClear={() => clearDownloads('links')}
+                          onPreview={(dl) => setPreviewLocal({ filePath: dl.filePath ?? '', title: dl.title })}
+                          onOpenFolder={(p) => window.api?.showItemInFolder?.(p)}
+                        />
+                      )}
+                      </AnimatePresence>
                     </motion.div>
-                  ) : (
+                  ) : downloaderMode === 'scrape' ? (
                     <motion.div
                       key="scrape-mode"
                       initial={{ opacity: 0, y: 16, scale: 0.98 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
-                      className="mb-4"
+                      className="flex-1 min-h-0 mb-4 overflow-y-auto"
                     >
                       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
-                        <div className="flex items-center gap-2.5">
+                        {(!isScraping && !scrapeItems) && (
+                          <>
+                        <div className="flex flex-wrap items-center gap-2.5">
                           <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
                             <ListVideo className="w-4 h-4" />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
                               Ambil Video dari Akun / Halaman
                             </h3>
@@ -1259,38 +1596,79 @@ export default function App(): React.ReactElement {
                               Masukkan tautan akun — daftar dimuat untuk dipilih.
                             </p>
                           </div>
+                          {/* Ekspor analitik — di samping kanan judul, ringkas */}
+                          <div className="flex items-center gap-1.5 shrink-0 ml-auto pl-2">
+                            <FileSpreadsheet
+                              className={`h-4 w-4 shrink-0 ${
+                                analyticsExport
+                                  ? 'text-blue-500 dark:text-blue-400'
+                                  : 'text-slate-400 dark:text-slate-500'
+                              }`}
+                            />
+                            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Ekspor analitik</span>
+                            <Toggle checked={analyticsExport} onChange={toggleAnalyticsExport} aria-label="Ekspor analitik" />
+                          </div>
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <input
-                            type="url"
-                            value={scrapeUrl}
-                            onChange={(e) => setScrapeUrl(e.target.value)}
-                            placeholder="mis. https://www.tiktok.com/@username"
-                            className="flex-1 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                handleScrape()
-                              }
-                            }}
-                          />
-                          <button
-                            onClick={(e) => {
+                        <FloatingInput
+                          type="url"
+                          label="Tautan akun / halaman"
+                          icon={<Search className="h-4 w-4" />}
+                          value={scrapeUrl}
+                          onChange={(e) => setScrapeUrl(e.target.value)}
+                          helper="mis. https://www.tiktok.com/@username"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
                               e.preventDefault()
-                              e.stopPropagation()
                               handleScrape()
-                            }}
-                            disabled={!scrapeUrl.trim() || isScraping}
-                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-5 py-2 text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                          >
+                            }
+                          }}
+                          action={
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                handleScrape()
+                              }}
+                              disabled={!scrapeUrl.trim() || isScraping}
+                              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isScraping ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Search className="h-4 w-4" />
+                              )}
+                              Ambil Daftar
+                            </button>
+                          }
+                        />
+                          </>
+                        )}
+                        {(isScraping || scrapeItems) && (
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-3">
+                          <div className="flex items-center gap-2 min-w-0">
                             {isScraping ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <Loader2 className="w-4 h-4 animate-spin text-blue-500 shrink-0" />
                             ) : (
-                              <Search className="w-4 h-4" />
+                              <ListVideo className="w-4 h-4 text-blue-500 shrink-0" />
                             )}
-                            Ambil Daftar
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                {isScraping ? 'Mengambil daftar video...' : 'Hasil Akun / Halaman'}
+                              </p>
+                              <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">{scrapeUrl}</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={clearScrape}
+                            disabled={isScraping}
+                            className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:text-slate-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Bersihkan
                           </button>
                         </div>
+                        )}
 
                         {scrapeError && (
                           <p className="text-xs text-rose-500 dark:text-rose-400 flex items-center gap-1.5">
@@ -1300,184 +1678,138 @@ export default function App(): React.ReactElement {
                         )}
 
                         {scrapeItems && scrapeItems.length > 0 && (
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex flex-col gap-3">
+                            {/* Toolbar: jumlah + pencarian + toggle grid/list */}
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                               <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
                                 {scrapeItems.length} video ditemukan
                                 {scrapeTruncated ? ' (menampilkan sebagian)' : ''}
                               </span>
-                              <div className="flex items-center gap-3">
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    toggleScrapeAll()
-                                  }}
-                                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
-                                >
-                                  {scrapeItems.every((it) => scrapeSelected[it.url])
-                                    ? 'Kosongkan Pilihan'
-                                    : 'Pilih Semua'}
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    startBatchDownload(selectedUrls)
-                                  }}
-                                  disabled={selectedUrls.length === 0 || isDownloading}
-                                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                                >
-                                  <DownloadCloud className="w-3.5 h-3.5" />
-                                  Unduh Terpilih ({selectedUrls.length})
-                                </button>
+                              <div className="flex items-center gap-2 sm:ml-auto">
+                                <div className="relative min-w-0 flex-1 sm:w-52">
+                                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    value={scrapeQuery}
+                                    onChange={(e) => setScrapeQuery(e.target.value)}
+                                    placeholder="Cari video..."
+                                    className="w-full rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 py-1.5 pl-8 pr-3 text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1 dark:bg-slate-900/60">
+                                  <button
+                                    type="button"
+                                    onClick={() => setScrapeView('grid')}
+                                    aria-label="Tampilan grid"
+                                    className={cn(
+                                      'flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors',
+                                      scrapeView === 'grid'
+                                        ? 'bg-white font-semibold text-slate-800 shadow-sm dark:bg-slate-700 dark:text-slate-100'
+                                        : 'font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                    )}
+                                  >
+                                    <LayoutGrid className="h-3.5 w-3.5" />
+                                    Grid
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setScrapeView('list')}
+                                    aria-label="Tampilan list"
+                                    className={cn(
+                                      'flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors',
+                                      scrapeView === 'list'
+                                        ? 'bg-white font-semibold text-slate-800 shadow-sm dark:bg-slate-700 dark:text-slate-100'
+                                        : 'font-medium text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                                    )}
+                                  >
+                                    <List className="h-3.5 w-3.5" />
+                                    List
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                            <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/40">
-                              {scrapeItems.map((item, idx) => (
-                                <motion.label
-                                  key={item.url}
-                                  initial={{ opacity: 0, x: -8 }}
-                                  animate={{ opacity: 1, x: 0 }}
-                                  transition={{ delay: Math.min(idx * 0.02, 0.3), duration: 0.25 }}
-                                  className="flex items-center gap-3 px-3 py-2.5 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-0 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={!!scrapeSelected[item.url]}
-                                    onChange={() => toggleScrapeItem(item.url)}
-                                    className="accent-blue-600 w-4 h-4 shrink-0"
-                                  />
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
-                                      {item.title}
-                                    </p>
-                                    <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
-                                      {item.url}
-                                    </p>
-                                  </div>
-                                  <span className="text-[10px] text-slate-400 dark:text-slate-600 shrink-0">
-                                    #{item.index + 1}
-                                  </span>
-                                </motion.label>
-                              ))}
+
+                            {/* Aksi: Pilih Semua + Unduh Terpilih */}
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  toggleScrapeAll()
+                                }}
+                                className="text-xs font-semibold text-blue-600 dark:text-blue-400"
+                              >
+                                {scrapeItems.every((it) => scrapeSelected[it.url])
+                                  ? 'Kosongkan Pilihan'
+                                  : 'Pilih Semua'}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  startBatchDownload(selectedUrls, 'scrape')
+                                }}
+                                disabled={selectedUrls.length === 0 || isDownloading}
+                                className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4 py-1.5 text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-500/25 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                              >
+                                <DownloadCloud className="w-3.5 h-3.5" />
+                                Unduh Terpilih ({selectedUrls.length})
+                              </button>
                             </div>
+
+                            {/* Daftar/grid hasil */}
+                            <ScrapeResultView
+                              items={filteredScrapeItems}
+                              view={scrapeView}
+                              selected={scrapeSelected}
+                              thumbs={scrapeThumbs}
+                              onToggle={toggleScrapeItem}
+                              onPreview={setScrapePreview}
+                              onThumbVisible={onThumbVisible}
+                            />
                           </div>
                         )}
+
+                        {/* Progres unduhan — KHUSUS tab "Akun / Halaman" (source: scrape) */}
+                        <AnimatePresence>
+                        {scrapeDownloads.length > 0 && (
+                          <ScrapeDownloadProgress
+                            downloads={scrapeDownloads}
+                            isDownloading={isDownloading}
+                            onClear={() => clearDownloads('scrape')}
+                          />
+                        )}
+                        </AnimatePresence>
                       </div>
                     </motion.div>
-                  )}
-
-              {downloads.length > 0 && (
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl overflow-hidden flex flex-col relative z-10 transition-colors">
-                  <div className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700 p-3 flex items-center transition-colors">
-                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400 pl-2">Antrean Unduhan</span>
-                    <span className="ml-auto text-[11px] text-slate-400 dark:text-slate-500 pr-2">
-                      {downloads.filter((d) => d.status === 'success').length} selesai ·{' '}
-                      {downloads.filter((d) => d.status === 'failed').length} gagal
-                    </span>
-                  </div>
-                  <div className="overflow-y-auto max-h-[50vh] p-0">
-                    {downloads.map((dl) => (
-                      <div
-                        key={dl.id}
-                        className="relative border-b border-slate-100 dark:border-slate-700/50 last:border-0 p-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                      >
-                        <div className="flex items-start gap-3">
-                          {dl.status === 'success' && dl.thumbnail ? (
-                            <img
-                              src={dl.thumbnail}
-                              alt=""
-                              className="w-16 h-16 rounded-lg object-cover shrink-0 bg-slate-100 dark:bg-slate-900/60"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 rounded-lg shrink-0 flex items-center justify-center bg-blue-50 dark:bg-slate-900/60 text-blue-600 dark:text-blue-400">
-                              <LinkIcon className="w-6 h-6" />
-                            </div>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-                              {dl.title || dl.url}
-                            </p>
-                            {dl.title && dl.url !== dl.title && (
-                              <p className="truncate text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                                {dl.url}
-                              </p>
-                            )}
-                            {dl.description && dl.status === 'success' && (
-                              <p className="line-clamp-2 text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                                {dl.description}
-                              </p>
-                            )}
-                            {dl.status === 'failed' && dl.error && (
-                              <p className="text-xs text-rose-500 dark:text-rose-400 mt-1 leading-snug" title={dl.error}>
-                                {dl.error}
-                              </p>
-                            )}
-
-                            {dl.status === 'downloading' && (
-                              <>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-900/60 overflow-hidden">
-                                    <div
-                                      className="h-full rounded-full bg-blue-600 transition-[width] duration-300"
-                                      style={{ width: `${Math.max(2, Math.min(100, dl.percent))}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-xs tabular-nums text-slate-600 dark:text-slate-300 shrink-0 w-10 text-right">
-                                    {Math.round(dl.percent)}%
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 mt-1 flex-wrap">
-                                  {dl.phase === 'merging' && <span>Menggabungkan...</span>}
-                                  {dl.phase === 'retrying' && <span>Mencoba ulang...</span>}
-                                  {dl.speedBytesPerSec && dl.speedBytesPerSec > 0 && (
-                                    <span>{formatSpeed(dl.speedBytesPerSec)}</span>
-                                  )}
-                                  {dl.etaSeconds !== undefined && <span>± {formatEta(dl.etaSeconds)}</span>}
-                                  {dl.sizeBytes ? <span>{formatBytes(dl.sizeBytes)}</span> : null}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                          <div className="flex flex-col items-end gap-1.5 shrink-0">
-                            {dl.status === 'downloading' && (
-                              <span className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-full text-[11px] font-medium border border-blue-200/50 dark:border-blue-500/20">
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                Mengunduh
-                              </span>
-                            )}
-                            {dl.status === 'success' && (
-                              <span className="bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2.5 py-1 rounded-full text-[11px] font-medium">
-                                Selesai
-                              </span>
-                            )}
-                            {dl.status === 'failed' && (
-                              <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 px-2.5 py-1 rounded-full text-[11px] font-medium">
-                                Gagal
-                              </span>
-                            )}
-                            {dl.status === 'success' && dl.filePath && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  window.api?.showItemInFolder?.(dl.filePath ?? '')
-                                }}
-                                title="Buka di folder"
-                                className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
-                              >
-                                <FolderOpen className="w-3.5 h-3.5" />
-                                Buka folder
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                  ) : downloaderMode === 'watcher' ? (
+                    <motion.div
+                      key="watcher-mode"
+                      initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+                      className="flex-1 min-h-0 mb-4 overflow-y-auto"
+                    >
+                      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
+                        <WatcherPanel
+                          onNotify={(title, body) => addToast(`${title} — ${body}`, 'success')}
+                        />
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="history-mode"
+                      initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+                      className="flex-1 min-h-0 mb-4"
+                    >
+                      <HistoryView
+                        history={history}
+                        onPreview={(h) => setPreviewLocal({ filePath: h.filePath, title: h.title, platform: h.platform })}
+                        onClear={() => setConfirmAction({ type: 'clearHistory' })}
+                      />
+                    </motion.div>
+                  )}
               </div>
             </motion.div>
           ) : (
@@ -1574,9 +1906,9 @@ export default function App(): React.ReactElement {
                       <p className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase mb-2">
                         Catatan Rilis
                       </p>
-                      <pre className="whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300 font-sans leading-relaxed max-h-40 overflow-y-auto">
-                        {updateInfo.notes}
-                      </pre>
+                      <div className="max-h-40 overflow-y-auto pr-1">
+                        <Markdown>{updateInfo.notes}</Markdown>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1670,6 +2002,44 @@ export default function App(): React.ReactElement {
                       Perbarui Resource
                     </button>
                   </div>
+                </div>
+
+                {/* KARTU PREFERENSI & PENYIMPANAN — reset semua preferensi ke default */}
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 sm:p-5 flex flex-col gap-4 transition-colors">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
+                      <RotateCcw className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
+                        Preferensi &amp; Penyimpanan
+                      </h3>
+                      <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
+                        Mode gelap, prasetel &amp; pengaturan unduhan tersimpan otomatis di perangkat Anda.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
+                    <Toggle
+                      checked={isDarkMode}
+                      onChange={(v) => setIsDarkMode(v)}
+                      label="Mode Gelap"
+                      hint="Tema gelap di seluruh aplikasi."
+                    />
+                    <Moon className="h-4 w-4 shrink-0 text-slate-400 dark:text-blue-400" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setConfirmAction({ type: 'reset' })
+                    }}
+                    className="self-start inline-flex items-center gap-2 bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-rose-600 dark:text-rose-400 px-4 py-2 rounded-full font-medium text-sm shadow-sm hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all active:scale-95"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Reset Semua Preferensi
+                  </button>
                 </div>
               </div>
             </motion.div>

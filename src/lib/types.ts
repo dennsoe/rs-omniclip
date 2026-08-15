@@ -1,4 +1,10 @@
-export type PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'whatsapp'
+export type PresetType = 'metadata' | 'hd' | 'fullhd' | 'uhd' | 'archive' | 'vertical'
+/** Mode pemrosesan: 'privacy' (cepat, tanpa efek) / 'enhance' (penjernihan maksimal). */
+export type ProcessingMode = 'privacy' | 'enhance'
+/** Kualitas encode (memetakan preset x264 + CRF). */
+export type QualityLevel = 'auto' | 'best' | 'balanced' | 'compact'
+/** Penanganan audio keluaran. */
+export type AudioMode = 'original' | 'aac128' | 'aac192' | 'aac256'
 export type FileStatus = 'pending' | 'processing' | 'success' | 'failed'
 
 export interface FileItem {
@@ -21,6 +27,10 @@ export interface FileItem {
 export interface ProcessingPayload {
   files: FileItem[]
   preset: PresetType
+  processingMode?: ProcessingMode
+  cleanMetadata?: boolean
+  quality?: QualityLevel
+  audio?: AudioMode
 }
 
 /** Satu item video hasil scrape akun/halaman (yt-dlp --flat-playlist). */
@@ -32,6 +42,26 @@ export interface ScrapeItem {
   title: string
   /** URL langsung video (siap diunduh). */
   url: string
+  /** URL thumbnail bila tersedia dari playlist (mis. YouTube); kosong bila NA (mis. TikTok). */
+  thumbnail?: string
+  /** Durasi (detik) bila tersedia dari playlist (flat-playlist menyediakannya untuk TikTok). */
+  duration?: number
+}
+
+/** Hasil resolusi pratinjau satu video (untuk thumbnail lazy & modal preview). */
+export interface ResolvedPreview {
+  /** URL video asal (yang diminta). */
+  url: string
+  /** URL media langsung yang bisa diputar <video>. */
+  playUrl?: string
+  /** URL thumbnail video. */
+  thumbnail?: string
+  /** Durasi (detik). */
+  duration?: number
+  /** Judul video. */
+  title?: string
+  /** Pesan kegagalan bila pratinjau tidak dapat diresolusi. */
+  error?: string
 }
 
 /** Opsi unduhan (engine yt-dlp) — dikirim renderer → main → downloader. */
@@ -90,4 +120,66 @@ export interface ResourceInfo {
   current: string | null
   expected: string | null
   outdated: boolean
+}
+
+/** Entri riwayat unduhan (tersimpan di main process). */
+export interface HistoryEntry {
+  url: string
+  title?: string
+  thumbnail?: string
+  filePath: string
+  platform?: string
+  ts: number
+}
+
+/** Akun yang dipantau Auto-Watcher. */
+export interface WatchedAccount {
+  url: string
+  label?: string
+  /** Detail profil (hasil verifikasi akun saat ditambahkan). */
+  name?: string
+  username?: string
+  avatar?: string
+  followers?: number
+  bio?: string
+  platform?: string
+  lastSeenId?: string
+  lastCheckedAt?: number
+  lastFoundAt?: number
+}
+
+/** Hasil verifikasi/resolusi detail sebuah akun (dipakai Auto-Watcher). */
+export interface AccountInfo {
+  url: string
+  /** Sudah terdaftar di Auto-Watcher (duplikat). */
+  duplicate: boolean
+  /** Terverifikasi ada (profil berhasil diambil). */
+  exists: boolean
+  name?: string
+  username?: string
+  avatar?: string
+  followers?: number
+  bio?: string
+  platform?: string
+  /** Pesan bila tidak dapat diverifikasi. */
+  error?: string
+}
+
+/** Konfigurasi proxy (anti-banned system). */
+export interface ProxyConfig {
+  enabled: boolean
+  proxies: string[]
+  rotationEvery: number
+}
+
+/** Mode pemrosesan hardware (encoder GPU). */
+export type HwAccelMode = 'auto' | 'videotoolbox' | 'nvenc' | 'amf'
+
+/** Konfigurasi aplikasi (tersimpan di main process, bukan localStorage). */
+export interface AppConfig {
+  proxy: ProxyConfig
+  watcher: { enabled: boolean; intervalHours: number; accounts: WatchedAccount[] }
+  hwAccel: { mode: HwAccelMode }
+  analyticsExport: boolean
+  history: HistoryEntry[]
 }

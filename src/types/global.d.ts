@@ -1,11 +1,18 @@
 import type {
   FileItem,
   PresetType,
+  ProcessingMode,
+  QualityLevel,
+  AudioMode,
   ScrapeItem,
   UpdateInfo,
   ResourceInfo,
   DownloadOptions,
-  DownloadProgress
+  DownloadProgress,
+  ResolvedPreview,
+  AppConfig,
+  HistoryEntry,
+  AccountInfo
 } from '@lib/types'
 
 /**
@@ -18,7 +25,14 @@ declare global {
       checkEngine: () => void
       onEngineStatus: (cb: (status: string) => void) => () => void
       onAppReady: (cb: (isReady: boolean) => void) => () => void
-      startProcessing: (payload: { files: FileItem[]; preset: PresetType }) => void
+      startProcessing: (payload: {
+        files: FileItem[]
+        preset: PresetType
+        processingMode?: ProcessingMode
+        cleanMetadata?: boolean
+        quality?: QualityLevel
+        audio?: AudioMode
+      }) => void
       onProcessingProgress: (
         cb: (data: {
           id: string
@@ -35,10 +49,14 @@ declare global {
       onDownloadProgress: (cb: (data: DownloadProgress) => void) => () => void
       onDownloadComplete: (cb: (data: { total: number; success: number; failed: number }) => void) => () => void
       /** Mengambil daftar video dari satu akun/halaman. */
-      scrapeAccount: (payload: { id: string; url: string }) => void
+      scrapeAccount: (payload: { id: string; url: string; options?: { cookiesBrowser?: string } }) => void
       onScrapeComplete: (
         cb: (data: { id: string; items: ScrapeItem[]; truncated?: boolean; error?: string }) => void
       ) => () => void
+      /** Meresolusi pratinjau satu video (URL media langsung + thumbnail/durasi). */
+      resolvePreview: (
+        payload: { url: string; options?: { cookiesBrowser?: string } }
+      ) => Promise<ResolvedPreview>
 
       // --- Ekstensi (tidak mengubah kontrak inti) ---
       /** Mendapatkan jalur absolut file yang di-drop (via webUtils di preload). */
@@ -62,6 +80,59 @@ declare global {
       onResourceStatus: (cb: (message: string) => void) => () => void
       /** Status resource segar dari proses utama (dipakai badge update sidebar). */
       onResourceChanged: (cb: (data: ResourceInfo[]) => void) => () => void
+
+      // --- Konfigurasi & riwayat (main process) ---
+      getConfig: () => Promise<AppConfig>
+      setConfig: (patch: Partial<AppConfig>) => Promise<AppConfig>
+      listHistory: () => Promise<HistoryEntry[]>
+      clearHistory: () => Promise<boolean>
+
+      // --- Manajer Proxy (anti-banned) ---
+      getProxyConfig: () => Promise<AppConfig['proxy']>
+      saveProxyConfig: (cfg: Partial<AppConfig['proxy']>) => Promise<AppConfig['proxy']>
+      testProxy: (proxyUrl: string) => Promise<{ ok: boolean; latencyMs: number; error?: string }>
+
+      // --- Hardware acceleration (deteksi encoder) ---
+      detectEncoders: () => Promise<Array<'videotoolbox' | 'nvenc' | 'amf'>>
+
+      // --- Ekspor data analitik (CSV) ---
+      exportAnalytics: (payload: {
+        items: Array<{
+          id?: string
+          title?: string
+          url: string
+          duration?: number
+          views?: number
+          likes?: number
+          comments?: number
+          description?: string
+        }>
+      }) => Promise<string>
+
+      // --- Auto-Watcher (pemantauan akun otomatis) ---
+      getWatcherConfig: () => Promise<AppConfig['watcher']>
+      addWatchedAccount: (payload: {
+        url: string
+        label?: string
+        profile?: {
+          name?: string
+          username?: string
+          avatar?: string
+          followers?: number
+          bio?: string
+          platform?: string
+        }
+      }) => Promise<AppConfig['watcher']>
+      removeWatchedAccount: (url: string) => Promise<AppConfig['watcher']>
+      setWatcherEnabled: (enabled: boolean) => Promise<AppConfig['watcher']>
+      setWatcherInterval: (hours: number) => Promise<AppConfig['watcher']>
+      checkWatcherNow: (
+        url?: string
+      ) => Promise<Array<{ url: string; newItems?: unknown[]; error?: string }>>
+      resolveWatchedAccount: (url: string) => Promise<AccountInfo>
+      onWatcherNotify: (
+        cb: (data: { title: string; body: string }) => void
+      ) => () => void
     }
   }
 }

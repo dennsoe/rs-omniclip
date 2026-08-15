@@ -1,31 +1,42 @@
 import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { PlayCircle, XCircle } from 'lucide-react'
-import type { FileItem } from '@lib/types'
+import { mediaUrlForFile } from '@lib/utils'
 import VideoPlayer from './VideoPlayer'
 
-export default function PreviewModal({
-  previewFile,
+/**
+ * Modal pratinjau video LOKAL (hasil unduhan) — pola sama ScrapePreviewModal.
+ * Memutar file langsung via protokol kustom `media://` (streaming dari disk,
+ * mendukung seeking). Tidak perlu resolve URL remote.
+ */
+export interface LocalMediaFile {
+  filePath: string
+  title?: string
+  platform?: string
+}
+
+export default function MediaPreviewModal({
+  file,
   onClose
 }: {
-  previewFile: FileItem | null
+  file: LocalMediaFile | null
   onClose: () => void
 }): React.ReactElement | null {
-  // Tutup dengan tombol Escape (pola sama seperti DownloadSettingsModal).
+  // Tutup dengan Escape (pola konsisten seluruh modal).
   useEffect(() => {
-    if (!previewFile) return
+    if (!file) return
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [previewFile, onClose])
+  }, [file, onClose])
 
   return (
     <AnimatePresence>
-    {previewFile && (
+    {file && (
     <motion.div
-      key="preview"
+      key="media-preview"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -48,9 +59,11 @@ export default function PreviewModal({
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-tight truncate">
-              {previewFile.name}
+              {file.title || 'Pratinjau Video'}
             </h3>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">Pratinjau video</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              {file.platform ? `${file.platform} · ` : ''}Hasil unduhan · pratinjau lokal
+            </p>
           </div>
           <button
             type="button"
@@ -62,9 +75,9 @@ export default function PreviewModal({
           </button>
         </div>
 
-        {/* Body: pemutar video */}
-        <div className="p-0 bg-black flex justify-center items-center">
-          <VideoPlayer file={previewFile.file} />
+        {/* Body: pemutar video lokal */}
+        <div className="bg-black flex justify-center items-center">
+          <VideoPlayer src={mediaUrlForFile(file.filePath)} />
         </div>
       </motion.div>
     </motion.div>

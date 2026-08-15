@@ -1,7 +1,490 @@
 # Kondisi Terkini — RS OmniClip
 
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
-ada perubahan. Tanggal terakhir diperbarui: **2026-08-14**.
+ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
+
+## Perubahan Terbaru (2026-08-15, belum commit)
+
+### Catatan Rilis dirender sebagai Markdown
+- Bagian **Catatan Rilis** di halaman Tentang & Update kini dirender sebagai
+  **Markdown** (bukan `<pre>` mentah): dependensi baru `react-markdown` +
+  `remark-gfm`, komponen `src/components/Markdown.tsx` (gaya konsisten tema:
+  heading, list, bold, kode, link, kutipan, tabel, task list). E2E: h2/li/strong
+  ter-render sebagai elemen HTML, tanpa `##`/`**` mentah. tsc/lint/build PASS.
+
+## Status Rilis v1.4.1 (DALAM PROSES RILIS) — 5 Fitur Besar
+
+- **Branch**: `release/v1.4.1` (baru, dari `release/v1.3.4`). Commit `91d05be`
+  "feat: rilis v1.4.1 — 5 fitur besar". **Sudah di-push** + **PR #26** ke `main`
+  (open, BELUM di-merge).
+- **Versi**: `1.3.4` → **`1.4.1`** (package.json + package-lock.json).
+- **Catatan rilis**: `release-notes/RELEASE_NOTES_v1.4.1.md`.
+- **Belum dilakukan** (tunggu instruksi user): merge PR (merge commit), build
+  artefak mac+win, tag `v1.4.1`, GitHub Release.
+- **Referensi pengerjaan**: `docs/IMPLEMENTATION_v1.4.md` (semua keputusan teknis).
+- **Semua 5 fitur SELESAI diimplementasi & DIVALIDASI** (tsc/lint/build PASS +
+  E2E Electron+CDP nyata). File baru: `electron/main/config.ts`, `media.ts`,
+  `engine/queue.ts`, `engine/proxy.ts`, `engine/analytics.ts`, `engine/watcher.ts`,
+  `src/components/ProxyManager.tsx`, `HistoryView.tsx`, `WatcherPanel.tsx`,
+  `MediaPreviewModal.tsx`.
+
+### Fase 0 — Fondasi
+- **Config store main process** (`config.ts`): `AppConfig` lengkap (proxy,
+  watcher, hwAccel, analyticsExport, history) tersimpan di
+  `userData/omni-config.json`; tulis ATOMIK (tmp+rename); `getConfig()/setConfig()/
+  appendHistory()/clearHistory()` (cap 500). IPC `config:get`/`config:set`.
+- **Queue manager** (`engine/queue.ts`): `enqueueBatch()` — batch unduhan FIFO
+  serial (manual + watcher tidak bentrok); `source: 'manual'|'watcher'`.
+
+### Fase 1 — Preview Inline + Riwayat
+- **`media://` protocol** (`media.ts`): `registerSchemesAsPrivileged` SEBELUM
+  ready; handler dgn dukungan **Range (206)** utk seek; helper
+  `mediaUrlForFile()`. CSP `media-src` ditambah `media:` di `src/index.html`.
+- **Preview baris antrean unduhan**: baris sukses punya tombol "Putar" →
+  `MediaPreviewModal` (`src={media://...}`) — terverifikasi putar + seek.
+- **Tab Riwayat** (`HistoryView.tsx`): list entri (judul/platform/waktu) +
+  tombol "Putar" (media://) + "Bersihkan Riwayat" (ConfirmModal `clearHistory`).
+  Riwayat dicatat otomatis saat unduhan sukses (`appendHistory` di main).
+
+### Fase 2 — Proxy Manager (Anti-Banned)
+- **`engine/proxy.ts`**: `normalizeProxy()`, `proxyAgentFor()` (HttpsProxyAgent/
+  SocksProxyAgent), `validProxies()`, `currentProxy()/nextProxy()` (rotasi
+  counter), `resetRotation()`, `testProxy()` (api.ipify.org, latensi).
+- **Integrasi**: `DownloadOptions.proxy` → `buildDownloadArgs` (`--proxy`),
+  `getDirectUrl`, TikWM `getRequest`/`resolveTikTokInfo`/`downloadVideoUrl`,
+  `downloadSingle` memakai `nextProxy()` saat proxy aktif. E2E: proxy save/test
+  jalan; UI di modal Pengaturan (textarea daftar proxy, toggle, rotasi tiap N,
+  tombol tes per baris, catatan IG/FB butuh residential).
+- **⚠️ FIX KRITIS (2026-08-15)**: `https-proxy-agent@9` & `socks-proxy-agent@10`
+  adalah ESM-only → main process electron-vite (CommonJS) crash
+  `ERR_REQUIRE_ESM`. FIX: turunkan ke **`https-proxy-agent@7.0.6`** &
+  **`socks-proxy-agent@8.0.5`** (CommonJS) — verifikasi `require()` jalan.
+
+### Fase 3 — Hardware Acceleration (GPU)
+- **`detectEncoders()`** (`ffmpeg.ts`): spawn `ffmpeg -encoders` → grep
+  h264_videotoolbox/nvenc/amf (cache per sesi). IPC `hw:detect`.
+- **`processor.ts`**: `processBatch(files, preset, onProgress, hwAccel='auto')`;
+  `buildArgSets`/`buildEnhance` + helper `encoderCrfArgs`/`encoderBitrateArgs`
+  (videotoolbox `-q:v 60`, nvenc `-cq`, amf `-qp_i/-qp_p`). Set HW dicoba dulu,
+  fallback berjenjang ke `libx264`. Preset `metadata` (`-c copy`) tak terpengaruh.
+- UI modal Pengaturan: dropdown "Pemrosesan Hardware" hanya menampilkan encoder
+  TERDETEKSI. E2E: `detectEncoders()` → `['videotoolbox']` di Mac; dropdown
+  menampilkan "Apple VideoToolbox (Mac)".
+
+### Fase 4 — Pemisah Data Analitik (CSV Exporter)
+- **`engine/analytics.ts`**: `AnalyticsRecord`, `csvEscape()` (RFC 4180),
+  `parseHashtags()`, `writeAnalyticsCsv()` (BOM utk Excel, nama unik),
+  `exportScrapeToCsv()`. Kolom: platform,url,id,title,views,likes,comments,
+  caption,hashtags,duration_seconds,uploaded_at.
+- **Capture engagement**: `--print` scrape diperluas dgn
+  `%(view_count)s\t%(like_count)s\t%(comment_count)s\t%(description)s` (parse
+  `NA`→undefined); `ScrapeItem` + `views/likes/comments/description`.
+- IPC `analytics:export` → tulis `analytics-YYYY-MM-DD.csv` di folder Unduhan.
+- UI: toggle "Ekspor Data Analitik ke CSV" di kartu Akun/Halaman (persist di
+  config `analyticsExport`); otomatis mengekspor setelah "Ambil Daftar" + toast
+  path. E2E: roundtrip config true/false, toggle+hint render.
+
+### Fase 5 — Auto-Watcher
+- **`engine/watcher.ts`**: `WatchedAccount` (url,label,lastSeenId,
+  lastCheckedAt,lastFoundAt); `startWatcher()/stopWatcher()` (setInterval
+  intervalHours, IDEMPOTENT — hanya saat app terbuka, tidak ada tray/auto-start);
+  `checkAccountOnce()` — `scrapeAccount(url, {}, 3)` (fetchLimit kecil),
+  bandingkan `items[0].id` vs `lastSeenId`; tick pertama = set cursor saja
+  (tanpa unduh lama); posting baru → `enqueueBatch(source:'watcher')` →
+  auto-clean `processBatch(...,'metadata')` → native `Notification` +
+  emit `watcher:notify` (toast).
+- `scrapeAccount` mendapat param **`fetchLimit`** (default 200; watcher pakai 3).
+- IPC: `watcher:add/remove/list/setEnabled/setInterval/checkNow`; event
+  `watcher:notify`. Config berubah → `startWatcher()` (restart interval).
+- UI `WatcherPanel.tsx` di mode Akun/Halaman: toggle aktif, input interval (jam),
+  tambah akun (URL+label), daftar akun (label/platform/url/status waktu + badge),
+  tombol "Cek Sekarang" (semua/per akun), hapus akun. E2E: add→list→remove
+  roundtrip OK; panel + semua kontrol render (tanpa overflow).
+
+### Validasi & E2E (2026-08-15)
+- `npm run typecheck` (node+web) PASS; `npx eslint src/ electron/` EXIT:0;
+  `npm run build` PASS.
+- E2E via CDP ke window Electron nyata (port 9222): seluruh `window.api` +
+  metode baru (config/history/proxy/hw/analytics/watcher) ada; config roundtrip;
+  `detectEncoders`→`['videotoolbox']`; watcher add/list/remove; UI mode
+  Akun/Halaman merender WatcherPanel + toggle CSV + kartu; modal Pengaturan
+  menampilkan Hardware (VideoToolbox) + Proxy (Manajer/Rotasi); **tanpa
+  overflow horizontal & tanpa emoji** (anti AI-slop dipertahankan).
+- **Operasional**: dev server dijalankan dgn `env -u ELECTRON_RUN_AS_NODE npm
+  run dev` (env sandbox menyuntik `ELECTRON_RUN_AS_NODE=1` → electron jalan sbg
+  node → `protocol` undefined). Launch Electron CDP: `npx electron .
+  --remote-debugging-port=9222 --user-data-dir="$TMPDIR/rs-omniclip-cdp"`
+  (unsandboxed).
+
+### Penyempurnaan Auto-Watcher + CSV (2026-08-15, belum commit)
+1. **Auto-Watcher pindah ke TAB ke-3 "Pantau Akun"** di halaman Pengunduh (sebelum
+   Riwayat; urutan: Banyak Link / Akun·Halaman / Pantau Akun / Riwayat). Badge
+   header menampilkan jumlah akun.
+2. **Toast toggle CSV** — toggle "Ekspor Data Analitik" kini memberi notifikasi
+   saat diaktifkan/dimatikan.
+3. **Konfirmasi hapus akun** — tombol hapus di daftar akun membuka modal
+   `ConfirmModal` type `removeAccount` ("Hapus Akun dari Auto-Watcher?").
+4. **Validasi akun + detail profil** — tombol "Periksa" memanggil IPC baru
+   `watcher:resolve` (via `resolveAccount`): duplikat → toast "sudah dipantau";
+   ada → kartu profil (avatar, nama, @username, pengikut, bio, platform) +
+   tombol "Pantau Akun Ini"; tidak ada/tak terverifikasi → pesan jujur.
+   Resolver: yt-dlp `--dump-single-json` (`resolveAccountInfo` di downloader.ts)
+   + SSR profil TikTok (`resolveTikTokProfile` di tiktok.ts, best-effort).
+5. **Deteksi duplikat** — `watcher:add`/`watcher:resolve` mendeteksi URL yang
+   sudah dipantau → toast akurat (sebelumnya toast "ditambahkan" selalu muncul).
+   `WatchedAccount` diperluas: name/username/avatar/followers/bio/platform.
+- E2E terverifikasi: tab ke-3 urut benar; toast CSV muncul; modal hapus + akun
+  benar-benar terhapus; resolve akun fiktif → exists:false; resolve `@YouTube`
+  → exists:true + detail (46 Jt pengikut); duplikat terdeteksi; profil tersimpan.
+  typecheck/eslint/build PASS.
+
+### Perbaikan lanjutan Auto-Watcher + CSV (2026-08-15, belum commit)
+1. **Toggle CSV diletakkan DI SAMPING KANAN judul** "Ambil Video dari Akun /
+   Halaman" (satu baris, `flex-wrap` + `ml-auto`), label ringkas **"Ekspor
+   analitik"** — tidak memakan tempat terpisah. (E2E: sameRow:true, toRight:true.)
+2. **Panel "Pantau Akun" terkunci saat nonaktif** — bila Auto-Watcher OFF, hanya
+   header + toggle + notice terkunci (Lock) yang tampil; SEMUA aksi (interval,
+   tambah akun, Periksa, Cek Sekarang, hapus) disembunyikan sampai diaktifkan.
+3. **Error cek akun TikTok kini ramah** — akar masalah teraudit: extractor
+   yt-dlp TikTok rusak GLOBAL (bot-detection, isu #17403) → `scrapeAccount`
+   gagal `[tiktok:user] Unable to extract secondary user ID`. `friendlyScrapeError`
+   kini mendeteksi pola ini → pesan jujur Bahasa Indonesia ("TikTok memblokir
+   pemeriksaan akun otomatis... gunakan YouTube/platform lain"). `checkAccountOnce`
+   juga mencatat `lastCheckedAt` walau gagal (status "Terakhir cek" akurat).
+- **BATASAN JUJUR**: Auto-Watcher TIDAK dapat memantau akun TikTok sampai
+  extractor yt-dlp diperbaiki (di luar kendali app); YouTube/platform lain
+  berfungsi. TikWM hanya melayani video per-URL, bukan feed profil.
+- E2E terverifikasi: toggle CSV di atas input (y 207 < 240); panel terkunci saat
+  off (Periksa/Cek/tambah form tersembunyi); error TikTok kini pesan ramah
+  (bukan kriptik). typecheck/eslint/build PASS.
+
+### Perombakan Total Preset — 2 Tab + Beberapa Select Detail + Toggle Metadata (2026-08-15, belum commit)
+- **UI baru (anti-ambigu)**: grid kartu prasetel DIHAPUS. Kini ada **2 tab
+  mode** ("Privasi Cepat (Tanpa Efek)" ikon `ShieldCheck` / "Penjernihan
+  Maksimal" ikon `Focus`) dengan **pill aktif BIRU yang GESER** (layoutId
+  `cleaner-mode-pill`, spring) — desain TETAP khas Pembersih (track
+  `rounded-xl` mengikuti tema, tombol `rounded-lg` `text-sm`), hanya EFEK
+  GESER yang diadopsi dari tab Pengunduh. Tab Pengunduh nantinya akan
+  mengikuti desain tab Pembersih ini. Di dalamnya **beberapa select detail**
+  (semua berikon sesuai: Prasetel `MonitorUp`, Kualitas `Gem`, Audio
+  `AudioLines`):
+  1. **Prasetel** — opsi berubah sesuai tab (mode): tab Cepat → "Kualitas
+     Asli (Salin)", "HD 720p (Cepat)", dst. (deskripsi: tanpa efek/cepat);
+     tab Jernih → "Kualitas Asli (Jernih)", "HD 720p (Jernih)", dst.
+     (deskripsi: penajaman & perbaikan warna). Semua opsi menampilkan
+     **judul + deskripsi rinci** (FloatingSelect diperluas: `description`).
+  2. **Kualitas** — Otomatis (Seimbang) / Kualitas Terbaik / Seimbang /
+     Kompak (File Kecil) → memetakan preset x264 + CRF.
+  3. **Audio** — Pertahankan Asli / AAC 128 / 192 / 256 kbps.
+  4. **Toggle "Hapus Metadata & GPS"** (Ya/Tidak, default ON) — opsi eksplisit
+     buang metadata/GPS (sebelumnya selalu dibuang tanpa kontrol).
+- **Ikon petir (`Zap`) & AI (`Sparkles`) DIHAPUS** dari tab; komponen kartu
+  `PresetSelector.tsx` dihapus (kode mati).
+- **Backend**: `ProcessOptions { hwAccel, processingMode, cleanMetadata,
+  quality, audio }` di `processBatch`; `buildArgSets(preset, input, output,
+  info, hwAccel, processingMode, cleanMetadata, quality, audio)`.
+  `common = -y -i <in> [+ -map_metadata -1 bila cleanMetadata]`. Helper baru:
+  `crfForQuality`, `x264QualityArgs`, `audioModeArgs`. Kualitas Asli privacy +
+  audio original → `-c copy`; audio diubah → re-encode audio saja (`-c:v copy`).
+  Helper WhatsApp dihapus. Preferensi baru: `omni.processingMode`,
+  `omni.cleanMetadata`, `omni.cleanerQuality`, `omni.cleanerAudio`.
+- **Mode `privacy`** (cepat, tanpa filter berat): Kualitas Asli → `-c copy`
+  (instan); HD/FullHD/4K → `scale` (short-side=target, contoh 720p→1280×720)
+  + `libx264 veryfast`; Vertikal → pad-blur 9:16 + `libx264 veryfast`.
+- **Mode `enhance`** (wajib re-encode, pipeline jernih):
+  `atadenoise=0a=0.04:0b=0.04 → [scale long-side + lanczos] → cas=0.7 →
+  eq(saturation=1.15:contrast=1.04)`; encoder CRF (hwAccel-aware, fallback
+  x264), kualitas/audio ikut select.
+- **Vertikal 9:16 pad-blur** (`VERTICAL_PAD_BLUR`): konten utuh di tengah,
+  latar blur (bukan hitam). Termasuk `crop=1080:1920` agar dimensi genap
+  (libx264 yuv420p) — diverifikasi langsung dgn ffmpeg.
+- **E2E terverifikasi (CDP 9222)**: 2 tab berikon (`iconPerTab [1,1]` —
+  ShieldCheck/Focus, bukan Zap/Sparkles), pill aktif biru `bg-blue-600`
+  bergeser antar tab (`layoutId cleaner-mode-pill`, verifikasi posisi pill
+  pindah saat switch), 3 select berikon (`selectIconCounts [2,2,2]` =
+  ikon+chevron), toggle Hapus Metadata tampil, grid kartu hilang;
+  opsi Prasetel BENAR-BENAR berbeda antar tab (Jernih vs Salin/Cepat); dark
+  mode: track slate-900 + panel slate-800. 5 job nyata PASS: privacy+archive
+  (auto/original)→640×360 copy, privacy+fullhd (compact/aac128)→1920×1080,
+  enhance+fullhd (best/original)→1920×1080, enhance+vertical
+  (cleanMetadata=false/aac192)→1080×1920 **metadata PERTAHAN**, privacy+archive
+  (aac256)→640×360 audio aac. typecheck/eslint/build PASS.
+
+### Konsistensi UI Halaman Pengunduh (2026-08-15, belum commit)
+- Header teks **"Unduh Video" + badge jumlah DIHAPUS** — halaman Pengunduh kini
+  konsisten dgn Pembersih (tanpa header teks; dimulai langsung dari tab).
+- Tab mode Pengunduh (Banyak Link / Akun·Halaman / Pantau Akun / Riwayat)
+  dirombak mengikuti **desain tab Pembersih**: track `rounded-xl` mengikuti
+  tema (`bg-slate-100 dark:bg-slate-900`), tombol `rounded-lg` `text-sm`,
+  pill aktif **biru `bg-blue-600` geser** (`layoutId downloader-mode-pill`),
+  ikon `h-4 w-4`.
+- Tombol **Pengaturan Unduhan** (gear) dipindah ke pojok kanan atas, sejajar
+  tab (tetap berfungsi + badge).
+- State `watcherAccountCount` + chain `getWatcherConfig` dihapus (hanya dipakai
+  badge lama yang dibuang). E2E CDP: `hasTitle false`, `badgeText false`,
+  tab `rounded-xl`/`text-sm`/ikon `[1,1,1,1]`, pill geser (`moved true`),
+  `hasGear true`. typecheck/eslint/build PASS.
+
+### Fokus Proses Halaman Pengunduh (2026-08-15, belum commit)
+- Saat **download / ambil data (scrape) diproses**, bagian input disembunyikan —
+  hanya tampilan proses yang terlihat:
+  - **Tab Banyak Link**: kartu "Tempel Banyak Tautan" disembunyikan saat
+    `isDownloading || downloads.length > 0` (fokus ke "Antrean Unduhan").
+  - **Tab Akun / Halaman**: header + input "Ambil Video dari Akun" disembunyikan
+    saat `isScraping || scrapeItems`; diganti header ringkas "Mengambil daftar
+    video..." / "Hasil Akun / Halaman" + tombol **Bersihkan**.
+- **Tombol "Bersihkan"** (ikon `Trash2`) mengosongkan hasil dan mengembalikan
+  bagian input: `clearDownloads()` (antrean) & `clearScrape()` (hasil scrape +
+  antrean + error + query). Nonaktif saat proses masih berjalan (`isDownloading`/
+  `isScraping`).
+- **E2E**: fresh state → input links & scrape tampil; saat download → input
+  tersembunyi + antrean + Bersihkan tampil (terverifikasi). typecheck/eslint/
+  build PASS.
+
+### UI Antrean Unduhan + Scrollbar Ramping (2026-08-15, belum commit)
+- **Aksi antrean (Putar, Buka folder) jadi icon-only horizontal** — tombol teks
+  diganti ikon (`PlayCircle`/`FolderOpen`) dengan tooltip (`title` + `aria-label`),
+  disusun sejajar (flex row) di kanan kartu. 
+- **Klik judul = putar otomatis** — judul item sukses kini `<button>` (hover
+  biru); klik membuka `MediaPreviewModal` (`setPreviewLocal`) yang auto-play
+  (`VideoPlayer` sudah `autoPlay`). 
+- **Scrollbar global didesain ulang** (`src/assets/main.css`, `@layer base`):
+  `scrollbar-width: thin` (Firefox) + `::-webkit-scrollbar` 8px, thumb rounded
+  (`border-radius 9999px`, `background-clip: content-box`), warna mengikuti
+  tema: light `rgb(148 163 184 / .55)` (slate-400), dark `.dark ::-webkit-
+  scrollbar-thumb` `rgb(71 85 105 / .7)` (slate-600), + hover.
+- **E2E**: scrollbar tervalidasi via computed style (lebar 8px, thumb slate-400
+  light / slate-600 dark); unduhan YouTube nyata sukses dgn kode baru
+  (download flow OK); typecheck/eslint/build PASS. (Verifikasi DOM item antrean
+  dibatasi CDP flaky + HMR reset state in-memory.)
+
+### Redesain Tabel/Daftar Premium + Responsif (2026-08-15, belum commit)
+- Semua daftar baris ("tabel") dibuat konsisten & premium, responsif thd ukuran
+  aplikasi: **Antrean Unduhan** (App.tsx), **Riwayat** (HistoryView),
+  **Hasil Akun list** (ScrapeResultView), **Pantau Akun** (WatcherPanel).
+- Pola: header ber-**icon chip + judul + jumlah** (`bg-slate-50/80` +
+  `dark:bg-slate-900/40`, `px-4 py-3`); baris `px-4 py-3` + hover
+  (`hover:bg-slate-50 dark:hover:bg-slate-700/40`); **thumbnail responsif**
+  (`h-12 w-12 sm:h-14 sm:w-14`, `hidden min-[420px]:block` = sembunyi di layar
+  sangat sempit) + **overlay play saat hover** (named group `group/thumb`);
+  judul hover biru; progress gradien (`bg-linear-to-r from-blue-500 to-blue-600`);
+  aksi icon-only horizontal.
+- **E2E**: Riwayat header premium tampil; **tanpa overflow horizontal di lebar
+  480px** (`scrollWidth == innerWidth`). typecheck/eslint/build PASS.
+
+### Perbaikan Audit Forensik (2026-08-15)
+0. **Batasan klik-import dropzone** — sebelumnya `getRootProps()` dipasang di
+   SELURUH area utama kanan + `noClick: activeMenu!=='cleaner' || files.length>0`
+   → klik di mana pun di halaman Pembersih (termasuk tab, select, toggle) membuka
+   dialog import. FIX: `noClick: true` SELALU (root tidak pernah membuka dialog),
+   dialog file hanya dari **area drop-zone (empty state)** via `open()`
+   (role=button, cursor-pointer, onClick → open). Drag tetap di seluruh area
+   utama (noDrag hanya di halaman lain). E2E: klik drop-zone → file input click=1;
+   klik tab/select/switch/panel/area → click=0.
+1. **CSP `font-src 'self' data:`** (`src/index.html`) — subset Cyrillic font
+   Plus Jakarta Sans di-inline Vite sbg `data:font/woff2` → font-src default
+   (`default-src 'self'`) memblokirnya → error konsol. Kini font termuat; error
+   konsol hilang (E2E diverifikasi).
+2. **`tiktok.ts` `getRequest` redirect** — redirect kini meneruskan `agent`
+   (proxy aktif), sebelumnya redirect jalan tanpa proxy.
+3. **`media.ts` suffix range** — `bytes=-N` (N byte terakhir) ditangani benar
+   (`start=size-N`), sebelumnya dibaca sbg `0..N`. Range `0-N`/open-ended tetap
+   benar. E2E: <video> media:// readyState 4 + seek 1.5s berhasil (Range 206
+   end-to-end).
+
+## Status Rilis v1.3.4 (SEDANG DIKERJAKAN) — redesign UI + prior fixes
+
+- **Branch**: `release/v1.3.4` (BELUM di-push ke remote; menunggu persetujuan
+  commit/push dari user).
+- **Sudah di-commit lokal** (5 commit):
+  - `1bad086` — Fix scrape 429 + Pengaturan Unduhan modal + konsistensi modal.
+  - `d3a03a5` — Pindah release note ke folder `release-notes/`.
+  - `8afae46` — Responsivitas (grid prasetel 1/2/3, trim flex-wrap, toast, sidebar).
+  - `3aacb32` — Penyimpanan lokal preferensi + modal konfirmasi reset.
+  - `2b510ad` — Redesign UI v1.3.4 (semua fitur daftar di bawah ini).
+- **Redesign v1.3.4** (terkomit di `2b510ad`; rincian di bawah):
+  - **Font premium**: Plus Jakarta Sans (variable) via
+    `@fontsource-variable/plus-jakarta-sans`; import di `src/main.tsx` + `@theme`
+    di `src/assets/main.css`. Build terverifikasi meng-bundle 3 file woff2.
+  - **Video player sinematik** (`src/components/VideoPlayer.tsx`): kontrol
+    kustom (play/pause, progress played+buffered, waktu, volume, kecepatan
+    0.5×–2×, PiP, fullscreen), auto-hide idle, gradasi premium, state
+    loading/error/kosong. (Tanpa AnimatePresence — pola proyek.)
+  - **Primitif form** (`src/components/ui/`): `FloatingField.tsx`
+    (FloatingInput/FloatingTextarea), `FloatingSelect.tsx` (dropdown kustom),
+    `FloatingMultiSelect.tsx` (multi-pilih + pencarian + chip), `Toggle.tsx`
+    (switch animasi).
+  - **Penerapan**: modal Pengaturan Unduhan (FloatingSelect Kualitas/Cookies +
+    Toggle paralel + FloatingTextarea Cookie Douyin); App.tsx (FloatingTextarea
+    tautan, FloatingInput URL scrape, FloatingMultiSelect hasil scrape, Toggle
+    Mode Gelap di Tentang); SortableFileItem (FloatingInput trim Mulai/Selesai).
+  - **Pembersihan class Tailwind v4 non-kanonik** (`h-[2px]`→`h-0.5`,
+    `z-[70]`→`z-70`, `bg-gradient-to-*`→`bg-linear-to-*`).
+  - **Fix dropdown via portal (2026-08-15)**: panel `FloatingSelect` &
+    `FloatingMultiSelect` dirender via portal ke `document.body` (position
+    fixed, posisi dari bounding rect trigger). Mengatasi: (1) scrollbar jelek
+    pada dropdown Kualitas (daftar pendek kini tampil penuh, tanpa `max-h-64`);
+    (2) dropdown yang menutupi field Cookies Browser secara berantakan (kini
+    latar solid + shadow + z-90, selalu di atas modal). Panel tertutup otomatis
+    saat kontainer di-scroll & direposisi saat resize.
+  - **Fix mode gelap portal (2026-08-15)**: efek baru di `App.tsx` menyinkronkan
+    kelas `dark` ke `document.documentElement` (`<html>`). Sebelumnya `.dark`
+    hanya di div root aplikasi, sehingga panel dropdown yang di-portal ke
+    `<body>` berada di luar `.dark` dan selalu PUTIH di dark mode. Kini panel
+    dropdown ikut gelap di dark mode & putih di mode terang — diverifikasi via
+    pengukuran DOM (bg panel dark=`slate-800`/oklch(0.279...), light=`rgb(255,
+    255,255)`, teks opsi `slate-200` di dark / `slate-700` di light, tanpa
+    scroll, tanpa overlap geometris dengan field Cookies).
+  - **Fix overlap label–nilai kosong (2026-08-15)**: dropdown dengan opsi value
+    `''` ("Tanpa Cookies") — `floated = open || value.length > 0` membuat label
+    tetap di tengah saat nilai kosong → label menimpa teks nilai (overlap ~20px
+    terukur via DOM). FIX: `floated = open || !!selected` (label mengambang saat
+    ada opsi terpilih) + span nilai kosong saat label di tengah. Terverifikasi
+    `glyphOverlapPx: 0`. Sama diterapkan ke `FloatingMultiSelect` (saat kosong).
+  - **List/grid hasil "Akun/Halaman" + thumbnail + durasi + preview (2026-08-15)**:
+    - Hasil scrape kini **grid kartu / baris list** dengan **toggle Grid/List** +
+      pencarian judul (menggantikan dropdown multi-select).
+    - **Durasi** dari flat-playlist (tersedia TikTok & YouTube).
+    - **Thumbnail lazy**: flat-playlist TikTok = `NA` → resolve per item via IPC
+      baru `preview:resolve` (TikWM ~0,5 s, antrean 4 konkuren + cache);
+      YouTube = URL deterministik `i.ytimg.com/vi/{id}/hqdefault.jpg`; gagal →
+      placeholder.
+    - **Modal preview** (pola sama PreviewModal antrean pembersih): klik
+      kartu/baris → resolve URL media langsung (`preview:resolve`; TikTok →
+      TikWM, lain → yt-dlp `--get-url` format tunggal) → VideoPlayer
+      (`src`+`poster` baru).
+    - `ScrapeItem` diperluas `thumbnail?`/`duration?`; engine `--print` tambah
+      `%(thumbnail)s\t%(duration)s` (parse `NA`).
+    - **Fix CSP `media-src` (2026-08-15)**: `media-src 'self' blob:` TIDAK
+      mengizinkan `https:` → `<video src="https://...tiktokcdn...">` diblokir
+      (readyState 0, tanpa error). Ditambah `https: http:` → preview remote
+      memutar (E2E: readyState 4, dur 13,7 s).
+    - **Thumbnail lazy via IntersectionObserver (2026-08-15)**: resolve
+      thumbnail HANYA untuk kartu yang terlihat (rootMargin 300px) + cache,
+      bukan semua item sekaligus — terhindar rate-limit TikWM untuk daftar
+      besar (E2E: 7→22 ter-load saat scroll). Sebelumnya resolve 49 item
+      sekaligus → banyak gagal rate-limit (hanya ~5-15/49 termuat).
+    - **Thumbnail otomatis SEMUA (2026-08-15)**: resolve thumbnail untuk
+      SEMUA item begitu daftar selesai diambil — tanpa menunggu scroll (antrean
+      4 konkuren + retry/backoff + sweep berkala ~15 dtk utk yang gagal
+      rate-limit; YouTube deterministik). E2E: 49/49 kartu dapat elemen img;
+      kecepatan muat tergantung TikWM (segar ~0,5s/panggil → semua ~6-12s;
+      saat TikWM throttling karena kuota IP, sebagian butuh sweep). Play icon
+      kartu grid kini ter-center TEPAT di area video (dx:0, dy:0 terukur),
+      bukan seluruh kartu.
+    - **Input & tombol proporsional (2026-08-15)**: input tautan akun/halaman
+      full-width (sebelumnya terjepit di samping tombol) + tombol "Ambil Daftar"
+      ringkas (`rounded-lg`, tanpa shadow besar) rata kanan di bawah input;
+      tombol "Unduh Semua" disamakan gayanya (terverifikasi DOM: input 2258px,
+      tombol 137×35, rata kanan diff 1px).
+    - **Textarea auto-resize + label aman (2026-08-15)**: `FloatingTextarea`
+      kini auto-resize (tinggi = `scrollHeight`, `overflow-hidden`) utk SEMUA
+      textarea (Tempel Banyak Tautan & Cookie Douyin) — tidak pernah scroll.
+      Padding atas `pt-6`→`pt-7` (28px) agar label floating (top-2.5, 10px)
+      TIDAK menabrak baris teks pertama (sebelumnya overlap ~11px terukur;
+      kini `collisionPx: -3` = 3px jarak bebas, terverifikasi di Electron
+      nyata: 12 baris → 276px tanpa scroll; dikosongkan → 76px).
+    - **Validasi**: tsc/lint/build PASS; E2E Electron+CDP nyata — scrape 49
+      item, durasi tampil, thumbnail otomatis, preview memutar video.
+      CATATAN MOCK: id/url mock harus < 2^53 (angka besar runtuh presisi → semua
+      URL identik → seleksi tampak "semua terpilih" — artefak mock, bukan bug).
+- **BELUM di-commit (2026-08-15, sesudah `2b510ad`)** — Redesign floating label
+  gaya Google (outlined text field), meniru field Google login:
+  - Semua inputan floating label (`FloatingInput`, `FloatingTextarea`,
+    `FloatingSelect`, `FloatingMultiSelect`) kini: label saat kosong duduk di
+    tengah field sebagai placeholder; saat terisi/fokus **naik mengangkang di
+    atas border** dengan efek **notch** — latar label senada field sehingga
+    border tampak terpotong di belakang label (sebelumnya label kecil
+    `uppercase` di dalam field).
+  - Warna label: biru saat fokus, netral saat terisi (blur), merah saat error.
+  - Efek & animasi: **glow biru lembut** saat fokus (ring 3px + bayangan
+    `0_12px_32px`), **shine sweep** halus menyapu field sekali saat fokus,
+    **caret biru**, ikon kiri berubah biru saat aktif, chevron dropdown
+    berputar + biru saat terbuka.
+  - Field dibuat **opak** (`dark:bg-slate-900`) agar patch notch label menyatu
+    sempurna (terverifikasi: light `rgb(255,255,255)`, dark `oklch(0.208...)`
+    identik dengan bg field — tanpa seam).
+  - File baru: `src/components/ui/FloatingShared.tsx` (komponen `FloatingLabel`
+    & `FieldShine`) + `floating-classes.ts` (fungsi `fieldShell` & `iconCls` —
+    dipisah agar fast-refresh bersih). Diperbarui: `FloatingField.tsx`,
+    `FloatingSelect.tsx`, `FloatingMultiSelect.tsx`.
+  - Terverifikasi E2E Electron+CDP nyata: textarea fokus → label delta 1px
+    (mengangkang border, patch putih), blur terisi → netral; select
+    Kualitas/Cookies Browser → delta 0 + glow + panel portal tetap terbuka;
+    dark mode → patch identik bg field. tsc/lint/build PASS (0 warning).
+  - **Fix alignment ikon–teks (2026-08-15)** — audit forensik atas screenshot
+    user menemukan & memperbaiki 2 bug layout:
+    (1) Shell `FloatingInput` kehilangan `flex items-center` saat redesign →
+    ikon + input terpisah ke dua baris → field SANGAT TINGGI & berantakan
+    (gambar 1). FIX: shell input `flex items-center`, ikon `ml-3 shrink-0`,
+    input `min-w-0 flex-1` (textarea tetap block).
+    (2) Span nilai select & teks input memakai padding asimetris `pt-5 pb-1.5`
+    → teks turun ~7px di bawah pusat ikon (`items-center` men-center ikon;
+    gambar 2). FIX: padding simetris `py-3.5` → teks sejajar ikon.
+    Terverifikasi E2E Electron nyata: `display:flex`, tinggi field 50px
+    kompak, `iconVsText: 0`, `textVsField: 0` untuk input & semua select.
+  - **Textarea kompak + auto-resize (2026-08-15)**: `FloatingTextarea` kini
+    mulai SETINGGI INPUT biasa (`rows={1}`, ~48px, label placeholder di tengah
+    seperti input) lalu **auto-resize membesar sesuai isi** & menyusut saat
+    dikosongkan — tidak pernah scroll. Padding `pt-7` → `py-3.5` (label gaya
+    Google hanya ~5,5px masuk field, tak butuh ruang ekstra). `rows={5}`/
+    `rows={2}` dihapus dari pemakaian (App.tsx & modal pengaturan).
+    Terverifikasi E2E Electron nyata: 48→108px utk 4 baris, kembali 48px saat
+    dikosongkan; Cookie Douyin 48→88px; tanpa scroll.
+  - **Tombol aksi di dalam field (2026-08-15)**: tombol "Unduh Semua" kini
+    berada DI DALAM textarea (kanan-bawah, `absolute bottom-1.5 right-1.5 z-10`)
+    dan "Ambil Daftar" DI DALAM input (kanan, ter-center vertikal via flex).
+    - Prop baru `action?: React.ReactNode` pada FloatingInput/FloatingTextarea.
+    - Textarea: padding-kanan ADAPTIF mengikuti lebar tombol (ResizeObserver
+      mengukur `actionRef` → `paddingRight = actionW + 18`) sehingga teks tidak
+      tertimpa & menyesuaikan bila jumlah link berubah ("Unduh Semua (N)").
+      Tombol tetap di kanan-bawah saat textarea membesar.
+    - Input: tombol sebagai anak flex (`relative z-10 shrink-0`) → otomatis
+      kanan & center vertikal (E2E `btnCenterVsField: 0`).
+    - Tombol aksi DISAMAKAN (konsisten): "Unduh Semua" & "Ambil Daftar"
+      identik (`text-sm px-3.5 py-2 gap-2 icon h-4 font-semibold shadow-sm`,
+      tinggi 36px); "Simpan" (trim) ikut disamakan. Terverifikasi E2E: kedua
+      tombol IDENTIK (h 36, fs 14px, padding 8/14px, radius 8px, fw 600).
+    - Terverifikasi E2E Electron nyata: tombol di dalam (`btnInside`), gap
+      kanan/bawah ~7px, `taPaddingRight` 160px ≈ btnW+18, field tumbuh 50→110px
+      saat 4 baris dengan tombol tetap kanan-bawah.
+  - **Rasa aplikasi desktop (2026-08-15)**:
+    - **Tanpa underline** — dihapus `hover:underline` dari tombol teks-link
+      (Bersihkan, Pilih Semua/Kosongkan Pilihan, Buka folder) + pengaman global
+      `a { text-decoration: none }` di main.css.
+    - **Window bisa di-drag** — strip drag `fixed inset-x-0 top-0 z-30 h-9`
+      dengan `-webkit-app-region: drag` (area atas 36px kosong, aman); tombol
+      menu mobile diberi `.app-no-drag` + `z-40` agar tetap bisa diklik.
+      Utility `.app-drag`/`.app-no-drag` di main.css (@layer utilities).
+    - **Tidak bisa select text** — `* { user-select: none }` global; `input` &
+      `textarea` tetap `user-select: text` (untuk mengedit).
+    - Terverifikasi E2E Electron nyata: strip `appRegion: drag` (fixed, 36px,
+      z-30); user-select body/button `none`, input/textarea `text`;
+      `underlinedTotal: 0`.
+  - **Fix warning CSS `@theme`/`@custom-variant` (2026-08-15)**: VS Code CSS
+    language server tidak mengenal at-rule Tailwind v4 → warning
+    `unknownAtRules`. FIX: deklarasikan at-rule via `css.customData` →
+    `.vscode/tailwind.css-data.json` (berisi @tailwind, @apply, @theme,
+    @custom-variant, @variant, @source, @utility) + tautkan di
+    `.vscode/settings.json`. Bukan mematikan semua `unknownAtRules` (tetap
+    mendeteksi at-rule benar-benar asing). Sekaligus perbarui setting TS
+    deprecated (`typescript.tsdk` → `js/ts.tsdk.path`,
+    `typescript.enablePromptUseWorkspaceTsdk` →
+    `js/ts.tsdk.promptToUseWorkspaceVersion`). Terverifikasi: get_errors
+    bersih, JSON valid, build PASS.
+    - **PELAJARAN OPERASIONAL (2026-08-15)**: error `No handler registered for
+      preview:resolve` + thumbnail tidak muncul = **main process STALE**
+      (electron-vite dev TIDAK hot-reload main). Renderer & preload baru dari
+      disk, tapi main di memori lama → `ipcMain.handle` tidak ada. FIX: restart
+      `npm run dev` (atau rebuild + relaunch) setelah mengubah `electron/main/**`
+      ATAU menambah IPC baru. Gejala khas: UI baru muncul tapi handler IPC lama
+      tidak ada.
+- **Validasi**: `tsc --noEmit` PASS, `eslint src` 0 error, `npm run build` PASS
+  (font ter-bundle). E2E via CDP (dev 5173): textarea/input floating tampil,
+  dropdown kustom Kualitas/Cookies terbuka + opsi render, toggle paralel &
+  Mode Gelap berfungsi (sinkron dengan sidebar), badge indikator pengaturan
+  non-default muncul, persistensi localStorage terverifikasi.
+- **Version bump 1.3.4 di package.json belum dilakukan** (menunggu commit/PR).
 
 ## Status Rilis v1.3.3 (2026-08-14) — Dukungan unduh Douyin, LIVE
 
@@ -434,8 +917,8 @@ Aplikasi berfungsi end-to-end dan telah di-push ke GitHub.
 | Peningkat Video HD 720p (`hd`) | Selesai & terverifikasi (upscale + penajaman + denoise) |
 | Peningkat Video FullHD 1080p (`fullhd`) | Selesai & terverifikasi |
 | Peningkat Video UHD 4K (`uhd`) | Selesai & terverifikasi |
-| Arsip Kualitas Maks (`archive`) | Selesai & terverifikasi |
-| Kompresor WhatsApp (`whatsapp`) | Selesai & terverifikasi |
+| Arsip Kualitas Maks (`archive`) | Selesai & terverifikasi (mode privacy = `-c copy` instan; mode enhance = CRF 18 + jernih) |
+| Vertikal 9:16 Story/Shorts/Reels (`vertical`) | Selesai & terverifikasi (pad-blur 1080×1920; menggantikan Kompresor WhatsApp) |
 | Pengunduh Universal (yt-dlp) | Selesai — multi-link batch + ambil daftar akun/halaman (scrape), kualitas/cookies/paralel, progress realtime + ETA + metadata video, retry otomatis, tombol buka folder |
 | Pemotong Inline (lossless) | Selesai & terverifikasi |
 | Monitor System (CPU/RAM) | Selesai — pemakaian aplikasi nyata & realtime (`system:stats`, via `procmon` + `ps`, termasuk FFmpeg/yt-dlp) |
@@ -450,7 +933,7 @@ Aplikasi berfungsi end-to-end dan telah di-push ke GitHub.
 | `npm run lint` | PASS |
 | `npm run build` | PASS (main, preload, renderer) |
 | `get_errors` (seluruh workspace) | No errors found |
-| Smoke test mesin | 11/11 PASS (metadata, HD, FullHD, 4K, archive, WhatsApp, trim) |
+| Smoke test mesin | 11/11 PASS (metadata, HD, FullHD, 4K, archive, vertical, trim) |
 
 ## Audit Forensik & Perbaikan (2026-08-13)
 
@@ -470,8 +953,10 @@ Detail lengkap: `docs/ENGINE_SPEC.md` dan `docs/IPC_CONTRACT.md`.
 
 ## Perombakan Fitur & UI (2026-08-13)
 
-- **Preset diperjelas** → `metadata`, `hd` (720p), `fullhd` (1080p), `uhd` (4K),
-  `archive`, `whatsapp`. Default `fullhd`. Semua terverifikasi via smoke test 11/11.
+- **Preset diperjelas** → `metadata` (khusus Auto-Watcher auto-clean),
+  `hd` (720p), `fullhd` (1080p), `uhd` (4K), `archive`, `vertical` 9:16.
+  Default `fullhd`. Mode `privacy`/`enhance` via Segmented Control
+  (lihat bagian perombakan preset di atas).
 - **Preset dipindah ke halaman Pembersih Video** — kartu prasetel kini tampil di
   area utama (komponen `src/components/PresetSelector.tsx`), bukan di sidebar;
   pilihan aktif selalu terlihat (antrean kosong maupun terisi).

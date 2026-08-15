@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, FileVideo, Scissors, Trash2 } from 'lucide-react'
 import type { FileItem } from '@lib/types'
 import StatusBadge from './StatusBadge'
+import { FloatingInput } from './ui/FloatingField'
 
 interface SortableFileItemProps {
   file: FileItem
@@ -83,8 +84,8 @@ export default function SortableFileItem({
           : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
       }`}
     >
-      <div className="p-4 flex items-center justify-between">
-        <div className="flex items-center overflow-hidden mr-4 flex-grow">
+      <div className="p-3 sm:p-4 flex items-center justify-between gap-2">
+        <div className="flex items-center overflow-hidden mr-2 sm:mr-4 flex-grow min-w-0">
           <div
             {...attributes}
             {...listeners}
@@ -122,7 +123,7 @@ export default function SortableFileItem({
           </div>
         </div>
 
-        <div className="flex items-center gap-4 shrink-0 relative z-10">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0 relative z-10">
           {!isProcessing && (
             <button
               onClick={(e) => {
@@ -163,25 +164,21 @@ export default function SortableFileItem({
           animate={{ height: 'auto', opacity: 1 }}
           className="overflow-hidden"
         >
-            <div className="px-14 pb-4 flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-slate-500">Mulai</span>
-                <input
+            <div className="px-4 sm:px-14 pb-4 flex flex-wrap items-end gap-2 sm:gap-4">
+              <div className="w-36">
+                <FloatingInput
                   type="text"
+                  label="Mulai (HH:MM:SS)"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  placeholder="HH:MM:SS"
-                  className="w-20 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-900 border-none focus:ring-1 focus:ring-blue-500 text-slate-700 dark:text-slate-300"
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-slate-500">Selesai</span>
-                <input
+              <div className="w-36">
+                <FloatingInput
                   type="text"
+                  label="Selesai (HH:MM:SS)"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  placeholder="HH:MM:SS"
-                  className="w-20 text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-900 border-none focus:ring-1 focus:ring-blue-500 text-slate-700 dark:text-slate-300"
                 />
               </div>
               <button
@@ -190,7 +187,7 @@ export default function SortableFileItem({
                   handleSaveTrim()
                 }}
                 disabled={isTrimmingPending}
-                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 w-full sm:w-auto"
               >
                 {isTrimmingPending ? 'Memotong...' : 'Simpan'}
               </button>
@@ -200,7 +197,7 @@ export default function SortableFileItem({
 
       {isProcessing && file.status === 'processing' && (
         <motion.div
-          className="absolute bottom-0 left-0 h-[2px] bg-blue-600"
+          className="absolute bottom-0 left-0 h-0.5 bg-blue-600"
           initial={{ width: 0 }}
           animate={{ width: `${file.progress}%` }}
         />

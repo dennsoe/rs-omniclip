@@ -4,8 +4,9 @@ import { execFile, spawn } from 'node:child_process'
 import { getEngineBinDir, getDownloadDir } from './paths'
 import { downloadFile } from './net'
 import { trackProcess, untrackProcess } from './procmon'
-import { isTikTokUrl, downloadTikTokVideo } from './tiktok'
+import { isTikTokUrl, resolveTikTokInfo, downloadTikTokVideo } from './tiktok'
 import { isDouyinUrl, normalizeDouyinUrl, writeNetscapeCookieFile } from './douyin'
+import { nextProxy } from './proxy'
 
 export interface DownloadProgress {
   id: string
@@ -41,6 +42,8 @@ export interface DownloadOptions {
   cookiesFile?: string
   /** Unduh beberapa URL sekaligus (maks 2) alih-alih berurutan. Default false. */
   parallel?: boolean
+  /** Proxy aktif utk unduhan ini (http(s):// atau socks5://). Diisi engine dari rotasi. */
+  proxy?: string
 }
 
 /** Nama binary yt-dlp sesuai platform (Windows memakai ekstensi .exe). */
@@ -146,6 +149,16 @@ export interface ScrapeItem {
   id: string
   title: string
   url: string
+  /** URL thumbnail bila tersedia dari playlist; kosong bila NA (mis. TikTok). */
+  thumbnail?: string
+  /** Durasi (detik) bila tersedia dari playlist (flat-playlist menyediakannya). */
+  duration?: number
+  /** Engagement (best-effort; flat-playlist sering 'NA'). Dipakai CSV analitik. */
+  views?: number
+  likes?: number
+  comments?: number
+  /** Caption/description (berisi hashtag). */
+  description?: string
 }
 
 export interface ScrapeResult {
@@ -153,8 +166,25 @@ export interface ScrapeResult {
   truncated: boolean
 }
 
-/** Batas item hasil scrape agar UI tetap responsif untuk akun yang sangat besar. */
-const MAX_SCRAPE_ITEMS = 500
+/** Hasil resolusi pratinjau satu video (untuk thumbnail lazy & modal preview). */
+export interface ResolvedPreview {
+  url: string
+  playUrl?: string
+  thumbnail?: string
+  duration?: number
+  title?: string
+  error?: string
+}
+
+/**
+ * Batas item scrape yang benar-benar DI-FETCH dari server (via `--playlist-items`).
+ * Mengurangi jumlah request API ke platform (TikTok me-rate-limit pagination
+ * dengan HTTP 429) — akar masalah scrape gagal pada akun besar.
+ */
+const SCRAPE_FETCH_LIMIT = 200
+
+/** Pola error transien scrape (mis. HTTP 429 TikTok) yang memicu retry + rotasi endpoint. */
+const SCRAPE_TRANSIENT_RE = /HTTP Error 429|Too Many Requests|Unable to download JSON metadata/i
 
 /** Batas unduhan paralel saat opsi `parallel` aktif (agar stabil & tidak kena rate-limit berlebihan). */
 const MAX_PARALLEL_DOWNLOADS = 2
@@ -243,6 +273,13 @@ async function downloadSingle(
   let lastError = ''
   let targetUrl = url
 
+  // Rotasi proxy anti-banned: ambil proxy berikutnya bila belum ditentukan
+  // (dari pengaturan global yang aktif).
+  if (!options.proxy) {
+    const picked = nextProxy()
+    if (picked) options = { ...options, proxy: picked }
+  }
+
   // Lapisan 0a (khusus Douyin): normalisasi short link -> URL kanonik + tulis
   // file cookie sesi bila pengguna menyediakan header Cookie. Douyin (2026)
   // mewajibkan cookie sesi; yt-dlp menerimanya via `--cookies <file>`.
@@ -265,7 +302,7 @@ async function downloadSingle(
 
   // Lapisan 0: TikTok via TikWM (cepat & bekerja saat yt-dlp ditolak TikTok).
   if (isTikTokUrl(url)) {
-    const tiktokOk = await tryTikTokDownload(url, id, onProgress)
+    const tiktokOk = await tryTikTokDownload(url, id, onProgress, options)
     if (tiktokOk) return true
     lastError = 'TikWM tidak berhasil; mencoba jalur yt-dlp...'
   }
@@ -317,17 +354,23 @@ async function downloadSingle(
 async function tryTikTokDownload(
   url: string,
   id: string,
-  onProgress: (p: DownloadProgress) => void
+  onProgress: (p: DownloadProgress) => void,
+  options: DownloadOptions = {}
 ): Promise<boolean> {
   onProgress({ id, url, percent: 0, status: 'downloading', phase: 'downloading' })
   const outDir = getDownloadDir()
-  const result = await downloadTikTokVideo(url, outDir, (phase, percent) => {
-    if (phase === 'resolving') {
-      onProgress({ id, url, percent: 0, status: 'downloading', phase: 'extracting' })
-    } else if (phase === 'downloading') {
-      onProgress({ id, url, percent, status: 'downloading', phase: 'downloading' })
-    }
-  })
+  const result = await downloadTikTokVideo(
+    url,
+    outDir,
+    (phase, percent) => {
+      if (phase === 'resolving') {
+        onProgress({ id, url, percent: 0, status: 'downloading', phase: 'extracting' })
+      } else if (phase === 'downloading') {
+        onProgress({ id, url, percent, status: 'downloading', phase: 'downloading' })
+      }
+    },
+    options.proxy
+  )
   if (result.ok && result.filePath) {
     onProgress({
       id,
@@ -491,23 +534,84 @@ async function runYtdlpDownload(
 
 /**
  * Mengambil daftar video dari satu akun/halaman (YouTube channel/@user, TikTok,
- * Instagram, dll) via `yt-dlp --flat-playlist --print` (cepat, tanpa mengunduh).
+ * Instagram, Douyin, dll) via `yt-dlp --flat-playlist --print` (cepat, tanpa
+ * mengunduh).
+ *
+ * DIPERKUAT (audit forensik 2026-08-14) — akar masalah HTTP 429 saat scrape:
+ * - TikTok me-rate-limit endpoint pagination (`/api/post/item_list/`) → 429
+ *   transien (per-IP). Scrape mem-fetch SEMUA halaman akun (1 request API per
+ *   halaman), jadi akun besar = banyak request = makin mungkin 429.
+ * - Sebelumnya scrape TANPA perlindungan: tanpa UA browser, tanpa cookies,
+ *   tanpa retry, tanpa rotasi endpoint, tanpa batas request, dan error mentah.
+ * Perbaikan: batas item yang DI-FETCH (`--playlist-items`, mengurangi request
+ * API), UA Chrome, cookies browser bila dikonfigurasi, retry + rotasi
+ * `api_hostname` saat 429, dan pesan error ramah.
  */
-export async function scrapeAccount(url: string): Promise<ScrapeResult> {
+export async function scrapeAccount(
+  url: string,
+  options: DownloadOptions = {},
+  fetchLimit = SCRAPE_FETCH_LIMIT
+): Promise<ScrapeResult> {
   const ytdlp = await ensureYtdlp()
   if (!ytdlp) {
     throw new Error('yt-dlp tidak tersedia. Periksa koneksi internet lalu coba lagi.')
   }
 
-  const args = [
+  // Normalisasi short link Douyin → URL kanonik agar scrape Douyin lebih andal.
+  let targetUrl = url
+  if (isDouyinUrl(url)) {
+    try {
+      targetUrl = await normalizeDouyinUrl(url)
+    } catch {
+      targetUrl = url
+    }
+  }
+
+  const baseArgs = [
     '--flat-playlist',
     '--no-warnings',
     '--print',
-    '%(id)s\t%(title)s\t%(webpage_url)s',
-    url
+    '%(id)s\t%(title)s\t%(webpage_url)s\t%(thumbnail)s\t%(duration)s\t%(view_count)s\t%(like_count)s\t%(comment_count)s\t%(description)s',
+    '--playlist-items',
+    `1-${fetchLimit}`,
+    '--user-agent',
+    CHROME_USER_AGENT
+  ]
+  if (options.cookiesBrowser && options.cookiesBrowser.trim()) {
+    baseArgs.push('--cookies-from-browser', options.cookiesBrowser.trim())
+  }
+
+  // Upaya 1: normal. Upaya 2 (hanya bila 429/transien): rotasi `api_hostname` —
+  // workaround komunitas yt-dlp untuk rate-limit TikTok.
+  const attempts: string[][] = [
+    [...baseArgs, targetUrl],
+    [
+      ...baseArgs,
+      '--extractor-args',
+      'tiktok:api_hostname=api16-normal-c-useast1a.tiktokv.com;app_name=trill',
+      targetUrl
+    ]
   ]
 
-  return await new Promise<ScrapeResult>((resolve, reject) => {
+  let lastError = ''
+  for (const args of attempts) {
+    const r = await runScrapeOnce(ytdlp, args, targetUrl, fetchLimit)
+    if (r.ok && r.result) return r.result
+    lastError = r.error ?? ''
+    if (!SCRAPE_TRANSIENT_RE.test(lastError)) break
+    await sleep(2500)
+  }
+  throw new Error(friendlyScrapeError(lastError))
+}
+
+/** Menjalankan satu proses scrape yt-dlp dan mengurai hasil flat-playlist. */
+async function runScrapeOnce(
+  ytdlp: string,
+  args: string[],
+  originalUrl: string,
+  fetchLimit = SCRAPE_FETCH_LIMIT
+): Promise<{ ok: boolean; result?: ScrapeResult; error?: string }> {
+  return await new Promise((resolve) => {
     const proc = spawn(ytdlp, args)
     let stdout = ''
     let stderrTail = ''
@@ -519,32 +623,59 @@ export async function scrapeAccount(url: string): Promise<ScrapeResult> {
       if (stderrTail.length < 4000) stderrTail += text
     })
     proc.on('error', (err) => {
-      reject(new Error(`Gagal menjalankan yt-dlp: ${err.message}`))
+      resolve({ ok: false, error: `Gagal menjalankan yt-dlp: ${err.message}` })
     })
     proc.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(lastLines(stderrTail)))
+        resolve({ ok: false, error: lastLines(stderrTail) })
         return
       }
       const items: ScrapeItem[] = []
       const seen = new Set<string>()
+      const parseNum = (v: string): number | undefined => {
+        const n = Number(v)
+        return v && v !== 'NA' && Number.isFinite(n) ? n : undefined
+      }
       for (const line of stdout.split('\n')) {
         const parts = line.split('\t').map((s) => (s ?? '').trim())
         if (parts.length < 3 || !parts[0]) continue
-        const entryUrl = parts[2] || url
+        const entryUrl = parts[2] || originalUrl
         if (seen.has(entryUrl)) continue
         seen.add(entryUrl)
+        // Kolom 4 = thumbnail (yt-dlp memakai 'NA' bila tidak tersedia di
+        // flat-playlist — mis. TikTok; YouTube tersedia). Kolom 5 = durasi.
+        // Kolom 6-9 = views/likes/comments/description (best-effort, NA diizinkan).
+        const thumb = parts[3] && parts[3] !== 'NA' ? parts[3] : undefined
+        const desc = parts[8] && parts[8] !== 'NA' ? parts[8].slice(0, 2000) : undefined
         items.push({
           index: items.length,
           id: parts[0],
           title: parts[1] || `Video ${items.length + 1}`,
-          url: entryUrl
+          url: entryUrl,
+          thumbnail: thumb,
+          duration: parseNum(parts[4]),
+          views: parseNum(parts[5]),
+          likes: parseNum(parts[6]),
+          comments: parseNum(parts[7]),
+          description: desc
         })
-        if (items.length >= MAX_SCRAPE_ITEMS) break
+        if (items.length >= fetchLimit) break
       }
-      resolve({ items, truncated: items.length >= MAX_SCRAPE_ITEMS })
+      resolve({ ok: true, result: { items, truncated: items.length >= SCRAPE_FETCH_LIMIT } })
     })
   })
+}
+
+/** Menerjemahkan error scrape agar ramah & informatif (khususnya 429 TikTok). */
+function friendlyScrapeError(raw: string): string {
+  const tail = lastLines(raw)
+  if (/HTTP Error 429|Too Many Requests/i.test(raw)) {
+    return `${tail} — TikTok sedang membatasi permintaan (429, sementara). Sudah dicoba ulang otomatis dgn user-agent browser & endpoint cadangan. Tunggu beberapa menit lalu coba lagi, atau aktifkan Cookies Browser di Pengaturan Unduhan untuk mengurangi pembatasan.`
+  }
+  if (/\[tiktok:user\]|Unable to extract secondary user ID|Unable to extract/i.test(raw)) {
+    return 'TikTok memblokir pemeriksaan akun otomatis saat ini (perlindungan anti-bot di pihak TikTok). Ambil daftar maupun pemantauan otomatis akun TikTok belum dapat berjalan. Coba lagi nanti, atau gunakan akun YouTube/platform lain untuk Auto-Watcher.'
+  }
+  return tail
 }
 
 /** Mengambil beberapa baris terakhir dari teks untuk pesan error yang ringkas. */
@@ -555,6 +686,143 @@ function lastLines(text: string, count = 3): string {
     .map((l) => l.trim())
     .filter(Boolean)
   return lines.slice(-count).join(' ') || 'Unduhan gagal.'
+}
+
+/**
+ * Detail profil akun yang berhasil di-resolve (dipakai verifikasi Auto-Watcher).
+ */
+export interface AccountProfileInfo {
+  name?: string
+  username?: string
+  avatar?: string
+  followers?: number
+  bio?: string
+  platform?: string
+}
+
+/**
+ * Meresolusi info profil sebuah AKUN/halaman via yt-dlp `--dump-single-json`
+ * (flat-playlist, 1 item). Berhasil → objek profil (uploader/channel, avatar,
+ * followers, bio). Gagal (akun tidak ada / platform memblokir) → null.
+ * Dipakai Auto-Watcher untuk memvalidasi tautan akun sebelum dipantau.
+ */
+export async function resolveAccountInfo(url: string): Promise<AccountProfileInfo | null> {
+  const ytdlp = await ensureYtdlp()
+  if (!ytdlp) return null
+  return await new Promise((resolve) => {
+    const proc = spawn(ytdlp, [
+      '--dump-single-json',
+      '--flat-playlist',
+      '--no-warnings',
+      '--playlist-items',
+      '1',
+      url
+    ])
+    let out = ''
+    proc.stdout.on('data', (chunk: Buffer) => {
+      out += chunk.toString()
+    })
+    proc.on('error', () => resolve(null))
+    proc.on('close', (code) => {
+      if (code !== 0 || !out.trim()) {
+        resolve(null)
+        return
+      }
+      try {
+        const j = JSON.parse(out) as Record<string, unknown>
+        const followersRaw = j.channel_follower_count ?? j.channel_follower_count_text
+        const followers =
+          typeof followersRaw === 'number' && Number.isFinite(followersRaw) ? followersRaw : undefined
+        resolve({
+          name:
+            typeof j.uploader === 'string' && j.uploader
+              ? j.uploader
+              : typeof j.channel === 'string' && j.channel
+                ? j.channel
+                : undefined,
+          username:
+            typeof j.uploader_id === 'string' && j.uploader_id
+              ? j.uploader_id
+              : typeof j.channel_id === 'string' && j.channel_id
+                ? j.channel_id
+                : undefined,
+          avatar: typeof j.thumbnail === 'string' && j.thumbnail ? j.thumbnail : undefined,
+          followers,
+          bio: typeof j.description === 'string' && j.description ? j.description.slice(0, 500) : undefined,
+          platform: typeof j.extractor === 'string' ? j.extractor.split(':')[0] : undefined
+        })
+      } catch {
+        resolve(null)
+      }
+    })
+  })
+}
+
+/**
+ * Meresolusi pratinjau satu video: URL media langsung yang bisa diputar
+ * (<video>), plus thumbnail/durasi/judul bila tersedia.
+ * - TikTok → TikWM (cepat, ~0,5 s, multi-key failover; data.play = tanpa watermark).
+ * - Platform lain → yt-dlp `--get-url` (best-effort; bisa lambat ~boot 11 s di macOS).
+ * Dipakai oleh modal preview video di hasil scrape & resolver thumbnail lazy.
+ */
+export async function resolvePreviewUrl(
+  url: string,
+  options: DownloadOptions = {}
+): Promise<ResolvedPreview> {
+  if (isTikTokUrl(url)) {
+    const info = await resolveTikTokInfo(url, options.proxy)
+    return {
+      url,
+      playUrl: info.playUrl,
+      thumbnail: info.thumbnail,
+      duration: info.duration,
+      title: info.title
+    }
+  }
+
+  const ytdlp = await ensureYtdlp()
+  if (!ytdlp) throw new Error('yt-dlp tidak tersedia. Periksa koneksi internet lalu coba lagi.')
+  const playUrl = await getDirectUrl(ytdlp, url, options)
+  if (!playUrl) throw new Error('Tidak dapat memuat pratinjau untuk URL ini.')
+  return { url, playUrl }
+}
+
+/** Menjalankan `yt-dlp --get-url` untuk mendapatkan URL media langsung (best-effort). */
+function getDirectUrl(
+  ytdlp: string,
+  url: string,
+  options: DownloadOptions
+): Promise<string | null> {
+  // Format TUNGGAL (progresif/HLS) — bisa diputar <video>. Hindari bv+ba
+  // (dua URL terpisah yang tidak bisa diputar bersamaan di <video>).
+  const args = [
+    '--no-warnings',
+    '--get-url',
+    '-f',
+    'b[height<=?1080]/b',
+    '--user-agent',
+    CHROME_USER_AGENT
+  ]
+  if (options.cookiesBrowser && options.cookiesBrowser.trim()) {
+    args.push('--cookies-from-browser', options.cookiesBrowser.trim())
+  }
+  if (options.proxy && options.proxy.trim()) {
+    args.push('--proxy', options.proxy.trim())
+  }
+  args.push(url)
+
+  return new Promise((resolve) => {
+    const proc = spawn(ytdlp, args)
+    let stdout = ''
+    proc.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
+    proc.on('error', () => resolve(null))
+    proc.on('close', (code) => {
+      const first = stdout.split('\n').map((l) => l.trim()).find(Boolean)
+      resolve(code === 0 && first ? first : null)
+    })
+  })
 }
 
 /**
@@ -587,6 +855,9 @@ function buildDownloadArgs(
     args.push('--cookies', options.cookiesFile.trim())
   } else if (options.cookiesBrowser && options.cookiesBrowser.trim()) {
     args.push('--cookies-from-browser', options.cookiesBrowser.trim())
+  }
+  if (options.proxy && options.proxy.trim()) {
+    args.push('--proxy', options.proxy.trim())
   }
   args.push('-o', outputTemplate, url)
   return args
