@@ -3,7 +3,7 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
 
-## Perubahan Terbaru (2026-08-15, belum commit)
+## Perubahan Terbaru (2026-08-15, SUDAH COMMIT + RILIS v1.4.1)
 
 ### Catatan Rilis dirender sebagai Markdown
 - Bagian **Catatan Rilis** di halaman Tentang & Update kini dirender sebagai
@@ -12,15 +12,24 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
   heading, list, bold, kode, link, kutipan, tabel, task list). E2E: h2/li/strong
   ter-render sebagai elemen HTML, tanpa `##`/`**` mentah. tsc/lint/build PASS.
 
-## Status Rilis v1.4.1 (DALAM PROSES RILIS) — 5 Fitur Besar
+### Desain & Animasi (commit `295c831`)
+- Tabel super responsif & konsisten (body tabel scroll internal, header sticky,
+  halaman tidak scroll); komponen antrean per tab (`DownloadQueue` /
+  `ScrapeDownloadProgress`) + pelacakan asal unduhan; exit animation halus
+  (AnimatePresence) untuk modal, toast, tabel, overlay; perbaikan select portal.
 
-- **Branch**: `release/v1.4.1` (baru, dari `release/v1.3.4`). Commit `91d05be`
-  "feat: rilis v1.4.1 — 5 fitur besar". **Sudah di-push** + **PR #26** ke `main`
-  (open, BELUM di-merge).
-- **Versi**: `1.3.4` → **`1.4.1`** (package.json + package-lock.json).
+## Status Rilis v1.4.1 (SELESAI — RELEASE v1.4.1 DIPUBLIKASI) — 5 Fitur Besar
+
+- **Branch**: `release/v1.4.1` (dari `release/v1.3.4`). **Sudah di-push** ke
+  origin (`93cf0dd..b50e3b8`).
+- **Versi**: `1.4.1`.
+- **PR #26** ke `main` **MERGED** (merge commit `9b000e2`, 2026-08-15) — bukan
+  squash.
+- **Tag**: `v1.4.1` dibuat di commit merge `9b000e2` + dipush.
+- **GitHub Release v1.4.1 DIBUAT** dengan catatan rilis lengkap + **4 artefak**:
+  `RS-OmniClip-1.4.1-arm64.dmg`, `RS-OmniClip-1.4.1-arm64.zip`,
+  `RS-OmniClip-1.4.1-x64-setup.exe`, `RS-OmniClip-1.4.1-x64-portable.exe`.
 - **Catatan rilis**: `release-notes/RELEASE_NOTES_v1.4.1.md`.
-- **Belum dilakukan** (tunggu instruksi user): merge PR (merge commit), build
-  artefak mac+win, tag `v1.4.1`, GitHub Release.
 - **Referensi pengerjaan**: `docs/IMPLEMENTATION_v1.4.md` (semua keputusan teknis).
 - **Semua 5 fitur SELESAI diimplementasi & DIVALIDASI** (tsc/lint/build PASS +
   E2E Electron+CDP nyata). File baru: `electron/main/config.ts`, `media.ts`,
