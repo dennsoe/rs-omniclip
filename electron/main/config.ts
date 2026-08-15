@@ -16,6 +16,13 @@ export interface HistoryEntry {
 export interface WatchedAccount {
   url: string
   label?: string
+  /** Detail profil (hasil verifikasi akun saat ditambahkan). */
+  name?: string
+  username?: string
+  avatar?: string
+  followers?: number
+  bio?: string
+  platform?: string
   lastSeenId?: string
   lastCheckedAt?: number
   lastFoundAt?: number

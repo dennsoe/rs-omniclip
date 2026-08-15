@@ -107,6 +107,60 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
   --remote-debugging-port=9222 --user-data-dir="$TMPDIR/rs-omniclip-cdp"`
   (unsandboxed).
 
+### Penyempurnaan Auto-Watcher + CSV (2026-08-15, belum commit)
+1. **Auto-Watcher pindah ke TAB ke-3 "Pantau Akun"** di halaman Pengunduh (sebelum
+   Riwayat; urutan: Banyak Link / Akun·Halaman / Pantau Akun / Riwayat). Badge
+   header menampilkan jumlah akun.
+2. **Toast toggle CSV** — toggle "Ekspor Data Analitik" kini memberi notifikasi
+   saat diaktifkan/dimatikan.
+3. **Konfirmasi hapus akun** — tombol hapus di daftar akun membuka modal
+   `ConfirmModal` type `removeAccount` ("Hapus Akun dari Auto-Watcher?").
+4. **Validasi akun + detail profil** — tombol "Periksa" memanggil IPC baru
+   `watcher:resolve` (via `resolveAccount`): duplikat → toast "sudah dipantau";
+   ada → kartu profil (avatar, nama, @username, pengikut, bio, platform) +
+   tombol "Pantau Akun Ini"; tidak ada/tak terverifikasi → pesan jujur.
+   Resolver: yt-dlp `--dump-single-json` (`resolveAccountInfo` di downloader.ts)
+   + SSR profil TikTok (`resolveTikTokProfile` di tiktok.ts, best-effort).
+5. **Deteksi duplikat** — `watcher:add`/`watcher:resolve` mendeteksi URL yang
+   sudah dipantau → toast akurat (sebelumnya toast "ditambahkan" selalu muncul).
+   `WatchedAccount` diperluas: name/username/avatar/followers/bio/platform.
+- E2E terverifikasi: tab ke-3 urut benar; toast CSV muncul; modal hapus + akun
+  benar-benar terhapus; resolve akun fiktif → exists:false; resolve `@YouTube`
+  → exists:true + detail (46 Jt pengikut); duplikat terdeteksi; profil tersimpan.
+  typecheck/eslint/build PASS.
+
+### Perbaikan lanjutan Auto-Watcher + CSV (2026-08-15, belum commit)
+1. **Toggle CSV diletakkan DI SAMPING KANAN judul** "Ambil Video dari Akun /
+   Halaman" (satu baris, `flex-wrap` + `ml-auto`), label ringkas **"Ekspor
+   analitik"** — tidak memakan tempat terpisah. (E2E: sameRow:true, toRight:true.)
+2. **Panel "Pantau Akun" terkunci saat nonaktif** — bila Auto-Watcher OFF, hanya
+   header + toggle + notice terkunci (Lock) yang tampil; SEMUA aksi (interval,
+   tambah akun, Periksa, Cek Sekarang, hapus) disembunyikan sampai diaktifkan.
+3. **Error cek akun TikTok kini ramah** — akar masalah teraudit: extractor
+   yt-dlp TikTok rusak GLOBAL (bot-detection, isu #17403) → `scrapeAccount`
+   gagal `[tiktok:user] Unable to extract secondary user ID`. `friendlyScrapeError`
+   kini mendeteksi pola ini → pesan jujur Bahasa Indonesia ("TikTok memblokir
+   pemeriksaan akun otomatis... gunakan YouTube/platform lain"). `checkAccountOnce`
+   juga mencatat `lastCheckedAt` walau gagal (status "Terakhir cek" akurat).
+- **BATASAN JUJUR**: Auto-Watcher TIDAK dapat memantau akun TikTok sampai
+  extractor yt-dlp diperbaiki (di luar kendali app); YouTube/platform lain
+  berfungsi. TikWM hanya melayani video per-URL, bukan feed profil.
+- E2E terverifikasi: toggle CSV di atas input (y 207 < 240); panel terkunci saat
+  off (Periksa/Cek/tambah form tersembunyi); error TikTok kini pesan ramah
+  (bukan kriptik). typecheck/eslint/build PASS.
+
+### Perbaikan Audit Forensik (2026-08-15)
+1. **CSP `font-src 'self' data:`** (`src/index.html`) — subset Cyrillic font
+   Plus Jakarta Sans di-inline Vite sbg `data:font/woff2` → font-src default
+   (`default-src 'self'`) memblokirnya → error konsol. Kini font termuat; error
+   konsol hilang (E2E diverifikasi).
+2. **`tiktok.ts` `getRequest` redirect** — redirect kini meneruskan `agent`
+   (proxy aktif), sebelumnya redirect jalan tanpa proxy.
+3. **`media.ts` suffix range** — `bytes=-N` (N byte terakhir) ditangani benar
+   (`start=size-N`), sebelumnya dibaca sbg `0..N`. Range `0-N`/open-ended tetap
+   benar. E2E: <video> media:// readyState 4 + seek 1.5s berhasil (Range 206
+   end-to-end).
+
 ## Status Rilis v1.3.4 (SEDANG DIKERJAKAN) — redesign UI + prior fixes
 
 - **Branch**: `release/v1.3.4` (BELUM di-push ke remote; menunggu persetujuan

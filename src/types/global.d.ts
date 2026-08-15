@@ -8,7 +8,8 @@ import type {
   DownloadProgress,
   ResolvedPreview,
   AppConfig,
-  HistoryEntry
+  HistoryEntry,
+  AccountInfo
 } from '@lib/types'
 
 /**
@@ -100,13 +101,25 @@ declare global {
 
       // --- Auto-Watcher (pemantauan akun otomatis) ---
       getWatcherConfig: () => Promise<AppConfig['watcher']>
-      addWatchedAccount: (payload: { url: string; label?: string }) => Promise<AppConfig['watcher']>
+      addWatchedAccount: (payload: {
+        url: string
+        label?: string
+        profile?: {
+          name?: string
+          username?: string
+          avatar?: string
+          followers?: number
+          bio?: string
+          platform?: string
+        }
+      }) => Promise<AppConfig['watcher']>
       removeWatchedAccount: (url: string) => Promise<AppConfig['watcher']>
       setWatcherEnabled: (enabled: boolean) => Promise<AppConfig['watcher']>
       setWatcherInterval: (hours: number) => Promise<AppConfig['watcher']>
       checkWatcherNow: (
         url?: string
       ) => Promise<Array<{ url: string; newItems?: unknown[]; error?: string }>>
+      resolveWatchedAccount: (url: string) => Promise<AccountInfo>
       onWatcherNotify: (
         cb: (data: { title: string; body: string }) => void
       ) => () => void

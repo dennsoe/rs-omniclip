@@ -672,6 +672,9 @@ function friendlyScrapeError(raw: string): string {
   if (/HTTP Error 429|Too Many Requests/i.test(raw)) {
     return `${tail} — TikTok sedang membatasi permintaan (429, sementara). Sudah dicoba ulang otomatis dgn user-agent browser & endpoint cadangan. Tunggu beberapa menit lalu coba lagi, atau aktifkan Cookies Browser di Pengaturan Unduhan untuk mengurangi pembatasan.`
   }
+  if (/\[tiktok:user\]|Unable to extract secondary user ID|Unable to extract/i.test(raw)) {
+    return 'TikTok memblokir pemeriksaan akun otomatis saat ini (perlindungan anti-bot di pihak TikTok). Ambil daftar maupun pemantauan otomatis akun TikTok belum dapat berjalan. Coba lagi nanti, atau gunakan akun YouTube/platform lain untuk Auto-Watcher.'
+  }
   return tail
 }
 
@@ -683,6 +686,76 @@ function lastLines(text: string, count = 3): string {
     .map((l) => l.trim())
     .filter(Boolean)
   return lines.slice(-count).join(' ') || 'Unduhan gagal.'
+}
+
+/**
+ * Detail profil akun yang berhasil di-resolve (dipakai verifikasi Auto-Watcher).
+ */
+export interface AccountProfileInfo {
+  name?: string
+  username?: string
+  avatar?: string
+  followers?: number
+  bio?: string
+  platform?: string
+}
+
+/**
+ * Meresolusi info profil sebuah AKUN/halaman via yt-dlp `--dump-single-json`
+ * (flat-playlist, 1 item). Berhasil → objek profil (uploader/channel, avatar,
+ * followers, bio). Gagal (akun tidak ada / platform memblokir) → null.
+ * Dipakai Auto-Watcher untuk memvalidasi tautan akun sebelum dipantau.
+ */
+export async function resolveAccountInfo(url: string): Promise<AccountProfileInfo | null> {
+  const ytdlp = await ensureYtdlp()
+  if (!ytdlp) return null
+  return await new Promise((resolve) => {
+    const proc = spawn(ytdlp, [
+      '--dump-single-json',
+      '--flat-playlist',
+      '--no-warnings',
+      '--playlist-items',
+      '1',
+      url
+    ])
+    let out = ''
+    proc.stdout.on('data', (chunk: Buffer) => {
+      out += chunk.toString()
+    })
+    proc.on('error', () => resolve(null))
+    proc.on('close', (code) => {
+      if (code !== 0 || !out.trim()) {
+        resolve(null)
+        return
+      }
+      try {
+        const j = JSON.parse(out) as Record<string, unknown>
+        const followersRaw = j.channel_follower_count ?? j.channel_follower_count_text
+        const followers =
+          typeof followersRaw === 'number' && Number.isFinite(followersRaw) ? followersRaw : undefined
+        resolve({
+          name:
+            typeof j.uploader === 'string' && j.uploader
+              ? j.uploader
+              : typeof j.channel === 'string' && j.channel
+                ? j.channel
+                : undefined,
+          username:
+            typeof j.uploader_id === 'string' && j.uploader_id
+              ? j.uploader_id
+              : typeof j.channel_id === 'string' && j.channel_id
+                ? j.channel_id
+                : undefined,
+          avatar: typeof j.thumbnail === 'string' && j.thumbnail ? j.thumbnail : undefined,
+          followers,
+          bio: typeof j.description === 'string' && j.description ? j.description.slice(0, 500) : undefined,
+          platform: typeof j.extractor === 'string' ? j.extractor.split(':')[0] : undefined
+        })
+      } catch {
+        resolve(null)
+      }
+    })
+  })
 }
 
 /**

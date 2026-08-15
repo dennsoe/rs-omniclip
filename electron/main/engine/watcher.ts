@@ -1,6 +1,13 @@
 import { Notification } from 'electron'
 import { getConfig, setConfig, type WatchedAccount } from '../config'
-import { scrapeAccount, type ScrapeItem, type DownloadProgress } from './downloader'
+import {
+  scrapeAccount,
+  resolveAccountInfo,
+  type ScrapeItem,
+  type DownloadProgress,
+  type AccountProfileInfo
+} from './downloader'
+import { isTikTokUrl, resolveTikTokProfile } from './tiktok'
 import { enqueueBatch } from './queue'
 import { processBatch, type ProcessFileInput } from './processor'
 import { getDownloadDir } from './paths'
@@ -174,6 +181,78 @@ export async function checkAccountOnce(
     }
     return { newItems }
   } catch (err) {
+    // Catat waktu percobaan (walau gagal) agar status "Terakhir cek" akurat.
+    updateAccount(acc.url, { lastCheckedAt: Date.now() })
     return { error: err instanceof Error ? err.message : 'Gagal memeriksa akun.' }
+  }
+}
+
+/** Hasil verifikasi/resolusi detail akun (dipakai IPC `watcher:resolve`). */
+export interface AccountInfo {
+  url: string
+  /** Sudah terdaftar di Auto-Watcher (duplikat). */
+  duplicate: boolean
+  /** Terverifikasi ada (profil berhasil diambil). */
+  exists: boolean
+  name?: string
+  username?: string
+  avatar?: string
+  followers?: number
+  bio?: string
+  platform?: string
+  /** Pesan bila tidak dapat diverifikasi. */
+  error?: string
+}
+
+/**
+ * Validasi + ambil detail profil sebuah akun sebelum dipantau.
+ * - Duplikat (sudah terdaftar) → `duplicate: true` (tanpa panggilan jaringan).
+ * - Resolve via yt-dlp; bila gagal & platform TikTok → parse SSR halaman profil.
+ * - Gagal semua → `exists: false` + pesan jujur (bukan klaim "tidak ada" palsu).
+ */
+export async function resolveAccount(url: string): Promise<AccountInfo> {
+  const accounts = getConfig().watcher.accounts
+  if (accounts.some((a) => a.url === url)) {
+    return { url, duplicate: true, exists: true }
+  }
+
+  // 1. yt-dlp (YouTube & platform lain yang tidak memblokir).
+  try {
+    const info: AccountProfileInfo | null = await resolveAccountInfo(url)
+    if (info) {
+      return {
+        url,
+        duplicate: false,
+        exists: true,
+        name: info.name,
+        username: info.username,
+        avatar: info.avatar,
+        followers: info.followers,
+        bio: info.bio,
+        platform: info.platform
+      }
+    }
+  } catch {
+    /* lanjut ke jalur TikTok */
+  }
+
+  // 2. TikTok: parse SSR halaman profil (best-effort).
+  if (isTikTokUrl(url)) {
+    try {
+      const prof = await resolveTikTokProfile(url)
+      if (prof) {
+        return { url, duplicate: false, exists: true, ...prof, platform: 'TikTok' }
+      }
+    } catch {
+      /* gagal — jatuh ke pesan jujur */
+    }
+  }
+
+  return {
+    url,
+    duplicate: false,
+    exists: false,
+    error:
+      'Akun tidak ditemukan atau tidak dapat diverifikasi saat ini (platform memblokir pemeriksaan atau akun tidak ada).'
   }
 }

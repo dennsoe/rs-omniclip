@@ -94,6 +94,19 @@ interface WatcherNotifyData {
   body: string
 }
 
+interface AccountInfoData {
+  url: string
+  duplicate: boolean
+  exists: boolean
+  name?: string
+  username?: string
+  avatar?: string
+  followers?: number
+  bio?: string
+  platform?: string
+  error?: string
+}
+
 const api = {
   // --- Kontrak inti jembatan IPC ---
   checkEngine: (): void => {
@@ -334,8 +347,18 @@ const api = {
 
   // --- Auto-Watcher (pemantauan akun otomatis) ---
   getWatcherConfig: (): Promise<WatcherConfigData> => ipcRenderer.invoke('watcher:list'),
-  addWatchedAccount: (payload: { url: string; label?: string }): Promise<WatcherConfigData> =>
-    ipcRenderer.invoke('watcher:add', payload),
+  addWatchedAccount: (payload: {
+    url: string
+    label?: string
+    profile?: {
+      name?: string
+      username?: string
+      avatar?: string
+      followers?: number
+      bio?: string
+      platform?: string
+    }
+  }): Promise<WatcherConfigData> => ipcRenderer.invoke('watcher:add', payload),
   removeWatchedAccount: (url: string): Promise<WatcherConfigData> =>
     ipcRenderer.invoke('watcher:remove', url),
   setWatcherEnabled: (enabled: boolean): Promise<WatcherConfigData> =>
@@ -344,6 +367,8 @@ const api = {
     ipcRenderer.invoke('watcher:setInterval', hours),
   checkWatcherNow: (url?: string): Promise<Array<{ url: string; newItems?: unknown[]; error?: string }>> =>
     ipcRenderer.invoke('watcher:checkNow', url),
+  resolveWatchedAccount: (url: string): Promise<AccountInfoData> =>
+    ipcRenderer.invoke('watcher:resolve', url),
   onWatcherNotify: (cb: (data: WatcherNotifyData) => void): Unsubscribe => {
     const listener = (_event: Electron.IpcRendererEvent, data: WatcherNotifyData): void => cb(data)
     ipcRenderer.on('watcher:notify', listener)

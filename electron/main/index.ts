@@ -33,7 +33,8 @@ import {
   startWatcher,
   stopWatcher,
   checkAccountOnce,
-  setWatcherNotify
+  setWatcherNotify,
+  resolveAccount
 } from '@engine/watcher'
 
 let mainWindow: BrowserWindow | null = null
@@ -449,13 +450,27 @@ function registerIpc(): void {
     const url = typeof payload?.url === 'string' ? payload.url.trim() : ''
     if (!url) return getConfig().watcher
     const label = typeof payload?.label === 'string' ? payload.label.trim() : ''
+    const p = payload?.profile
     const accounts = [...getConfig().watcher.accounts]
     if (!accounts.some((a) => a.url === url)) {
-      accounts.push({ url, label: label || undefined })
+      accounts.push({
+        url,
+        label: label || undefined,
+        name: typeof p?.name === 'string' ? p.name : undefined,
+        username: typeof p?.username === 'string' ? p.username : undefined,
+        avatar: typeof p?.avatar === 'string' ? p.avatar : undefined,
+        followers: typeof p?.followers === 'number' ? p.followers : undefined,
+        bio: typeof p?.bio === 'string' ? p.bio : undefined,
+        platform: typeof p?.platform === 'string' ? p.platform : undefined
+      })
     }
     setConfig({ watcher: { accounts } })
     startWatcher()
     return getConfig().watcher
+  })
+  ipcMain.handle('watcher:resolve', (_event, url) => {
+    const u = typeof url === 'string' ? url.trim() : ''
+    return resolveAccount(u)
   })
   ipcMain.handle('watcher:remove', (_event, url: string) => {
     const accounts = getConfig().watcher.accounts.filter((a) => a.url !== url)

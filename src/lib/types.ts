@@ -126,9 +126,33 @@ export interface HistoryEntry {
 export interface WatchedAccount {
   url: string
   label?: string
+  /** Detail profil (hasil verifikasi akun saat ditambahkan). */
+  name?: string
+  username?: string
+  avatar?: string
+  followers?: number
+  bio?: string
+  platform?: string
   lastSeenId?: string
   lastCheckedAt?: number
   lastFoundAt?: number
+}
+
+/** Hasil verifikasi/resolusi detail sebuah akun (dipakai Auto-Watcher). */
+export interface AccountInfo {
+  url: string
+  /** Sudah terdaftar di Auto-Watcher (duplikat). */
+  duplicate: boolean
+  /** Terverifikasi ada (profil berhasil diambil). */
+  exists: boolean
+  name?: string
+  username?: string
+  avatar?: string
+  followers?: number
+  bio?: string
+  platform?: string
+  /** Pesan bila tidak dapat diverifikasi. */
+  error?: string
 }
 
 /** Konfigurasi proxy (anti-banned system). */

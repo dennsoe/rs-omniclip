@@ -34,6 +34,7 @@ import {
   LayoutGrid,
   List,
   FileSpreadsheet,
+  RadioTower,
   type LucideIcon
 } from 'lucide-react'
 import {
@@ -129,7 +130,9 @@ export default function App(): React.ReactElement {
     PREF_KEYS.activeMenu,
     PREF_DEFAULTS.activeMenu
   )
-  const [downloaderMode, setDownloaderMode] = usePersistentState<'links' | 'scrape' | 'history'>(
+  const [downloaderMode, setDownloaderMode] = usePersistentState<
+    'links' | 'scrape' | 'watcher' | 'history'
+  >(
     PREF_KEYS.downloaderMode,
     PREF_DEFAULTS.downloaderMode
   )
@@ -171,6 +174,8 @@ export default function App(): React.ReactElement {
   // Ekspor data analitik (CSV) otomatis setelah ambil daftar (Fase 4).
   const [analyticsExport, setAnalyticsExport] = useState(false)
   const analyticsExportRef = useRef(false)
+  // Jumlah akun terpantau Auto-Watcher (badge tab Pantau Akun).
+  const [watcherAccountCount, setWatcherAccountCount] = useState(0)
   const [isDownloading, setIsDownloading] = useState(false)
   // Pengaturan unduhan (kualitas, cookies browser, paralel) — dipersist ke localStorage.
   const [downloadMaxHeight, setDownloadMaxHeight] = usePersistentState<number>(
@@ -684,6 +689,10 @@ export default function App(): React.ReactElement {
         }
       })
       .catch(() => {})
+    window.api
+      ?.getWatcherConfig?.()
+      .then((cfg) => setWatcherAccountCount(cfg?.accounts?.length ?? 0))
+      .catch(() => {})
   }, [])
 
   const toggleAnalyticsExport = (): void => {
@@ -691,6 +700,12 @@ export default function App(): React.ReactElement {
     analyticsExportRef.current = next
     setAnalyticsExport(next)
     window.api?.setConfig?.({ analyticsExport: next }).catch(() => {})
+    addToast(
+      next
+        ? 'Ekspor data analitik diaktifkan — CSV akan dibuat otomatis setiap kali ambil daftar akun.'
+        : 'Ekspor data analitik dimatikan — data tidak lagi diekspor ke CSV.',
+      'success'
+    )
   }
 
   const onDrop = useCallback(
@@ -1306,7 +1321,9 @@ export default function App(): React.ReactElement {
                         ? `${validLinks.length} link`
                         : downloaderMode === 'scrape'
                           ? `${scrapeItems?.length ?? 0} video`
-                          : `${history.length} riwayat`}
+                          : downloaderMode === 'watcher'
+                            ? `${watcherAccountCount} akun`
+                            : `${history.length} riwayat`}
                     </span>
                     <button
                       type="button"
@@ -1331,6 +1348,7 @@ export default function App(): React.ReactElement {
                   {[
                     { id: 'links', label: 'Banyak Link', Icon: LinkIcon },
                     { id: 'scrape', label: 'Akun / Halaman', Icon: ListVideo },
+                    { id: 'watcher', label: 'Pantau Akun', Icon: RadioTower },
                     { id: 'history', label: 'Riwayat', Icon: History }
                   ].map((m) => {
                     const isActive = downloaderMode === m.id
@@ -1340,7 +1358,7 @@ export default function App(): React.ReactElement {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation()
-                          setDownloaderMode(m.id as 'links' | 'scrape' | 'history')
+                          setDownloaderMode(m.id as 'links' | 'scrape' | 'watcher' | 'history')
                         }}
                         className={`relative px-4 py-2 text-xs font-semibold rounded-full transition-colors flex items-center gap-1.5 ${
                           isActive
@@ -1423,17 +1441,29 @@ export default function App(): React.ReactElement {
                       className="mb-4"
                     >
                       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex flex-wrap items-center gap-2.5">
                           <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
                             <ListVideo className="w-4 h-4" />
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
                               Ambil Video dari Akun / Halaman
                             </h3>
                             <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
                               Masukkan tautan akun — daftar dimuat untuk dipilih.
                             </p>
+                          </div>
+                          {/* Ekspor analitik — di samping kanan judul, ringkas */}
+                          <div className="flex items-center gap-1.5 shrink-0 ml-auto pl-2">
+                            <FileSpreadsheet
+                              className={`h-4 w-4 shrink-0 ${
+                                analyticsExport
+                                  ? 'text-blue-500 dark:text-blue-400'
+                                  : 'text-slate-400 dark:text-slate-500'
+                              }`}
+                            />
+                            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Ekspor analitik</span>
+                            <Toggle checked={analyticsExport} onChange={toggleAnalyticsExport} aria-label="Ekspor analitik" />
                           </div>
                         </div>
                         <FloatingInput
@@ -1468,22 +1498,6 @@ export default function App(): React.ReactElement {
                             </button>
                           }
                         />
-
-                        {/* Ekspor data analitik (CSV) otomatis setelah ambil daftar */}
-                        <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 px-3 py-2 transition-colors">
-                          <FileSpreadsheet className="h-4 w-4 text-blue-500 dark:text-blue-400 shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                              Ekspor Data Analitik ke CSV
-                            </p>
-                            <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-tight">
-                              Views / likes / komentar / caption tiap video disimpan ke file{' '}
-                              <code className="text-[10px] font-mono">analytics-YYYY-MM-DD.csv</code> di folder
-                              Unduhan.
-                            </p>
-                          </div>
-                          <Toggle checked={analyticsExport} onChange={toggleAnalyticsExport} aria-label="Ekspor data analitik" />
-                        </div>
 
                         {scrapeError && (
                           <p className="text-xs text-rose-500 dark:text-rose-400 flex items-center gap-1.5">
@@ -1584,11 +1598,19 @@ export default function App(): React.ReactElement {
                           </div>
                         )}
                       </div>
-
-                      {/* Panel Auto-Watcher (pemantauan akun otomatis) */}
+                    </motion.div>
+                  ) : downloaderMode === 'watcher' ? (
+                    <motion.div
+                      key="watcher-mode"
+                      initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+                      className="mb-4"
+                    >
                       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-2xl p-4 flex flex-col gap-3 transition-colors">
                         <WatcherPanel
                           onNotify={(title, body) => addToast(`${title} — ${body}`, 'success')}
+                          onChange={(list) => setWatcherAccountCount(list.length)}
                         />
                       </div>
                     </motion.div>

@@ -115,7 +115,8 @@ function getRequest(
         const location = res.headers.location
         const origin = new URL(url).origin
         const next = location.startsWith('http') ? location : `${origin}${location}`
-        resolve(getRequest(next, headers, timeoutMs))
+        // Teruskan agent (proxy) agar request redirect tetap lewat proxy aktif.
+        resolve(getRequest(next, headers, timeoutMs, agent))
         return
       }
       const chunks: Buffer[] = []
@@ -352,4 +353,67 @@ export async function downloadTikTokVideo(
 
   fs.rmSync(tempPath, { force: true })
   return { ok: false, error: `TikWM gagal di ${TIKWM_PROVIDERS.length} provider (${lastError}).` }
+}
+
+/** Detail profil akun TikTok (dari SSR halaman profil; best-effort). */
+export interface TikTokProfile {
+  name?: string
+  username?: string
+  avatar?: string
+  followers?: number
+  bio?: string
+}
+
+/**
+ * Resolve profil akun TikTok dengan membaca halaman profil secara langsung
+ * (HTML + JSON SSR `__UNIVERSAL_DATA_FOR_REHYDRATION__`). Best-effort:
+ * bila TikTok menyajikan halaman challenge (bot-detection), fungsi mengembalikan
+ * null dan pemanggil akan melaporkan "tidak dapat diverifikasi".
+ */
+export async function resolveTikTokProfile(url: string): Promise<TikTokProfile | null> {
+  const html = await new Promise<string | null>((resolve) => {
+    const req = https.get(
+      url,
+      { headers: { 'User-Agent': CHROME_USER_AGENT, 'Accept-Language': 'id-ID,id;q=0.9' } },
+      (res) => {
+        if ((res.statusCode ?? 0) >= 400) {
+          res.resume()
+          resolve(null)
+          return
+        }
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+      }
+    )
+    req.on('error', () => resolve(null))
+    req.setTimeout(15000, () => req.destroy(new Error('timeout')))
+  })
+  if (!html) return null
+
+  const m = /<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application\/json">([\s\S]*?)<\/script>/.exec(
+    html
+  )
+  if (!m) return null
+  try {
+    const data = JSON.parse(m[1]) as {
+      __DEFAULT_SCOPE__?: Record<string, unknown>
+    }
+    const scope = data.__DEFAULT_SCOPE__?.['webapp.user-detail'] as
+      | { userInfo?: { user?: Record<string, unknown> } }
+      | undefined
+    const user = scope?.userInfo?.user
+    if (!user) return null
+    const followersRaw = user.followerCount
+    return {
+      name: typeof user.nickname === 'string' ? user.nickname : undefined,
+      username: typeof user.uniqueId === 'string' ? user.uniqueId : undefined,
+      avatar: typeof user.avatarLarger === 'string' ? user.avatarLarger : undefined,
+      followers:
+        typeof followersRaw === 'number' && Number.isFinite(followersRaw) ? followersRaw : undefined,
+      bio: typeof user.signature === 'string' ? user.signature.slice(0, 500) : undefined
+    }
+  } catch {
+    return null
+  }
 }

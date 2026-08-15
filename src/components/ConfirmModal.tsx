@@ -3,8 +3,10 @@ import { motion } from 'motion/react'
 import { Trash2, XCircle, RotateCcw } from 'lucide-react'
 
 export interface ConfirmAction {
-  type: 'clear' | 'remove' | 'reset' | 'clearHistory'
+  type: 'clear' | 'remove' | 'reset' | 'clearHistory' | 'removeAccount'
   id?: string
+  /** Pesan tambahan (mis. nama akun yang akan dihapus). */
+  detail?: string
 }
 
 export default function ConfirmModal({
@@ -61,9 +63,11 @@ export default function ConfirmModal({
                 ? 'Reset Semua Preferensi?'
                 : confirmAction.type === 'clearHistory'
                   ? 'Bersihkan Riwayat?'
-                  : confirmAction.type === 'clear'
-                    ? 'Hapus Semua?'
-                    : 'Hapus Video?'}
+                  : confirmAction.type === 'removeAccount'
+                    ? 'Hapus Akun dari Auto-Watcher?'
+                    : confirmAction.type === 'clear'
+                      ? 'Hapus Semua?'
+                      : 'Hapus Video?'}
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
               {confirmAction.type === 'reset'
@@ -88,9 +92,13 @@ export default function ConfirmModal({
               ? 'Mode gelap, prasetel, dan pengaturan unduhan akan kembali ke nilai awal.'
               : confirmAction.type === 'clearHistory'
                 ? 'Seluruh riwayat unduhan akan dihapus. Tindakan ini tidak dapat dibatalkan.'
-                : confirmAction.type === 'clear'
-                  ? 'Apakah Anda yakin ingin menghapus semua video dari antrean?'
-                  : 'Apakah Anda yakin ingin menghapus video ini dari antrean?'}
+                : confirmAction.type === 'removeAccount'
+                  ? `Akun ${
+                      confirmAction.detail ? `"${confirmAction.detail}"` : 'ini'
+                    } tidak akan lagi dipantau secara otomatis. Tindakan ini tidak dapat dibatalkan.`
+                  : confirmAction.type === 'clear'
+                    ? 'Apakah Anda yakin ingin menghapus semua video dari antrean?'
+                    : 'Apakah Anda yakin ingin menghapus video ini dari antrean?'}
           </p>
         </div>
 

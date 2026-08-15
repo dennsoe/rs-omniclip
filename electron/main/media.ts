@@ -65,8 +65,16 @@ async function handleMediaRequest(request: Request): Promise<Response> {
   if (rangeHeader) {
     const m = /bytes=(\d*)-(\d*)/.exec(rangeHeader)
     if (m) {
-      let start = m[1] ? Number(m[1]) : 0
-      let end = m[2] ? Number(m[2]) : size - 1
+      const hasStart = m[1] !== ''
+      const hasEnd = m[2] !== ''
+      let start = hasStart ? Number(m[1]) : 0
+      let end = hasEnd ? Number(m[2]) : size - 1
+      // Range sufiks `bytes=-N`: N byte TERAKHIR (bukan 0..N).
+      if (!hasStart && hasEnd) {
+        const suffix = Number(m[2])
+        start = Math.max(size - suffix, 0)
+        end = size - 1
+      }
       if (Number.isNaN(start) || Number.isNaN(end)) start = 0
       end = Math.min(end, size - 1)
       if (start > end || start >= size) {
