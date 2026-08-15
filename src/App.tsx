@@ -76,6 +76,7 @@ import DownloadSettingsModal from '@components/DownloadSettingsModal'
 import DownloadQueue from '@components/DownloadQueue'
 import ScrapeDownloadProgress from '@components/ScrapeDownloadProgress'
 import Markdown from '@components/Markdown'
+import UpdateModal from '@components/UpdateModal'
 import HistoryView from '@components/HistoryView'
 import MediaPreviewModal, { type LocalMediaFile } from '@components/MediaPreviewModal'
 import WatcherPanel from '@components/WatcherPanel'
@@ -115,6 +116,8 @@ export default function App(): React.ReactElement {
   )
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
+  // Cegah modal update muncul berulang dari re-check berkala (sekali per sesi).
+  const [hasPromptedUpdate, setHasPromptedUpdate] = useState(false)
   const [resources, setResources] = useState<ResourceInfo[] | null>(null)
   // true setelah status resource terverifikasi (push main / cek manual) —
   // basis badge update sidebar agar tidak muncul palsu sebelum versi terdeteksi.
@@ -445,6 +448,9 @@ export default function App(): React.ReactElement {
   // yang outdated (ffmpeg/yt-dlp). Biru bila ada update app, amber bila hanya
   // resource.
   const appHasUpdate = updateInfo?.hasUpdate === true
+  // Modal update — tampil SEKALI PER SESI saat ada versi baru & app siap.
+  const updateModalOpen =
+    isAppReady && !hasPromptedUpdate && updateInfo?.hasUpdate === true && !!updateInfo.latest
   const outdatedResources = resourcesReady ? (resources ?? []).filter((r) => r.outdated) : []
   const updateBadgeCount = (appHasUpdate ? 1 : 0) + outdatedResources.length
   const showUpdateBadge = updateBadgeCount > 0
@@ -924,6 +930,15 @@ export default function App(): React.ReactElement {
       )}
       <div className="flex flex-1 min-h-0 bg-slate-50 dark:bg-slate-900 overflow-hidden font-sans text-slate-800 dark:text-slate-100 transition-colors duration-500">
         <Toasts toasts={toasts} />
+        <UpdateModal
+          open={updateModalOpen}
+          info={updateInfo}
+          onClose={() => setHasPromptedUpdate(true)}
+          onDownload={() => {
+            setHasPromptedUpdate(true)
+            handleOpenUpdate()
+          }}
+        />
         <ConfirmModal confirmAction={confirmAction} onClose={() => setConfirmAction(null)} onConfirm={handleConfirm} />
         <PreviewModal previewFile={previewFile} onClose={() => setPreviewFile(null)} />
         <ScrapePreviewModal item={scrapePreview} onClose={() => setScrapePreview(null)} />

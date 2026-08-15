@@ -3,6 +3,16 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
 
+## Perubahan Terbaru (2026-08-16)
+
+### Modal Notifikasi Update (branch `feat/update-modal`, belum commit)
+- Komponen baru `src/components/UpdateModal.tsx` — muncul **sekali per sesi** saat
+  ada versi baru (`hasUpdate`), setelah app siap. Isi: versi `v{current} → v{latest}`,
+  **catatan rilis dirender Markdown**, tombol **"Unduh Sekarang"** (buka halaman
+  rilis GitHub) & **"Nanti"**. Pola modal konsisten (AnimatePresence + exit halus).
+- Wiring di `App.tsx`: state `hasPromptedUpdate` + nilai turunan `updateModalOpen`
+  (tanpa effect → bebas warning react-hooks). tsc/lint/build PASS.
+
 ## Perubahan Terbaru (2026-08-15, SUDAH COMMIT + RILIS v1.4.1)
 
 ### Catatan Rilis dirender sebagai Markdown
