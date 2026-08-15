@@ -3,6 +3,15 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
 
+## Perubahan Terbaru (2026-08-15, belum commit)
+
+### Catatan Rilis dirender sebagai Markdown
+- Bagian **Catatan Rilis** di halaman Tentang & Update kini dirender sebagai
+  **Markdown** (bukan `<pre>` mentah): dependensi baru `react-markdown` +
+  `remark-gfm`, komponen `src/components/Markdown.tsx` (gaya konsisten tema:
+  heading, list, bold, kode, link, kutipan, tabel, task list). E2E: h2/li/strong
+  ter-render sebagai elemen HTML, tanpa `##`/`**` mentah. tsc/lint/build PASS.
+
 ## Status Rilis v1.4.1 (DALAM PROSES RILIS) — 5 Fitur Besar
 
 - **Branch**: `release/v1.4.1` (baru, dari `release/v1.3.4`). Commit `91d05be`

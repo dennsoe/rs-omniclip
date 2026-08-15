@@ -75,6 +75,7 @@ import ScrapeResultView from '@components/ScrapeResultView'
 import DownloadSettingsModal from '@components/DownloadSettingsModal'
 import DownloadQueue from '@components/DownloadQueue'
 import ScrapeDownloadProgress from '@components/ScrapeDownloadProgress'
+import Markdown from '@components/Markdown'
 import HistoryView from '@components/HistoryView'
 import MediaPreviewModal, { type LocalMediaFile } from '@components/MediaPreviewModal'
 import WatcherPanel from '@components/WatcherPanel'
@@ -1905,9 +1906,9 @@ export default function App(): React.ReactElement {
                       <p className="text-[10px] font-bold tracking-widest text-slate-400 dark:text-slate-500 uppercase mb-2">
                         Catatan Rilis
                       </p>
-                      <pre className="whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300 font-sans leading-relaxed max-h-40 overflow-y-auto">
-                        {updateInfo.notes}
-                      </pre>
+                      <div className="max-h-40 overflow-y-auto pr-1">
+                        <Markdown>{updateInfo.notes}</Markdown>
+                      </div>
                     </div>
                   )}
                 </div>
