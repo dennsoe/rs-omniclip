@@ -268,6 +268,28 @@ tidak punya jalur nyata.
   badge palsu karena `versions.json` belum terisi saat mount (deteksi yt-dlp
   butuh ~11 detik boot). Renderer juga menerima daftar ini setelah membuka
   app tanpa perlu klik "Periksa Resource".
+## 4.9. Performa Kampanye (analytics + AI) — BARU (2026-08-16)
+
+Channel `analytics:*` & `ai:*` untuk fitur menu "Performa Kampanye".
+
+| Arah | Channel | Tujuan |
+|---|---|---|
+| R → M | `analytics:list` (invoke) | Daftar workspace ringkas `{ id, name, profileName, updatedAt }` |
+| R → M | `analytics:load` (invoke) | Muat workspace by id → `CampaignWorkspace` (termasuk CSV text) |
+| R → M | `analytics:save` (invoke) | Simpan workspace → `{ id, savedAt }` (tulis atomik) |
+| R → M | `analytics:delete` (invoke) | Hapus workspace by id → `boolean` |
+| R → M | `ai:getKey` (invoke) | Ambil `GEMINI_API_KEY` dari config main (string, bisa kosong) |
+| R → M | `ai:setKey` (invoke) | Simpan `GEMINI_API_KEY` ke config main (tanpa login) |
+| R → M | `ai:analyze` (invoke) | Panggil Gemini → `{ text }`; payload `{ campaignsSummary, totalMetrics, question?, chatHistory? }` |
+
+`window.api` (preload): `listCampaignWorkspaces()`, `loadCampaignWorkspace(id)`,
+`saveCampaignWorkspace(payload)`, `deleteCampaignWorkspace(id)`,
+`getGeminiApiKey()`, `setGeminiApiKey(key)`, `aiAnalyze(payload)`.
+
+Catatan: `ai:analyze` WAJIB lewat main process (fetch Node) karena CSP renderer
+`connect-src 'self' ws:` memblokir akses keluar. Kunci Gemini disimpan di
+`userData/omni-config.json` (`AppConfig.geminiApiKey`), BUKAN sistem auth/login.
+
 ## 5. Aturan Penggunaan di Renderer
 
 1. Selalu panggil metode lewat optional chaining (`window.api?.method`) karena

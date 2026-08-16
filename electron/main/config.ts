@@ -54,6 +54,8 @@ export interface AppConfig {
   }
   analyticsExport: boolean
   history: HistoryEntry[]
+  /** Kunci Gemini untuk Asisten AI Performa Kampanye (disimpan lokal, BUKAN auth/login). */
+  geminiApiKey: string
 }
 
 export const CONFIG_DEFAULTS: AppConfig = {
@@ -61,7 +63,8 @@ export const CONFIG_DEFAULTS: AppConfig = {
   watcher: { enabled: false, intervalHours: 1, accounts: [] },
   hwAccel: { mode: 'auto' },
   analyticsExport: false,
-  history: []
+  history: [],
+  geminiApiKey: ''
 }
 
 /** Batas maksimum entri riwayat yang disimpan (terbaru di depan). */
@@ -73,6 +76,7 @@ type ConfigPatch = {
   hwAccel?: Partial<AppConfig['hwAccel']>
   analyticsExport?: boolean
   history?: HistoryEntry[]
+  geminiApiKey?: string
 }
 
 let cache: AppConfig | null = null
@@ -89,7 +93,8 @@ export function getConfig(): AppConfig {
     watcher: { ...CONFIG_DEFAULTS.watcher },
     hwAccel: { ...CONFIG_DEFAULTS.hwAccel },
     analyticsExport: CONFIG_DEFAULTS.analyticsExport,
-    history: []
+    history: [],
+    geminiApiKey: ''
   }
   try {
     const raw = fs.readFileSync(getConfigPath(), 'utf8')
@@ -99,7 +104,8 @@ export function getConfig(): AppConfig {
       watcher: { ...defaults.watcher, ...(parsed.watcher ?? {}) },
       hwAccel: { ...defaults.hwAccel, ...(parsed.hwAccel ?? {}) },
       analyticsExport: parsed.analyticsExport ?? defaults.analyticsExport,
-      history: Array.isArray(parsed.history) ? parsed.history : []
+      history: Array.isArray(parsed.history) ? parsed.history : [],
+      geminiApiKey: typeof parsed.geminiApiKey === 'string' ? parsed.geminiApiKey : ''
     }
   } catch {
     cache = defaults
@@ -115,7 +121,8 @@ export function setConfig(patch: ConfigPatch): AppConfig {
     watcher: { ...cur.watcher, ...(patch.watcher ?? {}) },
     hwAccel: { ...cur.hwAccel, ...(patch.hwAccel ?? {}) },
     analyticsExport: patch.analyticsExport ?? cur.analyticsExport,
-    history: patch.history ?? cur.history
+    history: patch.history ?? cur.history,
+    geminiApiKey: patch.geminiApiKey ?? cur.geminiApiKey
   }
   cache = next
   const p = getConfigPath()

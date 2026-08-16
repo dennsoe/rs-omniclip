@@ -17,7 +17,18 @@ export const PREF_KEYS = {
   downloadMaxHeight: 'omni.download.maxHeight',
   downloadCookiesBrowser: 'omni.download.cookiesBrowser',
   downloadDouyinCookie: 'omni.download.douyinCookie',
-  downloadParallel: 'omni.download.parallel'
+  downloadParallel: 'omni.download.parallel',
+  // Performa Kampanye (analisis Meta Ads vs Shopee Affiliate).
+  campaignProfile: 'omni.campaign.profile',
+  campaignMetaCsv: 'omni.campaign.metaCsv',
+  campaignShopeeCsv: 'omni.campaign.shopeeCsv',
+  campaignClicksCsv: 'omni.campaign.clicksCsv',
+  campaignMappingRule: 'omni.campaign.mappingRule',
+  campaignTaxRate: 'omni.campaign.taxRate',
+  campaignStatuses: 'omni.campaign.statuses',
+  campaignDateStart: 'omni.campaign.dateStart',
+  campaignDateEnd: 'omni.campaign.dateEnd',
+  campaignShowDashboard: 'omni.campaign.showDashboard'
 } as const
 
 /** Nilai default setiap preferensi (kembali ke ini saat reset). */
@@ -33,7 +44,17 @@ export const PREF_DEFAULTS = {
   downloadMaxHeight: 0,
   downloadCookiesBrowser: '',
   downloadDouyinCookie: '',
-  downloadParallel: false
+  downloadParallel: false,
+  campaignProfile: 'default',
+  campaignMetaCsv: '',
+  campaignShopeeCsv: '',
+  campaignClicksCsv: '',
+  campaignMappingRule: 'contains' as const,
+  campaignTaxRate: 12,
+  campaignStatuses: [],
+  campaignDateStart: '',
+  campaignDateEnd: '',
+  campaignShowDashboard: false
 } as const
 
 /** Menghapus SEMUA preferensi tersimpan (kembali ke default pada render berikutnya). */

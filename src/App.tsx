@@ -33,7 +33,8 @@ import {
   RadioTower,
   Focus,
   Gem,
-  AudioLines
+  AudioLines,
+  BarChart3
 } from 'lucide-react'
 import {
   DndContext,
@@ -85,6 +86,7 @@ import SortableFileItem from '@components/SortableFileItem'
 import FloatingSelect, { type SelectOption } from '@components/ui/FloatingSelect'
 import { FloatingInput, FloatingTextarea } from '@components/ui/FloatingField'
 import Toggle from '@components/ui/Toggle'
+import CampaignView from '@/views/CampaignView'
 
 /** Satu item antrean unduhan di renderer — kontrak onDownloadProgress + asal tab.
  *  `source` memisahkan progres per tab: Banyak Link vs Akun/Halaman. */
@@ -104,7 +106,7 @@ export default function App(): React.ReactElement {
   const isMobile = useIsMobile()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const [activeMenu, setActiveMenu] = usePersistentState<'cleaner' | 'downloader' | 'about'>(
+  const [activeMenu, setActiveMenu] = usePersistentState<'cleaner' | 'downloader' | 'performa' | 'about'>(
     PREF_KEYS.activeMenu,
     PREF_DEFAULTS.activeMenu
   )
@@ -1026,14 +1028,15 @@ export default function App(): React.ReactElement {
           <nav className="px-3 space-y-1 mb-6">
             {[
               { id: 'cleaner', label: 'Pembersih Video', desc: 'Bersihkan, tingkatkan & potong', Icon: Wand2 },
-              { id: 'downloader', label: 'Pengunduh Video', desc: 'Unduh video dari berbagai platform', Icon: DownloadCloud }
+              { id: 'downloader', label: 'Pengunduh Video', desc: 'Unduh video dari berbagai platform', Icon: DownloadCloud },
+              { id: 'performa', label: 'Performa Kampanye', desc: 'Meta Ads vs Shopee Affiliate', Icon: BarChart3 }
             ].map((item) => {
               const isActive = activeMenu === item.id
               return (
                 <motion.button
                   key={item.id}
                   type="button"
-                  onClick={() => setActiveMenu(item.id as 'cleaner' | 'downloader' | 'about')}
+                  onClick={() => setActiveMenu(item.id as 'cleaner' | 'downloader' | 'performa' | 'about')}
                   whileTap={{ scale: 0.98 }}
                   className={`relative w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-200 ${
                     isActive
@@ -1827,6 +1830,8 @@ export default function App(): React.ReactElement {
                   )}
               </div>
             </motion.div>
+          ) : activeMenu === 'performa' ? (
+            <CampaignView onToast={addToast} />
           ) : (
             <motion.div
               key="about-page"
