@@ -3,16 +3,17 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 
-## Status Rilis v1.4.2 (DALAM PROSES RILIS — modal update + catatan rilis markdown)
+## Status Rilis v1.4.2 (SELESAI — RELEASE v1.4.2 DIPUBLIKASI)
 
-- **Branch**: `release/v1.4.2` (dari `main`). **Versi**: `1.4.2`
-  (package.json + lockfile, `npm version --no-git-tag-version`).
-- **Isi baru vs v1.4.1**: modal notifikasi update otomatis (`UpdateModal.tsx`,
-  sudah di-merge ke main via PR #28) + catatan rilis Markdown (sudah di v1.4.1).
-  Alasan bump: artefak v1.4.1 dibuat sebelum modal update; agar update modal
-  terpicu, versi harus lebih tinggi dari 1.4.1.
-- **Belum dilakukan**: commit/push, PR, merge, build artefak mac+win, tag
-  `v1.4.2`, GitHub Release.
+- **Branch**: `release/v1.4.2` (dari `main`). **Versi**: `1.4.2`.
+- **PR #29** ke `main` **MERGED** (merge commit `32f319f`, 2026-08-16).
+- **Tag**: `v1.4.2` dibuat di commit merge `32f319f` + dipush.
+- **GitHub Release v1.4.2 DIBUAT** dengan catatan rilis lengkap + **4 artefak**:
+  `RS-OmniClip-1.4.2-arm64.dmg`, `RS-OmniClip-1.4.2-arm64.zip`,
+  `RS-OmniClip-1.4.2-x64-setup.exe`, `RS-OmniClip-1.4.2-x64-portable.exe`.
+- **Isi baru vs v1.4.1**: modal notifikasi update otomatis (`UpdateModal.tsx`)
+  + catatan rilis Markdown. Alasan bump: artefak v1.4.1 dibuat sebelum modal
+  update; agar modal update terpicu, versi harus lebih tinggi dari 1.4.1.
 - **Catatan rilis**: `release-notes/RELEASE_NOTES_v1.4.2.md`.
 
 ## Perubahan Terbaru (2026-08-16)
