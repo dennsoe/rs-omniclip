@@ -3,15 +3,21 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 
-## Status Rilis v2.0.0 (DALAM PROSES — build artefak & upload)
+## Status Rilis v2.0.0 (SELESAI — RELEASE v2.0.0 DIPUBLIKASI)
 
 - **Branch**: `release/v2.0.0` (dari `main`). **Versi**: `2.0.0`.
 - **REBRANDING**: RS OmniClip → **RS OmniTools** — repo `dennsoe/rs-omnitools`,
   brand logo `rsomni.png` (ikon app, sidebar, favicon), migrasi userData otomatis.
 - **PR #32** (rebrand) ke `main` **MERGED** (merge commit `b5e3659`, 2026-08-16).
+- **PR #33** (release) ke `main` **MERGED** (merge commit `d4a4bce`, 2026-08-16).
+- **Tag**: `v2.0.0` dibuat di commit merge `d4a4bce` + dipush.
+- **GitHub Release v2.0.0 DIBUAT** dengan catatan rilis lengkap + **4 artefak**:
+  `RS-OmniTools-2.0.0-arm64.dmg`, `RS-OmniTools-2.0.0-arm64.zip`,
+  `RS-OmniTools-2.0.0-x64-setup.exe`, `RS-OmniTools-2.0.0-x64-portable.exe`.
+  URL: https://github.com/dennsoe/rs-omnitools/releases/tag/v2.0.0
 - **Release notes**: `release-notes/RELEASE_NOTES_v2.0.0.md`.
-- **NEXT**: build artefak (`npm run build:mac` + `build:win` dengan ikon baru),
-  tag `v2.0.0`, GitHub Release + 4 artefak, PR release ke main.
+- Ikon aplikasi kustom terpasang (`icon.icns` 1,5MB di bundle macOS; ikon juga
+  dipakai installer Windows) — bukan lagi ikon default Electron.
 
 ## Status Rilis v1.5.0 (SELESAI — LIVE 2026-08-16)
 
