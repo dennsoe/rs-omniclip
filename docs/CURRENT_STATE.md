@@ -19,6 +19,43 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 - Ikon aplikasi kustom terpasang (`icon.icns` 1,5MB di bundle macOS; ikon juga
   dipakai installer Windows) — bukan lagi ikon default Electron.
 
+## Perubahan Terbaru (2026-08-16 — FIX SCRAPE/AMBIL DAFTAR TIKTOK: UA CHROME/126 + RETRY + PESAN JUJUR)
+
+**Permintaan user: audit forensik kenapa "Ambil Daftar" akun TikTok error
+"TikTok memblokir pemeriksaan akun otomatis". Akar masalah = kesalahan kode
+(bukan blokir global TikTok), dan user minta diterapkan + diverifikasi.**
+
+- **Akar masalah (terbukti deterministik via CLI, bukan tebakan)**:
+  - `CHROME_USER_AGENT` di `electron/main/engine/downloader.ts` memakai
+    **Chrome/140 (Windows)** → TikTok kini mem-flag UA ini → profil akun gagal
+    di-resolve → yt-dlp error `[tiktok:user] ... Unable to extract secondary
+    user ID` → aplikasi menampilkan pesan anti-bot.
+  - Uji 3× per kombinasi (yt-dlp sama, IP sama, akun `@mrbeast`):
+    UA Chrome/140 + 1-3 item (watcher "scrape 1 akun") = **FAIL 3/3**;
+    UA Chrome/140 + 1-200 = FAIL 2/3; **UA Chrome/126 + 1-3 & 1-200 = OK 3/3**;
+    UA Chrome/124 = OK 3/3. Pembeda = VERSI Chrome di UA (140 diblokir,
+    126/124 lolos) — bukan OS/jumlah item/rate-limit acak.
+  - Bukan regresi commit terakhir: 4 commit kampanye/AI/workspace TIDAK
+    menyentuh `downloader.ts`. UA Chrome/140 sudah ada sejak v1.3.4; TikTok
+    mulai mem-flag-nya belakangan.
+- **Perbaikan (3, diterapkan)**:
+  1. **UA → Chrome/126** di `downloader.ts` DAN `tiktok.ts` (konsisten) →
+     TikTok tidak lagi menolak.
+  2. **`SCRAPE_TRANSIENT_RE`** + `Unable to extract secondary user ID` &
+     `Unable to extract profile` → percobaan ke-2 (rotasi `api_hostname`) +
+     sleep kini JALAN saat TikTok challenge (sebelumnya langsung `break`).
+  3. **`friendlyScrapeError` jujur**: bedakan HTTP 404 ("akun tidak ditemukan"),
+     429 (rate-limit), dan `[tiktok:user]/Unable to extract` ("TikTok tidak
+     dapat diverifikasi — sementara dibatasi ATAU akun tidak ditemukan/privat/
+     dihapus — periksa username & coba lagi"). Pesan menakutkan lama dihapus.
+- **Verifikasi**:
+  - Bundle `out/main/index.js`: `Chrome/126` ada (2), `Chrome/140` 0,
+    pesan jujur ada, pesan lama "memblokir pemeriksaan" 0, pola transien ada.
+  - E2E in-app (CDP, setelah restart Electron): scrape `@mrbeast` →
+    loading → **panel "Hasil Akun / Halaman" terisi (630+ baris video)** —
+    sebelumnya gagal anti-bot. `get_errors` bersih, typecheck (node+web)/lint/
+    build PASS. Belum di-commit/branch.
+
 ## Perubahan Terbaru (2026-08-16 — BUBBLE CHAT AI: TEMA APLIKASI + LAYAR PENUH + PERSISTEN)
 
 **Permintaan user: audit forensik bubble chat asisten AI — tampilan sesuai tema
