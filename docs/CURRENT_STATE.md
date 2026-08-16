@@ -3,6 +3,29 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 
+## FITUR BARU: Performa Kampanye (SELESAI DIIMPLEMENTASI — BELUM DIRILIS)
+
+- **Acuan pengerjaan**: `docs/IMPLEMENTATION_PERFORMA_KAMPANYE.md` (9 fase).
+- **Menu sidebar baru "Performa Kampanye"** (`activeMenu: 'performa'`, ikon
+  `BarChart3`) — analisis Meta Ads vs komisi Shopee Affiliate: pencocokan tag
+  otomatis (contains/exact), tabel kampanye (search/sort/badge Winning-BEP-Boncos),
+  KPI + PPN dinamis, grafik recharts, diagnostik kolom, data tidak terpetakan,
+  AI advisor (via main process). TANPA auth/login.
+- **Status validasi**: `get_errors` bersih, `eslint src/ electron/` PASS,
+  `npm run typecheck` PASS, `npm run build` PASS, verifikasi E2E browser
+  (wizard, demo data, dashboard, tabel+search+badge, unmapped, AI UI).
+- **File baru (renderer)**: `src/lib/campaign/{types,csv,dataProcessor,demoData,format}.ts`,
+  `src/views/CampaignView.tsx`, `src/components/campaign/{CampaignTable,CampaignMetrics,
+  CampaignCharts,CampaignDateRange,DiagnosticsPanel,UnmappedSection,AiAdvisor}.tsx`.
+- **File baru (main)**: `electron/main/engine/campaign.ts` (workspace store
+  `userData/analytics/*.json` + Gemini `ai:analyze`).
+- **File diubah**: `src/App.tsx`, `src/lib/preferences.ts`, `src/types/global.d.ts`,
+  `electron/main/config.ts` (+`geminiApiKey`), `electron/main/index.ts`,
+  `electron/preload/index.ts`. Deps baru: `papaparse`, `recharts`.
+- **Catatan**: AI memakai `GEMINI_API_KEY` di Pengaturan (config main, bukan login);
+  tanpa kunci, seluruh tabel/grafik tetap berfungsi (AI graceful error).
+- **BELUM**: commit/push/PR/rilis. Menunggu instruksi user.
+
 ## Status Rilis v1.4.2 (SELESAI — RELEASE v1.4.2 DIPUBLIKASI)
 
 - **Branch**: `release/v1.4.2` (dari `main`). **Versi**: `1.4.2`.

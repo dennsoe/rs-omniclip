@@ -36,6 +36,16 @@ import {
   setWatcherNotify,
   resolveAccount
 } from '@engine/watcher'
+import {
+  listWorkspaces,
+  loadWorkspace,
+  saveWorkspace,
+  deleteWorkspace,
+  getGeminiApiKey,
+  setGeminiApiKey,
+  analyzeWithGemini,
+  type AiAnalyzePayload
+} from '@engine/campaign'
 
 let mainWindow: BrowserWindow | null = null
 let engineReady = false
@@ -513,6 +523,23 @@ function registerIpc(): void {
       results.push({ url: acc.url, ...res })
     }
     return results
+  })
+
+  // --- Performa Kampanye: workspace (analytics) + AI ---
+  ipcMain.handle('analytics:list', () => listWorkspaces())
+  ipcMain.handle('analytics:load', (_event, id: string) => {
+    if (typeof id !== 'string') return null
+    return loadWorkspace(id)
+  })
+  ipcMain.handle('analytics:save', (_event, payload) => saveWorkspace(payload ?? {}))
+  ipcMain.handle('analytics:delete', (_event, id: string) => {
+    if (typeof id !== 'string') return false
+    return deleteWorkspace(id)
+  })
+  ipcMain.handle('ai:getKey', () => getGeminiApiKey())
+  ipcMain.handle('ai:setKey', (_event, key: string) => setGeminiApiKey(typeof key === 'string' ? key : ''))
+  ipcMain.handle('ai:analyze', async (_event, payload: AiAnalyzePayload) => {
+    return analyzeWithGemini(payload ?? {})
   })
 
   ipcMain.on('processing:start', (_event, payload) => {

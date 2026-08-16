@@ -14,6 +14,11 @@ import type {
   HistoryEntry,
   AccountInfo
 } from '@lib/types'
+import type {
+  CampaignWorkspace,
+  CampaignWorkspaceSummary,
+  TotalMetrics
+} from '@lib/campaign/types'
 
 /**
  * Kontrak jembatan IPC (window.api) antara renderer React dan backend Node.js.
@@ -133,6 +138,31 @@ declare global {
       onWatcherNotify: (
         cb: (data: { title: string; body: string }) => void
       ) => () => void
+
+      // --- Performa Kampanye: workspace (analytics) + Asisten AI ---
+      listCampaignWorkspaces: () => Promise<CampaignWorkspaceSummary[]>
+      loadCampaignWorkspace: (id: string) => Promise<CampaignWorkspace | null>
+      saveCampaignWorkspace: (
+        payload: Partial<CampaignWorkspace>
+      ) => Promise<{ id: string; savedAt: string }>
+      deleteCampaignWorkspace: (id: string) => Promise<boolean>
+      getGeminiApiKey: () => Promise<string>
+      setGeminiApiKey: (key: string) => Promise<string>
+      aiAnalyze: (payload: {
+        campaignsSummary: Array<{
+          adName: string
+          adNames: string[]
+          matchedTag: string
+          spend: number
+          clicks: number
+          orders: number
+          commission: number
+          roi: number
+        }>
+        totalMetrics: TotalMetrics
+        question?: string
+        chatHistory?: Array<{ role: 'user' | 'model'; text: string }>
+      }) => Promise<{ text: string }>
     }
   }
 }

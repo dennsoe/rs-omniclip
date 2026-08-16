@@ -107,6 +107,57 @@ interface AccountInfoData {
   error?: string
 }
 
+interface CampaignWorkspaceData {
+  id: string
+  name: string
+  profileName: string
+  metaCsvText: string
+  shopeeCsvText: string
+  shopeeClicksText: string
+  settings: {
+    mappingRule: 'contains' | 'exact'
+    taxRate: number
+    selectedStatuses: string[]
+    dateStart: string
+    dateEnd: string
+  }
+  updatedAt: string
+}
+
+interface CampaignWorkspaceSummaryData {
+  id: string
+  name: string
+  profileName: string
+  updatedAt: string
+}
+
+interface AiAnalyzePayloadData {
+  campaignsSummary: Array<{
+    adName: string
+    adNames: string[]
+    matchedTag: string
+    spend: number
+    clicks: number
+    orders: number
+    commission: number
+    roi: number
+  }>
+  totalMetrics: {
+    totalSpend: number
+    totalCommission: number
+    netProfit: number
+    roi: number
+    totalClicks: number
+    totalShopeeClicks: number
+    totalOrders: number
+    conversionRate: number
+    averageCpc: number
+    cpa: number
+  }
+  question?: string
+  chatHistory?: Array<{ role: 'user' | 'model'; text: string }>
+}
+
 const api = {
   // --- Kontrak inti jembatan IPC ---
   checkEngine: (): void => {
@@ -382,7 +433,18 @@ const api = {
     return () => {
       ipcRenderer.removeListener('watcher:notify', listener)
     }
-  }
+  },
+
+  // --- Performa Kampanye: workspace (analytics) + Asisten AI ---
+  listCampaignWorkspaces: (): Promise<CampaignWorkspaceSummaryData[]> => ipcRenderer.invoke('analytics:list'),
+  loadCampaignWorkspace: (id: string): Promise<CampaignWorkspaceData | null> =>
+    ipcRenderer.invoke('analytics:load', id),
+  saveCampaignWorkspace: (payload: Partial<CampaignWorkspaceData>): Promise<{ id: string; savedAt: string }> =>
+    ipcRenderer.invoke('analytics:save', payload),
+  deleteCampaignWorkspace: (id: string): Promise<boolean> => ipcRenderer.invoke('analytics:delete', id),
+  getGeminiApiKey: (): Promise<string> => ipcRenderer.invoke('ai:getKey'),
+  setGeminiApiKey: (key: string): Promise<string> => ipcRenderer.invoke('ai:setKey', key),
+  aiAnalyze: (payload: AiAnalyzePayloadData): Promise<{ text: string }> => ipcRenderer.invoke('ai:analyze', payload)
 }
 
 export type Api = typeof api

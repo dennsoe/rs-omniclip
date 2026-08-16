@@ -66,9 +66,28 @@ Legenda status: `[x]` selesai, `[ ]` belum.
 - [ ] Pengujian pada Intel Mac (x64) dan Apple Silicon (arm64).
 - [ ] Umpan balik pengguna tim internal → prioritas ulang fitur.
 
+## Fase 5 — Performa Kampanye / Analytics (BARU — RENCANA, 2026-08-16)
+
+> Detail lengkap: `docs/IMPLEMENTATION_PERFORMA_KAMPANYE.md` (acuan pengerjaan
+> resmi). Fitur besar: analisis Meta Ads vs komisi Shopee Affiliate (pencocokan
+> tag otomatis + ROI + AI advisor) sebagai **menu baru "Performa Kampanye"**.
+> Tanpa auth/login; design 100% mengikuti tema rs-omni.
+
+- [x] Fase 0 — Fondasi: deps `papaparse`, `types.ts`, `dataProcessor.ts`, `demoData.ts`.
+- [x] Fase 1 — Menu sidebar `performa` + halaman utama + wizard upload 3 langkah.
+- [x] Fase 2 — Tabel kampanye (search/sort/badge Winning-BEP-Boncos/expand).
+- [x] Fase 3 — KPI, PPN dinamis, filter status, mapping rule, rentang tanggal.
+- [x] Fase 4 — Grafik `recharts` (bar/pie) + kinerja harian & per jam.
+- [x] Fase 5 — Diagnostik & data tidak terpetakan.
+- [x] Fase 6 — Persistensi workspace (main store) + ekspor/import + export CSV.
+- [x] Fase 7 — AI Advisor via main process (`ai:analyze`, kunci di config).
+- [ ] Fase 8 — Audit (validasi tsc/eslint/build PASS ✓), dokumentasi (✓), **rilis v1.5.0 BELUM** (tunggu instruksi).
+
 ## Prioritas Umum
 
 1. Stabilkan fondasi (Fase 2) sebelum fitur baru (Fase 3).
 2. Fitur P0 (pembersih, enhancer, pengunduh, kompresor) sudah berfungsi.
 3. Watermark (perlu FFmpeg dengan drawtext/overlay) & subtitle AI adalah nilai
    tambah terbesar berikutnya.
+4. **Fitur besar berikutnya: Performa Kampanye (Fase 5)** — acuan
+   `docs/IMPLEMENTATION_PERFORMA_KAMPANYE.md`.
