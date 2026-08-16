@@ -253,6 +253,54 @@ lain.**
   ini) atau window dev yang belum di-reload. Semua perbaikan ada di window dev
   (localhost:5173); aplikasi terpasang perlu di-build ulang.
 
+## Perubahan Terbaru (2026-08-16 — ASISTEN AI MULTI-PROVIDER: GEMINI + OPENAI GPT)
+
+**Permintaan user: Asisten AI Performa Kampanye tidak hanya memakai kunci
+Gemini — tambahkan kunci OpenAI (GPT); user bisa MEMILIH AI mana yang dipakai.**
+
+- **Config main** (`electron/main/config.ts`): tambah `openaiApiKey` +
+  `aiProvider: 'gemini' | 'openai'` (default `gemini`), dibaca/ditulis
+  `getConfig`/`setConfig`.
+- **Engine** (`electron/main/engine/campaign.ts`):
+  - `getOpenaiApiKey/setOpenaiApiKey`, `getAiProvider/setAiProvider`,
+    `getAiSettings/setAiSettings` (provider + kedua kunci).
+  - Helper bersama `buildContext` + `buildUserQuery` (dipakai kedua provider).
+  - `analyzeWithOpenAI` (REST `api.openai.com/v1/chat/completions`, model
+    `gpt-4o-mini`, Authorization Bearer, system prompt sama) + `analyzeWithAI`
+    dispatcher → jalankan provider terpilih.
+- **IPC** (`electron/main/index.ts` + `preload` + `global.d.ts`): ganti
+  `ai:getKey/ai:setKey` → `ai:getSettings/ai:setSettings`; `ai:analyze` →
+  `analyzeWithAI`.
+- **Renderer** (`CampaignView.tsx` + `AiAdvisor.tsx`):
+  - State `aiProvider` + `openaiKey`; muat `getAiSettings` saat mount;
+    `handleSaveAiSettings` simpan provider + kedua kunci.
+  - Modal Settings: selector **"Provider AI"** (Gemini / OpenAI GPT) + input
+    Kunci Gemini + Kunci OpenAI (keduanya), tombol Simpan.
+  - `AiAdvisor` menerima prop `aiProvider` → header "Gemini Active"/"OpenAI GPT
+    Active" + pesan error & nama kunci dinamis per provider.
+- **Verifikasi CDP Electron** (restart dev agar main/preload baru termuat):
+  `getAiSettings/setAiSettings` tersedia; roundtrip set provider+key OK;
+  dispatcher error: Gemini → "Kunci Gemini belum diatur (GEMINI_API_KEY)",
+  OpenAI → "Kunci OpenAI (GPT) belum diatur (OPENAI_API_KEY)"; header "Gemini
+  Active". `get_errors` bersih, typecheck (node+web)/lint/build PASS.
+  Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — SETTINGS AI: INPUT KUNCI SESUAI PROVIDER + FOOTER SIMPAN)
+
+**Permintaan user: yang tampil harus input API key sesuai provider terpilih
+(bukan keduanya); tombol Simpan seharusnya satu, bukan menempel di input GPT.**
+
+- **FIX** (`CampaignView.tsx`, modal Settings):
+  - Hanya tampilkan input kunci provider yang dipilih — `aiProvider === 'openai'
+    ? input Kunci OpenAI (GPT) : input Kunci Gemini` (kondisional).
+  - Tombol Simpan dipindah ke **footer** modal (satu tombol Simpan + Batal,
+    border-t, pola kanonik) — bukan menempel di input GPT.
+- **Verifikasi CDP Electron**: provider Gemini → hanya "Kunci Gemini"
+  (`hasOpenai:false`); provider OpenAI → hanya "Kunci OpenAI (GPT)"
+  (`hasGemini:false`); tepat 1 tombol Simpan + Batal + footer border-t.
+  `get_errors` bersih, typecheck (node+web)/lint/build PASS.
+  Belum di-commit/branch.
+
 ## Perubahan Terbaru (2026-08-16 — Audit UI Halaman Performa Kampanye)
 
 **Audit forensik konsistensi desain halaman "Performa Kampanye" vs halaman lain

@@ -28,6 +28,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { FloatingInput } from '@components/ui/FloatingField'
+import FloatingSelect from '@components/ui/FloatingSelect'
 import Tooltip from '@components/ui/Tooltip'
 import {
   parseMetaAds,
@@ -112,6 +113,8 @@ export default function CampaignView({
   const [showSettings, setShowSettings] = useState(false)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [geminiKey, setGeminiKey] = useState('')
+  const [openaiKey, setOpenaiKey] = useState('')
+  const [aiProvider, setAiProvider] = useState<'gemini' | 'openai'>('gemini')
   const [confirm, setConfirm] = useState<{ type: 'deleteWorkspace' | 'clearData'; id?: string; name?: string } | null>(null)
 
   /** Nama workspace yang sedang aktif (dari id tersimpan) — untuk chip status toolbar. */
@@ -158,10 +161,17 @@ export default function CampaignView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shopeeOrders])
 
-  // --- Muat kunci Gemini saat mount (workspace dibaca lazy dari localStorage) ---
+  // --- Muat pengaturan AI (provider + kedua kunci) saat mount ---
   useEffect(() => {
-    if (window.api?.getGeminiApiKey) {
-      window.api.getGeminiApiKey().then(setGeminiKey).catch(() => undefined)
+    if (window.api?.getAiSettings) {
+      window.api
+        .getAiSettings()
+        .then((s) => {
+          setAiProvider(s.provider)
+          setGeminiKey(s.geminiKey)
+          setOpenaiKey(s.openaiKey)
+        })
+        .catch(() => undefined)
     }
   }, [])
 
@@ -446,12 +456,20 @@ export default function CampaignView({
     input.click()
   }
 
-  const handleSaveGeminiKey = async () => {
-    if (window.api?.setGeminiApiKey) {
-      const saved = await window.api.setGeminiApiKey(geminiKey).catch(() => '')
-      setGeminiKey(saved)
-      onToast?.(saved ? 'Kunci Gemini disimpan.' : 'Kunci Gemini dihapus.', 'info')
+  const handleSaveAiSettings = async () => {
+    if (!window.api?.setAiSettings) return
+    const s = await window.api
+      .setAiSettings({ provider: aiProvider, geminiKey, openaiKey })
+      .catch(() => null)
+    if (s) {
+      setAiProvider(s.provider)
+      setGeminiKey(s.geminiKey)
+      setOpenaiKey(s.openaiKey)
     }
+    onToast?.(
+      `Pengaturan AI (${aiProvider === 'openai' ? 'OpenAI GPT' : 'Gemini'}) disimpan.`,
+      'success'
+    )
     setShowSettings(false)
   }
 
@@ -514,23 +532,57 @@ export default function CampaignView({
                 helper="Digunakan untuk menamai ekspor & workspace."
               />
 
-              <FloatingInput
-                label="Kunci Gemini (untuk Asisten AI)"
-                icon={<KeyRound className="h-4 w-4" />}
-                type="password"
-                value={geminiKey}
-                onChange={(e) => setGeminiKey(e.target.value)}
-                action={
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveGeminiKey()}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-blue-500/20 transition hover:bg-blue-700"
-                  >
-                    <Save className="h-3.5 w-3.5" /> Simpan
-                  </button>
-                }
-                helper="Disimpan aman di perangkat. Tanpa kunci, tabel & grafik tetap berfungsi."
+              {/* Pilih provider AI (Gemini / OpenAI GPT) */}
+              <FloatingSelect
+                label="Provider AI"
+                icon={<Brain className="h-4 w-4" />}
+                value={aiProvider}
+                options={[
+                  { value: 'gemini', label: 'Google Gemini', description: 'gemini-3.5-flash' },
+                  { value: 'openai', label: 'OpenAI GPT', description: 'gpt-4o-mini' },
+                ]}
+                onChange={(v) => setAiProvider(v === 'openai' ? 'openai' : 'gemini')}
+                placeholder="Pilih AI…"
               />
+
+              {/* Hanya tampilkan input kunci sesuai provider yang dipilih */}
+              {aiProvider === 'openai' ? (
+                <FloatingInput
+                  label="Kunci OpenAI (GPT)"
+                  icon={<KeyRound className="h-4 w-4" />}
+                  type="password"
+                  value={openaiKey}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  helper="Kunci aktif untuk provider OpenAI."
+                />
+              ) : (
+                <FloatingInput
+                  label="Kunci Gemini"
+                  icon={<KeyRound className="h-4 w-4" />}
+                  type="password"
+                  value={geminiKey}
+                  onChange={(e) => setGeminiKey(e.target.value)}
+                  helper="Kunci aktif untuk provider Gemini."
+                />
+              )}
+            </div>
+
+            {/* Footer aksi */}
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4 dark:border-slate-700/60">
+              <button
+                type="button"
+                onClick={() => setShowSettings(false)}
+                className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveAiSettings()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm shadow-blue-500/20 transition hover:bg-blue-700"
+              >
+                <Save className="h-3.5 w-3.5" /> Simpan
+              </button>
             </div>
           </motion.div>
         </motion.div>,
@@ -1154,7 +1206,7 @@ export default function CampaignView({
           {activeTab === 'campaigns' && <CampaignTable campaigns={mappedCampaigns} />}
           {activeTab === 'unmapped' && <UnmappedSection unmappedAds={unmappedAds} unmappedOrders={unmappedOrders} />}
           {activeTab === 'ai' && (
-            <AiAdvisor campaigns={mappedCampaigns} totalMetrics={totalMetrics} autoAuditKey={campaignSourceKey} />
+            <AiAdvisor campaigns={mappedCampaigns} totalMetrics={totalMetrics} autoAuditKey={campaignSourceKey} aiProvider={aiProvider} />
           )}
         </div>
         </div>

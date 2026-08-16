@@ -131,6 +131,12 @@ interface CampaignWorkspaceSummaryData {
   updatedAt: string
 }
 
+interface AiSettingsData {
+  provider: 'gemini' | 'openai'
+  geminiKey: string
+  openaiKey: string
+}
+
 interface AiAnalyzePayloadData {
   campaignsSummary: Array<{
     adName: string
@@ -442,8 +448,8 @@ const api = {
   saveCampaignWorkspace: (payload: Partial<CampaignWorkspaceData>): Promise<{ id: string; savedAt: string }> =>
     ipcRenderer.invoke('analytics:save', payload),
   deleteCampaignWorkspace: (id: string): Promise<boolean> => ipcRenderer.invoke('analytics:delete', id),
-  getGeminiApiKey: (): Promise<string> => ipcRenderer.invoke('ai:getKey'),
-  setGeminiApiKey: (key: string): Promise<string> => ipcRenderer.invoke('ai:setKey', key),
+  getAiSettings: (): Promise<AiSettingsData> => ipcRenderer.invoke('ai:getSettings'),
+  setAiSettings: (patch: Partial<AiSettingsData>): Promise<AiSettingsData> => ipcRenderer.invoke('ai:setSettings', patch),
   aiAnalyze: (payload: AiAnalyzePayloadData): Promise<{ text: string }> => ipcRenderer.invoke('ai:analyze', payload)
 }
 

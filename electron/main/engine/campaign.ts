@@ -67,6 +67,8 @@ export interface AiAnalyzePayload {
 
 /** Nama model Gemini — konsisten dengan acuan rs-9 (server.ts). */
 const GEMINI_MODEL = 'gemini-3.5-flash'
+/** Nama model OpenAI (GPT) untuk Asisten AI. */
+const OPENAI_MODEL = 'gpt-4o-mini'
 
 function analyticsDir(): string {
   return path.join(app.getPath('userData'), 'analytics')
@@ -167,6 +169,47 @@ export function setGeminiApiKey(key: string): string {
   return clean
 }
 
+/** Ambil kunci OpenAI (GPT) dari config. */
+export function getOpenaiApiKey(): string {
+  return getConfig().openaiApiKey ?? ''
+}
+
+/** Simpan kunci OpenAI (GPT) ke config main. */
+export function setOpenaiApiKey(key: string): string {
+  const clean = typeof key === 'string' ? key.trim() : ''
+  setConfig({ openaiApiKey: clean })
+  return clean
+}
+
+/** Provider AI yang dipilih user. */
+export function getAiProvider(): 'gemini' | 'openai' {
+  return getConfig().aiProvider === 'openai' ? 'openai' : 'gemini'
+}
+
+export function setAiProvider(provider: 'gemini' | 'openai'): 'gemini' | 'openai' {
+  const p = provider === 'openai' ? 'openai' : 'gemini'
+  setConfig({ aiProvider: p })
+  return p
+}
+
+/** Pengaturan AI lengkap (provider + kedua kunci). */
+export interface AiSettings {
+  provider: 'gemini' | 'openai'
+  geminiKey: string
+  openaiKey: string
+}
+
+export function getAiSettings(): AiSettings {
+  return { provider: getAiProvider(), geminiKey: getGeminiApiKey(), openaiKey: getOpenaiApiKey() }
+}
+
+export function setAiSettings(patch: Partial<AiSettings>): AiSettings {
+  if (patch.geminiKey !== undefined) setGeminiApiKey(patch.geminiKey)
+  if (patch.openaiKey !== undefined) setOpenaiApiKey(patch.openaiKey)
+  if (patch.provider !== undefined) setAiProvider(patch.provider)
+  return getAiSettings()
+}
+
 /** System prompt AI — analis media buying Meta Ads + Shopee Affiliate Indonesia. */
 const SYSTEM_PROMPT = `Kamu adalah analis media buying profesional yang sangat berpengalaman, spesialis iklan Meta Ads + komisi Shopee Affiliate di Indonesia.
 
@@ -180,6 +223,26 @@ Data diberikan sebagai ringkasan kampanye (tag, nama iklan, spend, klik, pesanan
 
 Tugasmu: analisis mendalam & rekomendasi taktis yang SPESIFIK per kampanye — mana yang layak scale, mana yang harus diperbaiki (creative/targeting/link tag), mana yang harus dimatikan. Perhatikan indikasi tag link rusak (spend besar tapi klik Shopee/order kecil). Jawab dalam Bahasa Indonesia, format Markdown (heading, bullet, bold, tabel bila perlu). Ringkas namun lengkap dan actionable.`
 
+/** Bangun teks konteks dari ringkasan kampanye + metrik total (dipakai kedua provider). */
+function buildContext(payload: AiAnalyzePayload): string {
+  const summaryText = (payload.campaignsSummary ?? [])
+    .map(
+      (c) =>
+        `- ${c.matchedTag.toUpperCase()} (${c.adNames.join(', ')}): spend ${c.spend}, klik ${c.clicks}, pesanan ${c.orders}, komisi ${c.commission}, ROI ${c.roi}%`
+    )
+    .join('\n')
+  const tm = payload.totalMetrics ?? {}
+  return `RINGKASAN KAMPANYE:\n${summaryText || '(kosong)'}\n\nMETRIK TOTAL:\n- Total Spend: ${tm.totalSpend}\n- Total Komisi: ${tm.totalCommission}\n- Net Profit: ${tm.netProfit}\n- ROI: ${tm.roi}%\n- Total Klik Meta: ${tm.totalClicks}\n- Total Klik Shopee: ${tm.totalShopeeClicks}\n- Total Pesanan: ${tm.totalOrders}\n- Konversi: ${tm.conversionRate}%\n- CPC Rata-rata: ${tm.averageCpc}\n- CPA: ${tm.cpa}\n- Pajak PPN: 12%`
+}
+
+/** Bangun pertanyaan user (audit awal atau pertanyaan spesifik) + konteks. */
+function buildUserQuery(payload: AiAnalyzePayload): string {
+  const context = buildContext(payload)
+  return payload.question
+    ? `Pertanyaan pengguna: ${payload.question}\n\nGunakan data berikut sebagai konteks:\n${context}`
+    : `Lakukan audit awal laporan saya. Gunakan data berikut:\n${context}`
+}
+
 /** Panggil Gemini (REST via fetch Node). Mengembalikan teks jawaban. */
 export async function analyzeWithGemini(payload: AiAnalyzePayload): Promise<{ text: string }> {
   const apiKey = getGeminiApiKey()
@@ -189,26 +252,13 @@ export async function analyzeWithGemini(payload: AiAnalyzePayload): Promise<{ te
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`
 
-  const summaryText = (payload.campaignsSummary ?? [])
-    .map(
-      (c) =>
-        `- ${c.matchedTag.toUpperCase()} (${c.adNames.join(', ')}): spend ${c.spend}, klik ${c.clicks}, pesanan ${c.orders}, komisi ${c.commission}, ROI ${c.roi}%`
-    )
-    .join('\n')
-
-  const tm = payload.totalMetrics ?? {}
-  const contextText = `RINGKASAN KAMPANYE:\n${summaryText || '(kosong)'}\n\nMETRIK TOTAL:\n- Total Spend: ${tm.totalSpend}\n- Total Komisi: ${tm.totalCommission}\n- Net Profit: ${tm.netProfit}\n- ROI: ${tm.roi}%\n- Total Klik Meta: ${tm.totalClicks}\n- Total Klik Shopee: ${tm.totalShopeeClicks}\n- Total Pesanan: ${tm.totalOrders}\n- Konversi: ${tm.conversionRate}%\n- CPC Rata-rata: ${tm.averageCpc}\n- CPA: ${tm.cpa}\n- Pajak PPN: 12%`
-
   const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = []
   for (const m of payload.chatHistory ?? []) {
     if (m && typeof m.text === 'string') {
       contents.push({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })
     }
   }
-  const userQuery = payload.question
-    ? `Pertanyaan pengguna: ${payload.question}\n\nGunakan data berikut sebagai konteks:\n${contextText}`
-    : `Lakukan audit awal laporan saya. Gunakan data berikut:\n${contextText}`
-  contents.push({ role: 'user', parts: [{ text: userQuery }] })
+  contents.push({ role: 'user', parts: [{ text: buildUserQuery(payload) }] })
 
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
@@ -243,4 +293,55 @@ export async function analyzeWithGemini(payload: AiAnalyzePayload): Promise<{ te
     throw new Error('Gemini mengembalikan jawaban kosong.')
   }
   return { text }
+}
+
+/** Panggil OpenAI GPT (REST via fetch Node). Mengembalikan teks jawaban. */
+export async function analyzeWithOpenAI(payload: AiAnalyzePayload): Promise<{ text: string }> {
+  const apiKey = getOpenaiApiKey()
+  if (!apiKey) {
+    throw new Error('Kunci OpenAI (GPT) belum diatur (OPENAI_API_KEY) di Pengaturan Performa Kampanye.')
+  }
+
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    { role: 'system', content: SYSTEM_PROMPT },
+  ]
+  for (const m of payload.chatHistory ?? []) {
+    if (m && typeof m.text === 'string') {
+      messages.push({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })
+    }
+  }
+  messages.push({ role: 'user', content: buildUserQuery(payload) })
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model: OPENAI_MODEL, messages, temperature: 0.7, max_tokens: 2048 }),
+    signal: AbortSignal.timeout(60000)
+  })
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '')
+    if (res.status === 401) {
+      throw new Error('Kunci OpenAI tidak valid (HTTP 401). Periksa OPENAI_API_KEY di Pengaturan.')
+    }
+    throw new Error(`OpenAI gagal merespon (HTTP ${res.status}). ${errText.slice(0, 200)}`)
+  }
+
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>
+    error?: { message?: string }
+  }
+  if (data.error?.message) {
+    throw new Error(data.error.message)
+  }
+  const text = data.choices?.[0]?.message?.content ?? ''
+  if (!text) {
+    throw new Error('OpenAI mengembalikan jawaban kosong.')
+  }
+  return { text }
+}
+
+/** Dispatcher AI — jalankan provider yang sedang dipilih user. */
+export async function analyzeWithAI(payload: AiAnalyzePayload): Promise<{ text: string }> {
+  return getAiProvider() === 'openai' ? analyzeWithOpenAI(payload) : analyzeWithGemini(payload)
 }

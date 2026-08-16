@@ -20,11 +20,14 @@ export default function AiAdvisor({
   campaigns,
   totalMetrics,
   autoAuditKey,
+  aiProvider = 'gemini',
 }: {
   campaigns: MappedCampaign[]
   totalMetrics: TotalMetrics
   /** Kunci sumber data — audit otomatis hanya dijalankan saat data berubah (bukan tiap filter). */
   autoAuditKey?: string
+  /** Provider AI yang dipilih user: 'gemini' | 'openai'. */
+  aiProvider?: 'gemini' | 'openai'
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputMessage, setInputMessage] = useState('')
@@ -86,9 +89,11 @@ export default function AiAdvisor({
       ])
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (/API key|kunci|GEMINI|ai:analyze|belum diatur/i.test(msg)) {
+      if (/API key|kunci|GEMINI|OPENAI|ai:analyze|belum diatur/i.test(msg)) {
         setNoApi(true)
-        setError('Kunci Gemini belum diatur di Pengaturan Performa Kampanye.')
+        setError(
+          `Kunci ${aiProvider === 'openai' ? 'OpenAI (GPT)' : 'Gemini'} belum diatur di Pengaturan Performa Kampanye.`
+        )
       } else {
         setError(`Gagal berkomunikasi dengan AI: ${msg}`)
       }
@@ -151,7 +156,7 @@ export default function AiAdvisor({
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">AI Media Buying Analyst</h3>
             <p className="flex items-center gap-1.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
               <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-              Gemini Active · Spesialis Optimasi ROI
+              {aiProvider === 'openai' ? 'OpenAI GPT Active' : 'Gemini Active'} · Spesialis Optimasi ROI
             </p>
           </div>
         </div>
@@ -219,7 +224,7 @@ export default function AiAdvisor({
                 <p className="mt-0.5">{error}</p>
                 {noApi && (
                   <p className="mt-1">
-                    Atur <strong>GEMINI_API_KEY</strong> melalui menu <strong>Performa Kampanye → Pengaturan</strong> (disimpan aman di perangkat,
+                    Atur <strong>{aiProvider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY'}</strong> melalui menu <strong>Performa Kampanye → Pengaturan</strong> (disimpan aman di perangkat,
                     tanpa login). Sementara itu, seluruh analisis tabel/grafik tetap berfungsi.
                   </p>
                 )}
