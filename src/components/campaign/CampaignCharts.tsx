@@ -15,10 +15,10 @@ import {
 } from 'recharts'
 import { Calendar, TrendingUp, TrendingDown, ChevronDown, ChevronUp, Clock, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import type { MappedCampaign, ShopeeAffiliateRow, DailyPerformanceRow } from '@lib/campaign/types'
-import { formatIDR, formatDateFullID } from '@lib/campaign/format'
+import { formatIDR, formatDateFullID, displayOrderStatus } from '@lib/campaign/format'
 
 const STATUS_COLORS: Record<string, string> = {
-  Tertunda: '#f59e0b',
+  Diproses: '#f59e0b',
   Selesai: '#10b981',
   Batal: '#ef4444',
   Dibatalkan: '#ef4444',
@@ -143,7 +143,8 @@ export default function CampaignCharts({
     acc[s] = (acc[s] || 0) + 1
     return acc
   }, {})
-  const pieData = Object.keys(statusCounts).map((s) => ({ name: s, value: statusCounts[s] }))
+  // Label tampilan memakai mapping ("Tertunda" → "Diproses"); kunci internal tetap data mentah.
+  const pieData = Object.keys(statusCounts).map((s) => ({ name: displayOrderStatus(s), value: statusCounts[s] }))
 
   const totals = dailyPerformance.reduce(
     (acc, r) => ({

@@ -45,7 +45,7 @@ import type {
   ShopeeClickRow,
   CampaignWorkspaceSummary,
 } from '@lib/campaign/types'
-import { formatIDR } from '@lib/campaign/format'
+import { formatIDR, displayOrderStatus } from '@lib/campaign/format'
 import {
   listWorkspaces,
   loadWorkspace,
@@ -62,7 +62,7 @@ import UnmappedSection from '@components/campaign/UnmappedSection'
 import CampaignDateRange from '@components/campaign/CampaignDateRange'
 import AiAdvisor from '@components/campaign/AiAdvisor'
 
-type Tab = 'overview' | 'campaigns' | 'unmapped' | 'ai'
+type Tab = 'overview' | 'campaigns' | 'unmapped'
 
 /** Palet warna avatar workspace (berbeda per workspace agar mudah dikenali). */
 const WS_AVATAR_COLORS = [
@@ -818,6 +818,11 @@ export default function CampaignView({
       )
     : null
 
+  // Asisten AI — bubble chat mengambang (bukan tab), dirender di kedua mode.
+  const aiAdvisor = (
+    <AiAdvisor campaigns={mappedCampaigns} totalMetrics={totalMetrics} autoAuditKey={campaignSourceKey} aiProvider={aiProvider} />
+  )
+
   // ============================================================
   // RENDER
   // ============================================================
@@ -980,6 +985,7 @@ export default function CampaignView({
       {settingsModal}
       {workspaceModal}
       {confirmDialog}
+      {aiAdvisor}
     </motion.div>
     )
   }
@@ -1089,7 +1095,7 @@ export default function CampaignView({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className={`min-w-0 truncate text-xs font-bold uppercase ${isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300'}`}>
-                    {status}
+                    {displayOrderStatus(status)}
                   </span>
                   <span
                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
@@ -1167,7 +1173,6 @@ export default function CampaignView({
                 { id: 'overview', label: 'Ringkasan & Grafik', Icon: BarChart3 },
                 { id: 'campaigns', label: `Kampanye (${mappedCampaigns.length})`, Icon: Layers },
                 { id: 'unmapped', label: `Tidak Terpetakan (${unmappedAds.length + unmappedOrders.length})`, Icon: Package },
-                { id: 'ai', label: 'Asisten AI', Icon: Brain },
               ] as const
             ).map(({ id, label, Icon }) => {
               const isActive = activeTab === id
@@ -1205,9 +1210,6 @@ export default function CampaignView({
           )}
           {activeTab === 'campaigns' && <CampaignTable campaigns={mappedCampaigns} />}
           {activeTab === 'unmapped' && <UnmappedSection unmappedAds={unmappedAds} unmappedOrders={unmappedOrders} />}
-          {activeTab === 'ai' && (
-            <AiAdvisor campaigns={mappedCampaigns} totalMetrics={totalMetrics} autoAuditKey={campaignSourceKey} aiProvider={aiProvider} />
-          )}
         </div>
         </div>
       </div>
@@ -1216,6 +1218,7 @@ export default function CampaignView({
       {settingsModal}
       {workspaceModal}
       {confirmDialog}
+      {aiAdvisor}
     </motion.div>
   )
 }

@@ -19,6 +19,105 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 - Ikon aplikasi kustom terpasang (`icon.icns` 1,5MB di bundle macOS; ikon juga
   dipakai installer Windows) — bukan lagi ikon default Electron.
 
+## Perubahan Terbaru (2026-08-16 — BUBBLE CHAT AI: TEMA APLIKASI + LAYAR PENUH + PERSISTEN)
+
+**Permintaan user: audit forensik bubble chat asisten AI — tampilan sesuai tema
+aplikasi, inputan kanonik, bisa full 1 halaman, tanpa icon/bot/user, super
+responsive, simpan percakapan di localStorage, ada hapus riwayat.**
+
+- **Tema aplikasi** (`src/components/campaign/AiAdvisor.tsx`):
+  - Header pola kanonik modal (badge Brain + judul + subtitle + tombol aksi
+    ber-Tooltip); panel `bg-white dark:bg-slate-800 border rounded-2xl shadow-2xl`.
+  - Input pakai **`FloatingInput`** (floating label "Tulis pesan…", aksi tombol
+    Kirim di dalam field) — konsisten dgn modal Pengaturan.
+- **Layar penuh (full 1 halaman)**: state `maximized` — panel kompak
+  `bottom-24 right-6 h-[min(640px,calc(100dvh-9rem))] w-[min(420px,calc(100vw-2rem))]`
+  ⇄ layar penuh `inset-0`; tombol Maximize2/Minimize2; saat layar penuh FAB
+  disembunyikan & konten pesan/input dibatasi `max-w-3xl` (mudah dibaca).
+- **Tanpa icon/bot/user**: avatar lingkaran (Bot/User) DIHAPUS dari pesan —
+  bubble bersih (user kanan biru, model kiri abu-abu + Markdown + waktu);
+  empty-state teks saja; FAB memakai `MessageSquare` (bukan Bot). Ikon header/
+  kirim/alert tetap (fungsional, tema aplikasi).
+- **Persisten localStorage**: `usePersistentState(PREF_KEYS.campaignAiChat)` =
+  `omni.campaign.ai.chat` (ditambah di `preferences.ts` + `PREF_DEFAULTS`).
+  Otomatis tersimpan tiap perubahan; `formatTime()` toleran Date/string ISO
+  (JSON serialize Date → string).
+- **Hapus riwayat**: tombol Trash2 di header → **2 langkah konfirmasi** (berubah
+  merah "Yakin hapus riwayat?", auto-reset 2,5s) → klik lagi = `setMessages([])`
+  → key otomatis DIHAPUS dari localStorage ([] === default).
+- **Auto-audit disempurnakan**: tidak auto-audit ulang bila percakapan tersimpan
+  (mis. setelah reload); setelah hapus riwayat TIDAK memicu audit ulang otomatis
+  (user klik Muat Ulang bila mau) — hindari panggilan API tak terduga.
+- **Verifikasi CDP Electron**: panel 420×640, FloatingInput aktif, tanpa avatar
+  pesan (0 avatar; 1 elemen rounded-full = titik status provider), layar penuh
+  `inset-0` + FAB sembunyi + tombol Kecilkan, clear 2 langkah → `lsAfter:null` +
+  empty-state tanpa re-audit, kirim pesan → user+model ter-persist (msgCount 2),
+  reload mempertahankan percakapan, buka ulang tanpa re-audit. `ai:analyze`
+  resolve ~5,5s (normal). get_errors bersih, typecheck (node+web)/lint/build
+  PASS. Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — LABEL STATUS "TERTUNDA" → "DIPROSES")
+
+**Permintaan user: kata "Tertunda" di frontend Performa Kampanye diganti menjadi
+"Diproses". Audit semua titik agar penerapan benar & konsisten.**
+
+- **Helper baru** (`src/lib/campaign/format.ts`): `displayOrderStatus(status)` —
+  memetakan `Tertunda` (case-insensitive) → `Diproses`; status lain dikembalikan
+  apa adanya. **Data mentah tidak diubah** — hanya label TAMPILAN yang berubah.
+- **Titik tampilan yang dipetakan** (semua lewat `displayOrderStatus`):
+  - Kartu **Filter Status Pesanan Shopee** (`CampaignView.tsx`) — label status.
+  - **Pie chart** "Status Pesanan Shopee Affiliate" (`CampaignCharts.tsx`) —
+    nama segmen & legend memakai label tampilan; kunci `STATUS_COLORS`
+    `Tertunda` → `Diproses` (warna amber `#f59e0b` tetap) sehingga lookup warna
+    cocok.
+  - Tabel **Tidak Terpetakan** (`UnmappedSection.tsx`) — kolom Status.
+- **Yang sengaja TIDAK diubah** (agar perhitungan/filter akurat): kunci internal
+  `statusBreakdown`/`statusCounts`/`selectedStatuses` tetap `orderStatus`
+  mentah; filter "Selesai Saja", default status (kecualikan Batal/Cancel/
+  Refund), komisi & ROI tetap memakai data mentah. `demoData.ts`/`dataProcessor`
+  tetap status mentah (mapping terjadi saat render).
+- **Verifikasi CDP Electron**: kartu filter tampil `DIPROSES` (bukan TERTUNDA),
+  legend pie `Diproses`, `bodyHasTertunda:false` di semua tab (Kampanye,
+  Ringkasan & Grafik, Tidak Terpetakan). `get_errors` bersih, typecheck
+  (node+web)/lint/build PASS. Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — ASISTEN AI JADI BUBBLE CHAT MENGGAMBANG)
+
+**Permintaan user: asisten AI tidak ditempatkan di tab — buatkan bubble chat
+(FAB + panel) yang mengambang. Audit menyeluruh agar penerapan tepat & akurat.**
+
+- **Restruktur** (`src/components/campaign/AiAdvisor.tsx`):
+  - Dari chat tab full-width (grid `xl:grid-cols-4` + sidebar Quick Analysis)
+    menjadi **bubble chat mengambang**: FAB (tombol bulat kanan-bawah,
+    `fixed bottom-6 right-6`, h-14 w-14, ikon Bot ↔ X saat terbuka) + panel
+    chat `fixed bottom-24 right-6 z-50` (380×600, `h-[min(600px,calc(100dvh-9rem))]`).
+  - **Portal ke `document.body`** (`createPortal`) — bebas dari stacking context
+    ancestor bertransform; `z-50` > konten & sidebar, di bawah modal (z-70/z-80).
+  - Layout kompak: header (badge Brain + judul + badge provider + tombol refresh
+    audit + tutup X), chip saran cepat (muncul hanya saat belum ada pesan &
+    tidak loading), area pesan (user kanan/biru, model kiri/Markdown), input +
+    Kirim, footer catatan. Semua logika AI dipertahankan (runAnalyze, error
+    per-provider, Markdown, scroll otomatis).
+  - **Auto-audit kini digate `open` + `autoAuditKey`** dengan `lastAuditedKey`
+    ref → audit otomatis hanya dijalankan SATU KALI per sumber data saat chat
+    DIBUKA (tidak membuang pemakaian API saat chat tertutup; tidak duplikat saat
+    buka-tutup ulang).
+- **Hapus tab AI** (`src/views/CampaignView.tsx`):
+  - `type Tab` → `'overview' | 'campaigns' | 'unmapped'`; entri
+    `{ id: 'ai', label: 'Asisten AI', Icon: Brain }` dihapus dari array tab;
+    blok `{activeTab === 'ai' && <AiAdvisor .../>}` dihapus dari konten tab.
+  - `AiAdvisor` dirender sebagai elemen `aiAdvisor` (portal, posisi fixed)
+    di return **WIZARD dan DASHBOARD** — selalu tersedia di kedua mode.
+  - `Brain` masih dipakai (ikon selector Provider AI di modal Pengaturan).
+- **Verifikasi CDP Electron** (renderer HMR): FAB muncul di dashboard
+  (`fabExists:true`); klik FAB → panel terbuka (`opened:true`, header
+  "AI Media Buying Analyst", provider "OpenAI GPT Active", input+Kirim, tombol
+  tutup, FAB berubah jadi X, panel 380×600 di kanan-bawah); auto-audit memicu
+  analisis OpenAI asli ("Audit Awal Laporan Kampanye"); tutup → panel hilang &
+  FAB kembali; buka ulang → pesan tetap & TANPA audit duplikat (lastAuditedKey
+  bekerja). `get_errors` bersih, typecheck (node+web)/lint/build PASS.
+  Belum di-commit/branch.
+
 ## Perubahan Terbaru (2026-08-16 — MODAL SETTINGS: PORTAL KE BODY + BUG WIZARD)
 
 **Permintaan user: saat modal Pengaturan Performa Kampanye muncul, sidebar

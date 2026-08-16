@@ -30,7 +30,8 @@ export const PREF_KEYS = {
   campaignDateEnd: 'omni.campaign.dateEnd',
   campaignShowDashboard: 'omni.campaign.showDashboard',
   campaignDemoMode: 'omni.campaign.demoMode',
-  campaignActiveWorkspace: 'omni.campaign.activeWorkspace'
+  campaignActiveWorkspace: 'omni.campaign.activeWorkspace',
+  campaignAiChat: 'omni.campaign.ai.chat'
 } as const
 
 /** Nilai default setiap preferensi (kembali ke ini saat reset). */
@@ -58,7 +59,8 @@ export const PREF_DEFAULTS = {
   campaignDateEnd: '',
   campaignShowDashboard: false,
   campaignDemoMode: false,
-  campaignActiveWorkspace: ''
+  campaignActiveWorkspace: '',
+  campaignAiChat: []
 } as const
 
 /** Menghapus SEMUA preferensi tersimpan (kembali ke default pada render berikutnya). */

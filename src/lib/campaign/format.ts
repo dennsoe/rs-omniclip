@@ -16,6 +16,16 @@ export function formatNumber(value: number): string {
   }).format(value || 0)
 }
 
+/**
+ * Label status pesanan Shopee untuk TAMPILAN (data mentah tidak diubah).
+ * "Tertunda" → "Diproses" — dipakai di kartu filter status, pie chart, dan tabel.
+ */
+export function displayOrderStatus(status: string): string {
+  const l = (status || '').toLowerCase()
+  if (l === 'tertunda' || l.includes('tertunda')) return 'Diproses'
+  return status
+}
+
 // ---------------------------------------------------------------------------
 // Tanggal — konsisten untuk SELURUH fitur (baku: Agustus → "Agt").
 // Parsing LOKAL (hindari pergeseran UTC) agar tidak berubah per zona waktu.

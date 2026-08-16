@@ -1,6 +1,6 @@
 import { AlertTriangle, PackageX, Megaphone } from 'lucide-react'
 import type { UnmappedAd, UnmappedOrder } from '@lib/campaign/types'
-import { formatIDR } from '@lib/campaign/format'
+import { formatIDR, displayOrderStatus } from '@lib/campaign/format'
 
 /**
  * Data yang tidak terpetakan: iklan Meta tanpa tag Shopee + pesanan Shopee
@@ -102,7 +102,7 @@ export default function UnmappedSection({
                 {unmappedOrders.map((o, i) => (
                   <tr key={`${o.orderId}-${i}`} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/30">
                     <td className="min-w-0 truncate px-4 py-2.5 text-xs font-medium text-slate-700 dark:text-slate-200">{o.itemName || o.orderId}</td>
-                    <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{o.orderStatus}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-500 dark:text-slate-400">{displayOrderStatus(o.orderStatus)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-xs tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">
                       {formatIDR(o.netAffiliateCommission)}
                     </td>
