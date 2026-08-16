@@ -22,11 +22,13 @@ import {
   ShoppingBag,
   FolderOpen,
   KeyRound,
-  X,
+  XCircle,
   Package,
+  Database,
+  RotateCcw,
 } from 'lucide-react'
 import { FloatingInput } from '@components/ui/FloatingField'
-import FloatingSelect from '@components/ui/FloatingSelect'
+import Tooltip from '@components/ui/Tooltip'
 import {
   parseMetaAds,
   parseShopeeAffiliate,
@@ -43,6 +45,12 @@ import type {
   CampaignWorkspaceSummary,
 } from '@lib/campaign/types'
 import { formatIDR } from '@lib/campaign/format'
+import {
+  listWorkspaces,
+  loadWorkspace,
+  saveWorkspace as storeSaveWorkspace,
+  deleteWorkspace as storeDeleteWorkspace,
+} from '@lib/campaign/workspaceStore'
 import { usePersistentState } from '@hooks/use-persistent-state'
 import { PREF_KEYS, PREF_DEFAULTS } from '@lib/preferences'
 import DiagnosticsPanel from '@components/campaign/DiagnosticsPanel'
@@ -54,6 +62,16 @@ import CampaignDateRange from '@components/campaign/CampaignDateRange'
 import AiAdvisor from '@components/campaign/AiAdvisor'
 
 type Tab = 'overview' | 'campaigns' | 'unmapped' | 'ai'
+
+/** Palet warna avatar workspace (berbeda per workspace agar mudah dikenali). */
+const WS_AVATAR_COLORS = [
+  'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+  'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
+  'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
+  'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400',
+  'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400',
+  'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-400',
+]
 
 /**
  * Halaman "Performa Kampanye" — analisis Meta Ads vs komisi Shopee Affiliate.
@@ -83,15 +101,24 @@ export default function CampaignView({
   const [shopeeClicks, setShopeeClicks] = useState<ShopeeClickRow[]>([])
   const [parsingError, setParsingError] = useState<string | null>(null)
   const [uploadStep, setUploadStep] = useState<1 | 2 | 3>(1)
-  const [isDemoMode, setIsDemoMode] = useState(false)
+  const [isDemoMode, setIsDemoMode] = usePersistentState<boolean>(PREF_KEYS.campaignDemoMode, PREF_DEFAULTS.campaignDemoMode)
+  const [activeWorkspaceId, setActiveWorkspaceId] = usePersistentState<string>(PREF_KEYS.campaignActiveWorkspace, PREF_DEFAULTS.campaignActiveWorkspace)
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [fileName, setFileName] = useState<{ meta: string; shopee: string; clicks: string }>({ meta: '', shopee: '', clicks: '' })
 
-  // --- Workspace (main store) + AI key ---
-  const [workspaces, setWorkspaces] = useState<CampaignWorkspaceSummary[]>([])
+  // --- Workspace (localStorage store) + AI key + konfirmasi aksi ---
+  const [workspaces, setWorkspaces] = useState<CampaignWorkspaceSummary[]>(() => listWorkspaces())
   const [workspaceName, setWorkspaceName] = useState('')
   const [showSettings, setShowSettings] = useState(false)
+  const [showWorkspace, setShowWorkspace] = useState(false)
   const [geminiKey, setGeminiKey] = useState('')
+  const [confirm, setConfirm] = useState<{ type: 'deleteWorkspace' | 'clearData'; id?: string; name?: string } | null>(null)
+
+  /** Nama workspace yang sedang aktif (dari id tersimpan) — untuk chip status toolbar. */
+  const activeWorkspaceName = useMemo(
+    () => workspaces.find((w) => w.id === activeWorkspaceId)?.name,
+    [workspaces, activeWorkspaceId]
+  )
 
   // --- Parse CSV saat teks berubah ---
   useEffect(() => {
@@ -131,15 +158,26 @@ export default function CampaignView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shopeeOrders])
 
-  // --- Muat daftar workspace + kunci Gemini saat mount ---
+  // --- Muat kunci Gemini saat mount (workspace dibaca lazy dari localStorage) ---
   useEffect(() => {
-    if (window.api?.listCampaignWorkspaces) {
-      window.api.listCampaignWorkspaces().then(setWorkspaces).catch(() => undefined)
-    }
     if (window.api?.getGeminiApiKey) {
       window.api.getGeminiApiKey().then(setGeminiKey).catch(() => undefined)
     }
   }, [])
+
+  // --- Tutup modal dengan Escape (pola kanonik modal aplikasi) ---
+  useEffect(() => {
+    if (!showSettings && !showWorkspace && !confirm) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowSettings(false)
+        setShowWorkspace(false)
+        setConfirm(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showSettings, showWorkspace, confirm])
 
   // --- Filter + perhitungan ---
   const filteredShopeeOrders = useMemo(
@@ -197,6 +235,7 @@ export default function CampaignView({
   }
   const handleMetaUpload = (file: File) => {
     setIsDemoMode(false)
+    setActiveWorkspaceId('')
     setFileName((f) => ({ ...f, meta: file.name }))
     readFile(file, (text) => {
       setMetaCsvText(text)
@@ -205,6 +244,7 @@ export default function CampaignView({
   }
   const handleShopeeUpload = (file: File) => {
     setIsDemoMode(false)
+    setActiveWorkspaceId('')
     setFileName((f) => ({ ...f, shopee: file.name }))
     readFile(file, (text) => {
       setShopeeCsvText(text)
@@ -213,12 +253,14 @@ export default function CampaignView({
   }
   const handleClicksUpload = (file: File) => {
     setIsDemoMode(false)
+    setActiveWorkspaceId('')
     setFileName((f) => ({ ...f, clicks: file.name }))
     readFile(file, (text) => setShopeeClicksText(text))
   }
 
   const loadDemoData = () => {
     setIsDemoMode(true)
+    setActiveWorkspaceId('')
     setFileName({ meta: 'demo-meta-ads.csv', shopee: 'demo-shopee.csv', clicks: 'demo-clicks.csv' })
     setMetaCsvText(DEMO_META_ADS_CSV)
     setShopeeCsvText(DEMO_SHOPEE_AFFILIATE_CSV)
@@ -228,7 +270,7 @@ export default function CampaignView({
     setActiveTab('overview')
   }
 
-  const handleClear = () => {
+  const doClear = () => {
     setMetaCsvText('')
     setShopeeCsvText('')
     setShopeeClicksText('')
@@ -237,12 +279,16 @@ export default function CampaignView({
     setShopeeClicks([])
     setSelectedStatuses([])
     setIsDemoMode(false)
+    setActiveWorkspaceId('')
     setParsingError(null)
     setUploadStep(1)
     setShowDashboard(false)
     setActiveTab('overview')
     setFileName({ meta: '', shopee: '', clicks: '' })
   }
+
+  /** Tombol "Bersihkan Data" → buka modal validasi (bukan langsung membersihkan). */
+  const handleClear = () => setConfirm({ type: 'clearData' })
 
   // --- Ekspor CSV hasil ---
   const handleExportCSV = () => {
@@ -281,38 +327,34 @@ export default function CampaignView({
     URL.revokeObjectURL(url)
   }
 
-  // --- Workspace: simpan / muat / hapus / ekspor / impor ---
+  // --- Workspace: localStorage store (simpan / muat / hapus / ekspor / impor) ---
   const refreshWorkspaces = useCallback(() => {
-    if (window.api?.listCampaignWorkspaces) {
-      window.api.listCampaignWorkspaces().then(setWorkspaces).catch(() => undefined)
-    }
+    setWorkspaces(listWorkspaces())
   }, [])
 
-  const handleSaveWorkspace = async () => {
-    if (!window.api?.saveCampaignWorkspace) {
-      onToast?.('Simpan workspace hanya tersedia di aplikasi desktop.', 'error')
-      return
-    }
+  const handleSaveWorkspace = () => {
+    const name = workspaceName.trim() || profileName || 'default'
     try {
-      const res = await window.api.saveCampaignWorkspace({
-        name: workspaceName || profileName || 'default',
+      const res = storeSaveWorkspace({
+        name,
         profileName,
         metaCsvText,
         shopeeCsvText,
         shopeeClicksText,
         settings: { mappingRule, taxRate, selectedStatuses, dateStart, dateEnd },
       })
-      setWorkspaceName(res.id)
+      setWorkspaceName(name)
+      setActiveWorkspaceId(res.id)
+      setIsDemoMode(false)
       refreshWorkspaces()
-      onToast?.('Workspace berhasil disimpan.', 'success')
+      onToast?.(`Workspace "${name}" disimpan.`, 'success')
     } catch (err) {
       onToast?.(`Gagal menyimpan workspace: ${err instanceof Error ? err.message : String(err)}`, 'error')
     }
   }
 
-  const handleLoadWorkspace = async (id: string) => {
-    if (!window.api?.loadCampaignWorkspace) return
-    const ws = await window.api.loadCampaignWorkspace(id).catch(() => null)
+  const handleLoadWorkspace = (id: string) => {
+    const ws = loadWorkspace(id)
     if (!ws) {
       onToast?.('Workspace tidak ditemukan.', 'error')
       return
@@ -329,30 +371,44 @@ export default function CampaignView({
     setWorkspaceName(ws.name)
     setShowDashboard(true)
     setActiveTab('overview')
+    setShowWorkspace(false)
+    setIsDemoMode(false)
+    setActiveWorkspaceId(ws.id)
     onToast?.(`Workspace "${ws.name}" dimuat.`, 'success')
   }
 
-  const handleDeleteWorkspace = async (id: string) => {
-    if (!window.api?.deleteCampaignWorkspace) return
-    await window.api.deleteCampaignWorkspace(id).catch(() => undefined)
-    refreshWorkspaces()
+  /** Klik "Hapus" → buka modal validasi (bukan langsung menghapus). */
+  const handleDeleteWorkspace = (id: string, name: string) => setConfirm({ type: 'deleteWorkspace', id, name })
+
+  /** Konfirmasi modal validasi → eksekusi aksi yang dipilih. */
+  const handleConfirm = () => {
+    if (!confirm) return
+    if (confirm.type === 'deleteWorkspace' && confirm.id) {
+      storeDeleteWorkspace(confirm.id)
+      refreshWorkspaces()
+      onToast?.('Workspace dihapus.', 'success')
+    } else if (confirm.type === 'clearData') {
+      doClear()
+    }
+    setConfirm(null)
   }
 
-  const handleExportWorkspace = () => {
+  const handleExportWorkspace = (id?: string) => {
+    const stored = id ? loadWorkspace(id) : null
     const ws = {
       version: 1,
       exportedAt: new Date().toISOString(),
-      profileName,
-      metaCsvText,
-      shopeeCsvText,
-      shopeeClicksText,
-      settings: { mappingRule, taxRate, selectedStatuses, dateStart, dateEnd },
+      profileName: stored?.profileName ?? profileName,
+      metaCsvText: stored?.metaCsvText ?? metaCsvText,
+      shopeeCsvText: stored?.shopeeCsvText ?? shopeeCsvText,
+      shopeeClicksText: stored?.shopeeClicksText ?? shopeeClicksText,
+      settings: stored?.settings ?? { mappingRule, taxRate, selectedStatuses, dateStart, dateEnd },
     }
     const blob = new Blob([JSON.stringify(ws, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `metaxshopee_${profileName}_${new Date().toISOString().slice(0, 10)}.mxs9.json`
+    a.download = `metaxshopee_${ws.profileName}_${new Date().toISOString().slice(0, 10)}.mxs9.json`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -380,6 +436,8 @@ export default function CampaignView({
         setUploadStep(3)
         setShowDashboard(true)
         setActiveTab('overview')
+        setIsDemoMode(false)
+        setActiveWorkspaceId('')
         onToast?.('Workspace berhasil diimpor.', 'success')
       } catch (err) {
         onToast?.(`Gagal mengimpor workspace: ${err instanceof Error ? err.message : String(err)}`, 'error')
@@ -414,30 +472,40 @@ export default function CampaignView({
   // wizard tidak menampilkan modal). Portal ke body = posisi di JSX bebas.
   const settingsModal = showSettings
     ? createPortal(
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 z-70 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm p-4 transition-colors"
+          onClick={() => setShowSettings(false)}
+        >
           <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.2 }}
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: 'spring', bounce: 0.2, duration: 0.35 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-800"
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden max-w-lg w-full relative shadow-2xl transition-colors flex flex-col max-h-[85vh]"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-slate-900/60 dark:text-blue-400">
-                  <Settings className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Pengaturan Performa Kampanye</h3>
-                  <p className="text-[11px] text-slate-400 dark:text-slate-500">Profil, AI, dan manajemen workspace.</p>
-                </div>
+            {/* Header — pola kanonik modal aplikasi */}
+            <div className="flex items-center gap-2.5 px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-700/60">
+              <div className="p-2 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg shrink-0 transition-colors">
+                <Settings className="w-4 h-4" />
               </div>
-              <button type="button" onClick={() => setShowSettings(false)} className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-700" aria-label="Tutup">
-                <X className="h-4 w-4" />
-              </button>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-tight">Pengaturan Performa Kampanye</h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Profil & kunci AI.</p>
+              </div>
+              <Tooltip label="Tutup">
+                <button type="button" onClick={() => setShowSettings(false)} aria-label="Tutup" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0 transition-colors">
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </Tooltip>
             </div>
 
-            <div className="mt-5 space-y-4">
+            {/* Body */}
+            <div className="overflow-y-auto px-5 py-4 flex flex-col gap-4">
               <FloatingInput
                 label="Nama Profil"
                 icon={<Users className="h-4 w-4" />}
@@ -463,56 +531,157 @@ export default function CampaignView({
                 }
                 helper="Disimpan aman di perangkat. Tanpa kunci, tabel & grafik tetap berfungsi."
               />
+            </div>
+          </motion.div>
+        </motion.div>,
+        document.body,
+      )
+    : null
 
-              <div className="border-t border-slate-100 pt-4 dark:border-slate-700">
-                <h4 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Workspace</h4>
-                <FloatingInput
-                  label="Nama Workspace (untuk disimpan)"
-                  icon={<Save className="h-4 w-4" />}
-                  value={workspaceName}
-                  onChange={(e) => setWorkspaceName(e.target.value)}
-                  action={
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveWorkspace()}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-blue-500/20 transition hover:bg-blue-700"
-                    >
-                      <Save className="h-3.5 w-3.5" /> Simpan
-                    </button>
-                  }
-                />
-                <div className="mt-3 flex items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <FloatingSelect
-                      label="Muat workspace tersimpan"
-                      icon={<FolderOpen className="h-4 w-4" />}
-                      value=""
-                      options={workspaces.map((w) => ({ value: w.id, label: w.name, description: w.profileName }))}
-                      onChange={(v) => { if (v) void handleLoadWorkspace(v) }}
-                      placeholder="Pilih workspace…"
-                    />
-                  </div>
+  // Modal Workspace — manajemen workspace (simpan/muat/hapus/ekspor/impor) via
+  // localStorage. Portal ke body (z-70) agar menutupi sidebar & konsisten dgn modal lain.
+  const workspaceModal = showWorkspace
+    ? createPortal(
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 z-70 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm p-4 transition-colors"
+          onClick={() => setShowWorkspace(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: 'spring', bounce: 0.2, duration: 0.35 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden max-w-lg w-full relative shadow-2xl transition-colors flex flex-col max-h-[85vh]"
+          >
+            {/* Header — pola kanonik modal aplikasi */}
+            <div className="flex items-center gap-2.5 px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-700/60">
+              <div className="p-2 bg-indigo-50 dark:bg-slate-900/50 text-indigo-600 dark:text-indigo-400 rounded-lg shrink-0 transition-colors">
+                <Database className="w-4 h-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-tight">Workspace Performa Kampanye</h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Simpan & muat set data. Tersimpan di perangkat (localStorage).</p>
+              </div>
+              <Tooltip label="Tutup">
+                <button type="button" onClick={() => setShowWorkspace(false)} aria-label="Tutup" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0 transition-colors">
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </Tooltip>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto px-5 py-4 flex flex-col gap-4">
+              {/* Simpan workspace baru / perbarui */}
+              <FloatingInput
+                label="Nama Workspace"
+                icon={<Save className="h-4 w-4" />}
+                value={workspaceName}
+                onChange={(e) => setWorkspaceName(e.target.value)}
+                helper="Menyimpan profil, laporan CSV, dan pengaturan saat ini. Nama sama = perbarui."
+                action={
                   <button
                     type="button"
-                    onClick={handleExportWorkspace}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-600/50 dark:hover:text-blue-400"
+                    onClick={handleSaveWorkspace}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-blue-500/20 transition hover:bg-blue-700"
                   >
-                    <Download className="h-3.5 w-3.5" /> Ekspor
+                    <Save className="h-3.5 w-3.5" /> Simpan
                   </button>
+                }
+              />
+
+              {/* Daftar workspace tersimpan */}
+              <div className="border-t border-slate-100 pt-4 dark:border-slate-700">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    Workspace Tersimpan ({workspaces.length})
+                  </h4>
+                  <Tooltip label="Impor dari file JSON">
+                    <button
+                      type="button"
+                      onClick={handleImportWorkspace}
+                      aria-label="Impor workspace"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 shadow-sm transition hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-600/50 dark:hover:text-blue-400"
+                    >
+                      <Upload className="h-3 w-3" /> Impor
+                    </button>
+                  </Tooltip>
                 </div>
-                {workspaces.length > 0 && (
-                  <ul className="mt-2 space-y-1.5">
-                    {workspaces.map((w) => (
-                      <li key={w.id} className="flex items-center gap-2 rounded-lg border border-slate-100 px-2.5 py-1.5 dark:border-slate-700">
-                        <span className="min-w-0 flex-1 truncate text-xs text-slate-600 dark:text-slate-300">
-                          {w.name} <span className="text-slate-400">· {w.profileName}</span>
+
+                {workspaces.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-400 dark:border-slate-700 dark:text-slate-500">
+                    Belum ada workspace. Simpan state saat ini untuk mulai.
+                  </div>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {workspaces.map((w, i) => (
+                      <li key={w.id} className="flex items-center gap-3 rounded-xl border border-slate-100 dark:border-slate-700 px-3 py-2.5">
+                        {/* Avatar warna — berbeda per workspace agar mudah dikenali */}
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                            WS_AVATAR_COLORS[i % WS_AVATAR_COLORS.length]
+                          }`}
+                        >
+                          {w.name.charAt(0).toUpperCase()}
                         </span>
-                        <button type="button" onClick={() => void handleLoadWorkspace(w.id)} className="rounded-md p-1 text-blue-500 transition hover:bg-blue-50 dark:hover:bg-blue-500/10" title="Muat">
-                          <FolderOpen className="h-3.5 w-3.5" />
-                        </button>
-                        <button type="button" onClick={() => void handleDeleteWorkspace(w.id)} className="rounded-md p-1 text-rose-500 transition hover:bg-rose-50 dark:hover:bg-rose-500/10" title="Hapus">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{w.name}</span>
+                            {w.hasMeta && (
+                              <span className="shrink-0 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-blue-600 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400">
+                                Meta
+                              </span>
+                            )}
+                            {w.hasShopee && (
+                              <span className="shrink-0 rounded-md border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-orange-600 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-400">
+                                Shopee
+                              </span>
+                            )}
+                            {w.hasClicks && (
+                              <span className="shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400">
+                                Klik
+                              </span>
+                            )}
+                          </div>
+                          <div className="truncate text-[10px] text-slate-400">
+                            {w.profileName} ·{' '}
+                            {new Date(w.updatedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </div>
+                        </div>
+                        <Tooltip label="Muat workspace">
+                          <button
+                            type="button"
+                            onClick={() => handleLoadWorkspace(w.id)}
+                            aria-label={`Muat ${w.name}`}
+                            className="rounded-md p-1.5 text-blue-500 transition hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                          >
+                            <FolderOpen className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip label="Ekspor JSON">
+                          <button
+                            type="button"
+                            onClick={() => handleExportWorkspace(w.id)}
+                            aria-label={`Ekspor ${w.name}`}
+                            className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip label="Hapus workspace">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteWorkspace(w.id, w.name)}
+                            aria-label={`Hapus ${w.name}`}
+                            className="rounded-md p-1.5 text-rose-500 transition hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </Tooltip>
                       </li>
                     ))}
                   </ul>
@@ -520,7 +689,79 @@ export default function CampaignView({
               </div>
             </div>
           </motion.div>
-        </div>,
+        </motion.div>,
+        document.body,
+      )
+    : null
+
+  // Modal validasi (confirm) — untuk aksi destruktif: hapus workspace & bersihkan data.
+  const confirmDialog = confirm
+    ? createPortal(
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 z-80 flex items-center justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm p-4 transition-colors"
+          onClick={() => setConfirm(null)}
+        >
+          <motion.div
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ type: 'spring', bounce: 0.2, duration: 0.35 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden max-w-sm w-full relative shadow-2xl transition-colors flex flex-col"
+          >
+            {/* Header — pola kanonik modal aplikasi */}
+            <div className="flex items-center gap-2.5 px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-700/60">
+              <div
+                className={`p-2 rounded-lg shrink-0 transition-colors ${
+                  confirm.type === 'clearData'
+                    ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : 'bg-rose-50 dark:bg-rose-500/10 text-rose-500 dark:text-rose-400'
+                }`}
+              >
+                {confirm.type === 'clearData' ? <RotateCcw className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-tight">
+                  {confirm.type === 'deleteWorkspace' ? 'Hapus Workspace?' : 'Bersihkan Data?'}
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {confirm.type === 'deleteWorkspace'
+                    ? `Workspace "${confirm.name}" akan dihapus permanen.`
+                    : 'Semua laporan akan dikosongkan dari tampilan. Preferensi & workspace tetap tersimpan.'}
+                </p>
+              </div>
+              <Tooltip label="Tutup">
+                <button type="button" onClick={() => setConfirm(null)} aria-label="Tutup" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0 transition-colors">
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </Tooltip>
+            </div>
+
+            {/* Footer aksi */}
+            <div className="flex justify-end gap-2 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setConfirm(null)}
+                className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirm}
+                className={`rounded-lg px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition ${
+                  confirm.type === 'clearData' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+              >
+                {confirm.type === 'deleteWorkspace' ? 'Hapus' : 'Bersihkan'}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>,
         document.body,
       )
     : null
@@ -543,9 +784,16 @@ export default function CampaignView({
             <button
               type="button"
               onClick={loadDemoData}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-500/30 dark:text-blue-400 dark:hover:bg-blue-500/10"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-600 shadow-sm transition hover:bg-blue-50 dark:border-blue-500/30 dark:bg-slate-800 dark:text-blue-400 dark:hover:bg-blue-500/10"
             >
               <Sparkles className="h-3.5 w-3.5" /> Coba Data Demo
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowWorkspace(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 text-xs font-semibold text-indigo-600 shadow-sm transition hover:bg-indigo-50 dark:border-indigo-500/40 dark:bg-slate-800 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+            >
+              <Database className="h-4 w-4" /> Workspace
             </button>
             <ToolbarBtn title="Impor Workspace (JSON)" onClick={handleImportWorkspace}>
               <Upload className="h-4 w-4" />
@@ -678,6 +926,8 @@ export default function CampaignView({
         </div>
       </div>
       {settingsModal}
+      {workspaceModal}
+      {confirmDialog}
     </motion.div>
     )
   }
@@ -696,15 +946,23 @@ export default function CampaignView({
       <div className="relative z-10 pt-16 md:pt-8 px-4 sm:px-6 md:px-8 pb-4 flex-1 flex flex-col min-h-0">
         {/* Aksi (tanpa judul header) */}
         <div className="mb-5 flex flex-wrap items-center justify-end gap-2">
-          {isDemoMode && (
-            <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-2 text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+          {activeWorkspaceName ? (
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
+              <Database className="h-3.5 w-3.5" /> {activeWorkspaceName}
+            </span>
+          ) : isDemoMode ? (
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400">
               <Sparkles className="h-3.5 w-3.5" /> Mode Demo
             </span>
-          )}
+          ) : null}
           <CampaignDateRange dateStart={dateStart} dateEnd={dateEnd} onChange={(s, e) => { setDateStart(s); setDateEnd(e) }} onReset={() => { setDateStart(''); setDateEnd('') }} />
-          <ToolbarBtn title="Simpan Workspace" onClick={() => void handleSaveWorkspace()}>
-            <Save className="h-4 w-4" />
-          </ToolbarBtn>
+          <button
+            type="button"
+            onClick={() => setShowWorkspace(true)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-indigo-300 bg-white px-3 text-xs font-semibold text-indigo-600 shadow-sm transition hover:bg-indigo-50 dark:border-indigo-500/40 dark:bg-slate-800 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+          >
+            <Database className="h-4 w-4" /> Workspace
+          </button>
           <ToolbarBtn title="Ekspor Hasil (CSV)" onClick={handleExportCSV}>
             <FileSpreadsheet className="h-4 w-4" />
           </ToolbarBtn>
@@ -904,6 +1162,8 @@ export default function CampaignView({
       </div>
 
       {settingsModal}
+      {workspaceModal}
+      {confirmDialog}
     </motion.div>
   )
 }
@@ -1042,18 +1302,20 @@ function ToolbarBtn({
   danger?: boolean
 }) {
   return (
-    <button
-      type="button"
-      title={title}
-      aria-label={title}
-      onClick={onClick}
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-all ${
-        danger
-          ? 'border-rose-200 bg-white text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:border-rose-500/30 dark:bg-slate-800 dark:text-rose-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-300'
-          : 'border-slate-200 bg-white text-slate-500 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-blue-600/50 dark:hover:text-blue-400'
-      }`}
-    >
-      {children}
-    </button>
+    <Tooltip label={title}>
+      <button
+        type="button"
+        title={title}
+        aria-label={title}
+        onClick={onClick}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border shadow-sm transition-all ${
+          danger
+            ? 'border-rose-200 bg-white text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:border-rose-500/30 dark:bg-slate-800 dark:text-rose-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-300'
+            : 'border-slate-200 bg-white text-slate-500 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:border-blue-600/50 dark:hover:text-blue-400'
+        }`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   )
 }

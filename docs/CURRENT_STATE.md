@@ -121,6 +121,138 @@ bawaan browser pada SEMUA input angka.**
 - **Validasi**: `get_errors` bersih, typecheck/lint/build PASS.
   Belum di-commit/branch.
 
+## Perubahan Terbaru (2026-08-16 — WORKSPACE localStorage + MODAL VALIDASI + TOOLTIP)
+
+**Permintaan user: performa kampanye punya workspace — user bisa tambah/hapus
+workspace fleksibel, disimpan di localStorage. Semua aksi destruktif diberi
+modal validasi. Tombol ikon tanpa label diberi tooltip.**
+
+- **Workspace → localStorage** (`src/lib/campaign/workspaceStore.ts` BARU):
+  - Menggantikan penyimpanan Electron IPC (file di userData) dengan
+    localStorage renderer (berfungsi juga di browser).
+  - Index ringkas di key `rsomni.campaign.workspaces`; isi lengkap tiap
+    workspace (termasuk CSV) di key `rsomni.campaign.workspace.<id>` → aman
+    kuota (tidak menulis semua CSV ke satu key besar).
+  - `listWorkspaces / loadWorkspace / saveWorkspace / deleteWorkspace` — semua
+    dibungkus try/catch; `saveWorkspace` menimpa bila nama sama, melempar Error
+    bila kuota penuh.
+- **Modal Workspace khusus** (`CampaignView.tsx`, portal ke body z-70):
+  - Tombol toolbar "Workspace" (ikon Database) di wizard & dashboard.
+  - Simpan state saat ini dengan nama (FloatingInput + tombol Simpan), daftar
+    workspace tersimpan (Muat / Ekspor JSON / Hapus), Impor dari file JSON.
+  - Modal tetap terbuka setelah simpan agar user langsung melihat hasilnya.
+  - Section workspace DIHAPUS dari modal Settings (kini hanya Profil + AI key).
+- **Modal validasi** (portal z-80) untuk aksi destruktif:
+  - Hapus workspace → "Hapus Workspace?" (nama workspace disebutkan).
+  - Bersihkan Data → "Bersihkan Data?" (laporan dikosongkan, preferensi tetap).
+  - Tombol Batal / konfirmasi; toast setelah aksi berhasil.
+- **Tooltip kustom** (`src/components/ui/Tooltip.tsx` BARU): portal ke body
+  z-100, muncul saat hover/fokus (delay 90ms), posisi di bawah pemicu + diklamp
+  agar tak keluar viewport. Diterapkan ke SEMUA `ToolbarBtn` + tombol ikon
+  modal Workspace (Muat/Ekspor/Hapus).
+- **Verifikasi CDP Electron**: simpan → localStorage terisi (index + per-id),
+  hapus → modal validasi muncul → konfirmasi → terhapus (`[]`), bersihkan data
+  → modal validasi, tooltip muncul, settings modal tanpa section workspace.
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS.
+  Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — MODAL KANONIK + LABEL & WARNA WORKSPACE)
+
+**Permintaan user: desain modal yang dibuat tidak konsisten dengan modal
+halaman lain; workspace tampilkan label agar mudah dikenali + warna berbeda.**
+
+- **Akar**: modal workspace/settings/confirm memakai shell menyimpang
+  (`bg-slate-950/40`, kartu `max-w-md p-5`, badge `h-9 w-9 rounded-xl`, tutup
+  `X`). Pola kanonik aplikasi (ConfirmModal/DownloadSettingsModal/UpdateModal):
+  overlay `bg-black/40 dark:bg-black/60`, kartu `max-w-lg overflow-hidden
+  shadow-2xl flex flex-col max-h-[85vh]`, header `px-5 pt-5 pb-3 border-b` +
+  badge `p-2 rounded-lg w-4 h-4`, tutup `XCircle w-5 h-5`, body `px-5 py-4`.
+- **FIX** (`CampaignView.tsx`): ketiga modal (Settings, Workspace, Confirm)
+  dirombak ke pola kanonik. Tutup modal kini juga via **Escape**.
+- **Label & warna workspace**:
+  - `CampaignWorkspaceSummary` + index store mendapat flag `hasMeta /
+    hasShopee / hasClicks` (dihitung saat simpan dari isi CSV).
+  - Setiap item workspace: **avatar huruf awal dengan warna berbeda** (palet
+    `WS_AVATAR_COLORS`: biru/emerald/amber/violet/rose/cyan, bergilir) + **label
+    dataset berwarna**: Meta (biru), Shopee (oranye), Klik (emerald) → mudah
+    dikenali sekilas.
+- **Verifikasi CDP Electron**: modal `bg-black/40`, header `border-b` 1px,
+  badge `p-2`, tutup `XCircle` (`lucide-circle-x`), label Meta/Shopee/Klik
+  tampil dengan warna berbeda, avatar berwarna. Settings modal tanpa section
+  workspace. `get_errors` bersih, typecheck/lint/build PASS.
+  Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — TOMBOL WORKSPACE BERLABEL + WARNA)
+
+**Permintaan user: tombol Workspace tidak ada label teks & warnanya tidak
+berbeda (hanya ikon).**
+
+- **FIX** (`CampaignView.tsx`): tombol "Workspace" di toolbar wizard &
+  dashboard diubah dari `ToolbarBtn` ikon-only menjadi **tombol berlabel**
+  `[Database] Workspace` dengan **warna indigo** (`bg-indigo-600`, teks putih,
+  `h-9` — sama tinggi dgn tombol lain), menonjol dari tombol ikon netral.
+- **Verifikasi CDP Electron**: tombol ditemukan (`text:"Workspace"`,
+  `hasIcon:true`, `hasLabel:true`), `bg oklch(hue 277)` = indigo-600, teks
+  putih, tinggi 36px. `get_errors` bersih, typecheck/lint/build PASS.
+  Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — TOMBOL WORKSPACE OUTLINE + UKURAN KONSISTEN)
+
+**Permintaan user: tombol Workspace dibuat OUTLINE (bukan fill penuh); tombol
+"Coba Data Demo" disamakan ukurannya.**
+
+- **FIX** (`CampaignView.tsx`):
+  - Tombol Workspace: `bg-indigo-600` (fill) → **outline** — `border
+    border-indigo-300 bg-white text-indigo-600` (+ dark mode), tetap `h-9`.
+  - Tombol "Coba Data Demo" (wizard): `px-3 py-1.5` → **`h-9`** (sama tinggi
+    dgn tombol toolbar lain) + bg putih + border biru.
+- **Verifikasi CDP Electron**: Workspace bg putih + border indigo 1px + tinggi
+  36px; Coba Data Demo tinggi 36px (sama), bg putih, border 1px. Kedua tombol
+  konsisten. `get_errors` bersih, typecheck/lint/build PASS.
+  Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — UKURAN KONSISTEN + DEMO PERSIST + WORKSPACE AKTIF)
+
+**Permintaan user: (1) 3 tombol toolbar tidak konsisten ukurannya; (2) mode
+demo hilang saat refresh; (3) tampilkan workspace mana yang sedang aktif (anti
+rancu saat banyak workspace / mode demo).**
+
+- **Ukuran konsisten** (`CampaignView.tsx` + `CampaignDateRange.tsx`): semua
+  kontrol toolbar kini `h-9` (36px) — chip Mode Demo/workspace, trigger date
+  range (`px-3 py-2` → `h-9`), tombol Workspace.
+- **Mode demo persist** (`preferences.ts` + `CampaignView.tsx`): `isDemoMode`
+  diubah dari `useState` → `usePersistentState(PREF_KEYS.campaignDemoMode)`.
+  Saat refresh, badge "Mode Demo" tetap tampil.
+- **Workspace aktif** (`preferences.ts` + `CampaignView.tsx`):
+  - `activeWorkspaceId` persisten (`PREF_KEYS.campaignActiveWorkspace`).
+  - Chip status di toolbar: bila ada workspace aktif → `[Database] nama
+    workspace` (indigo); bila mode demo → `[Sparkles] Mode Demo` (biru);
+    keduanya `h-9`.
+  - `handleLoadWorkspace` set active id; `handleSaveWorkspace` set id hasil
+    simpan; upload/impor/demo/clear reset `activeWorkspaceId=''` &
+    `isDemoMode=false`.
+- **Verifikasi CDP Electron**: demoChip 36px = dateTrigger 36px = wsBtn 36px;
+  `demoModeKey:"true"` + chip Mode Demo tetap tampil setelah reload; setelah
+  simpan chip menampilkan nama workspace + id tersimpan. `get_errors` bersih,
+  typecheck/lint/build PASS. Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — TRIGGER DATE RANGE SAMA DGN TOMBOL LAIN)
+
+**Permintaan user: ukuran date range picker masih tidak konsisten dgn tombol
+lain.**
+
+- **FIX** (`CampaignDateRange.tsx`): trigger date range `rounded-xl` →
+  **`rounded-lg`** (sama dgn tombol Workspace & chip status). Tinggi sudah
+  `h-9` (36px) dari perubahan sebelumnya.
+- **Verifikasi CDP Electron**: SEMUA kontrol toolbar = 36px — Mode Demo chip,
+  trigger date range, tombol Workspace, tombol ikon (Ekspor/Bersihkan/
+  Settings). Screenshot dikonfirmasi konsisten. `get_errors` bersih,
+  typecheck/lint/build PASS. Belum di-commit/branch.
+- **Catatan**: bila masih terlihat tidak konsisten, kemungkinan membuka aplikasi
+  terpasang `/Applications/RS OmniTools.app` (v2.0.0 — LAMA, tanpa perubahan
+  ini) atau window dev yang belum di-reload. Semua perbaikan ada di window dev
+  (localhost:5173); aplikasi terpasang perlu di-build ulang.
+
 ## Perubahan Terbaru (2026-08-16 — Audit UI Halaman Performa Kampanye)
 
 **Audit forensik konsistensi desain halaman "Performa Kampanye" vs halaman lain

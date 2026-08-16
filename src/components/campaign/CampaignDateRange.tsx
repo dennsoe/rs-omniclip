@@ -346,7 +346,7 @@ export default function CampaignDateRange({
           type="button"
           onClick={() => (open ? setOpen(false) : openPicker())}
           className={clsx(
-            'inline-flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-xs font-semibold shadow-sm transition-all dark:bg-slate-800',
+            'inline-flex h-9 items-center gap-2 rounded-lg border bg-white px-3 text-xs font-semibold shadow-sm transition-all dark:bg-slate-800',
             open
               ? 'border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400'
               : 'border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-blue-600/50 dark:hover:text-blue-400'
