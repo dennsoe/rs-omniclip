@@ -1,7 +1,19 @@
 # Kondisi Terkini — RS OmniClip
 
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
-ada perubahan. Tanggal terakhir diperbarui: **2026-08-15**.
+ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
+
+## Status Rilis v1.4.2 (DALAM PROSES RILIS — modal update + catatan rilis markdown)
+
+- **Branch**: `release/v1.4.2` (dari `main`). **Versi**: `1.4.2`
+  (package.json + lockfile, `npm version --no-git-tag-version`).
+- **Isi baru vs v1.4.1**: modal notifikasi update otomatis (`UpdateModal.tsx`,
+  sudah di-merge ke main via PR #28) + catatan rilis Markdown (sudah di v1.4.1).
+  Alasan bump: artefak v1.4.1 dibuat sebelum modal update; agar update modal
+  terpicu, versi harus lebih tinggi dari 1.4.1.
+- **Belum dilakukan**: commit/push, PR, merge, build artefak mac+win, tag
+  `v1.4.2`, GitHub Release.
+- **Catatan rilis**: `release-notes/RELEASE_NOTES_v1.4.2.md`.
 
 ## Perubahan Terbaru (2026-08-16)
 
