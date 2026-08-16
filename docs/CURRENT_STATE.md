@@ -3,6 +3,24 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 
+## Status Rilis v2.1.0 (SELESAI — RELEASE v2.1.0 DIPUBLIKASI)
+
+- **Branch**: `release/v2.1.0` (dari `main`). **Versi**: `2.1.0`.
+- **PR #36** (release) ke `main` **MERGED** (merge commit `c121af5`, 2026-08-16).
+- **Tag**: `v2.1.0` dibuat di commit merge `c121af5` + dipush.
+- **GitHub Release v2.1.0 DIBUAT** — **Latest**, catatan rilis lengkap + **4
+  artefak** (dibangun LOKAL karena GitHub Actions terkunci billing akun):
+  `RS-OmniTools-2.1.0-arm64.dmg`, `RS-OmniTools-2.1.0-arm64.zip`,
+  `RS-OmniTools-2.1.0-x64-setup.exe`, `RS-OmniTools-2.1.0-x64-portable.exe`.
+  URL: https://github.com/dennsoe/rs-omnitools/releases/tag/v2.1.0
+- **Release notes**: `release-notes/RELEASE_NOTES_v2.1.0.md`.
+- Isi: UI Performa Kampanye dirombak + Workspace + AI multi-provider + asisten
+  AI bubble chat + label status Diproses + fix Ambil Daftar akun TikTok (UA
+  Chrome/126) + docs rencana Winning Product.
+- **Catatan**: GitHub Actions terkunci "billing issue" → build rilis ini lokal
+  (`npm run build:mac` / `build:win`) lalu unggah manual via `gh release
+  create`. Bila ingin build otomatis kembali, aktifkan billing GitHub Actions.
+
 ## Master Terbaru — PR #34 MERGED (2026-08-16)
 
 - **PR #34** (`feat/campaign-ui-polish` → `main`) **MERGED** dengan **merge
