@@ -27,6 +27,7 @@ import { getTrackedPids, sampleProcess } from '@engine/procmon'
 import { enqueueBatch } from '@engine/queue'
 import { testProxy, resetRotation } from '@engine/proxy'
 import { registerMediaScheme, registerMediaProtocol } from './media'
+import { migrateLegacyUserData } from './migrate-userdata'
 import { getConfig, setConfig, appendHistory, clearHistory } from './config'
 import { exportScrapeToCsv } from '@engine/analytics'
 import {
@@ -147,7 +148,8 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 560,
     show: false,
-    title: 'RS OmniClip',
+    title: 'RS OmniTools',
+    icon: path.join(__dirname, '../../build/icon.png'),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
     backgroundColor: '#f8fafc',
@@ -204,7 +206,7 @@ async function initEngine(): Promise<void> {
       emitEngineStatus('Mesin siap digunakan.')
       emit('app:ready', true)
     } catch (err) {
-      console.error('[RS OmniClip] Gagal menginisialisasi engine:', err)
+      console.error('[RS OmniTools] Gagal menginisialisasi engine:', err)
       emitEngineStatus('Gagal menginisialisasi mesin FFmpeg. Periksa koneksi internet lalu coba lagi.')
       emit('app:ready', false)
     } finally {
@@ -252,7 +254,7 @@ async function handleProcessing(payload: {
     })
     emit('processing:complete', { outputFolder })
   } catch (err) {
-    console.error('[RS OmniClip] Gagal memproses batch:', err)
+    console.error('[RS OmniTools] Gagal memproses batch:', err)
     emit('processing:complete', { outputFolder: '' })
   }
 }
@@ -606,6 +608,10 @@ function registerIpc(): void {
       /* versi resource tidak wajib untuk fungsi inti */
     })
 }
+
+// Migrasi data pengguna saat rebranding (rs-omniclip → rs-omnitools) — SEBELUM
+// app menulis apa pun ke userData baru.
+migrateLegacyUserData()
 
 // Skema kustom media:// (streaming file lokal utk pratinjau) — WAJIB sebelum app ready.
 registerMediaScheme()

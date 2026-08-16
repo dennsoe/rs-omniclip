@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Smoke test headless untuk mesin RS OmniClip.
+ * Smoke test headless untuk mesin RS OmniTools.
  *
  * Memverifikasi bahwa:
  *   1. Binary FFmpeg/FFprobe dapat diunduh (via ffbinaries).
@@ -21,7 +21,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
 
-const workDir = path.join(os.tmpdir(), 'omniclip-smoke-' + Date.now())
+const workDir = path.join(os.tmpdir(), 'omnitools-smoke-' + Date.now())
 const binDir = path.join(workDir, 'bin')
 const outDir = path.join(workDir, 'out')
 fs.mkdirSync(binDir, { recursive: true })
@@ -51,7 +51,7 @@ function run(cmd, args) {
 }
 
 async function main() {
-  console.log('\n=== SMOKE TEST MESIN RS OMNICLIP ===\n')
+  console.log('\n=== SMOKE TEST MESIN RS OMNITOOLS ===\n')
   console.log(`Direktori kerja: ${workDir}\n`)
 
   // 1. Unduh binary

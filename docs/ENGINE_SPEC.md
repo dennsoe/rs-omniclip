@@ -18,9 +18,9 @@ Electron. Kode: `electron/main/engine/`.
 
 | Fungsi | Lokasi |
 |---|---|
-| `getEngineBinDir()` | `~/Library/Application Support/rs-omniclip/bin` (userData) |
-| `getOutputBaseDir()` | `~/Downloads/RS-OmniClip` |
-| `getDownloadDir()` | `~/Downloads/RS-OmniClip/Unduhan` |
+| `getEngineBinDir()` | `~/Library/Application Support/rs-omnitools/bin` (userData) |
+| `getOutputBaseDir()` | `~/Downloads/RS-OmniTools` |
+| `getDownloadDir()` | `~/Downloads/RS-OmniTools/Unduhan` |
 | `createOutputFolderForBatch(src)` | `<folder berkas sumber>/[CLEANED] - YYYY-MM-DD` |
 
 Semua binary (ffmpeg, ffprobe, yt-dlp) disimpan di `getEngineBinDir()`, bukan di
@@ -274,7 +274,7 @@ Opsi (dari UI "Pengaturan Unduhan"):
   "Cannot parse data"), pesan diberi keterangan ramah + saran.
 - Setelah seluruh antrean → event `download:complete` berisi ringkasan
   `{ total, success, failed }`.
-- Output ke `~/Downloads/RS-OmniClip/Unduhan/`; tombol "Buka folder" memakai
+- Output ke `~/Downloads/RS-OmniTools/Unduhan/`; tombol "Buka folder" memakai
   channel `folder:reveal` (`shell.showItemInFolder`).
 
 ### 8.3 Ambil Daftar Akun / Halaman (`scrapeAccount`)

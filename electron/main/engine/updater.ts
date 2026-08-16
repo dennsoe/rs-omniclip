@@ -7,7 +7,7 @@ import { ensureFfmpeg, resetFfmpegCache, expectedFfmpegVersion } from './ffmpeg'
 import { ensureYtdlp, resetYtdlpCache } from './downloader'
 
 /**
- * Modul pembaruan RS OmniClip — SEPENUHNYA GRATIS (tanpa biaya apa pun):
+ * Modul pembaruan RS OmniTools — SEPENUHNYA GRATIS (tanpa biaya apa pun):
  *  - Cek versi aplikasi via GitHub Releases API (repo publik, tanpa token).
  *  - Strategi macOS: manual — tombol membuka halaman rilis, user mengunduh
  *    dmg/zip lalu membukanya sendiri (tidak butuh Developer ID/notarisasi).
@@ -15,7 +15,7 @@ import { ensureYtdlp, resetYtdlpCache } from './downloader'
  */
 
 export const UPDATE_REPO_OWNER = 'dennsoe'
-export const UPDATE_REPO_NAME = 'rs-omniclip'
+export const UPDATE_REPO_NAME = 'rs-omnitools'
 const REPO = `${UPDATE_REPO_OWNER}/${UPDATE_REPO_NAME}`
 const LATEST_RELEASE_API = `https://api.github.com/repos/${REPO}/releases/latest`
 const MANIFEST_URL = `https://raw.githubusercontent.com/${REPO}/main/resources.json`
@@ -69,7 +69,7 @@ interface InstalledVersions {
 /** Mengambil JSON dari URL dengan batas waktu dan User-Agent yang benar. */
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'RS-OmniClip', Accept: 'application/vnd.github+json' },
+    headers: { 'User-Agent': 'RS-OmniTools', Accept: 'application/vnd.github+json' },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)

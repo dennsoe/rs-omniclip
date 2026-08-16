@@ -1,4 +1,4 @@
-# Kondisi Terkini — RS OmniClip
+# Kondisi Terkini — RS OmniTools
 
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
@@ -41,8 +41,8 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 - **PR #29** ke `main` **MERGED** (merge commit `32f319f`, 2026-08-16).
 - **Tag**: `v1.4.2` dibuat di commit merge `32f319f` + dipush.
 - **GitHub Release v1.4.2 DIBUAT** dengan catatan rilis lengkap + **4 artefak**:
-  `RS-OmniClip-1.4.2-arm64.dmg`, `RS-OmniClip-1.4.2-arm64.zip`,
-  `RS-OmniClip-1.4.2-x64-setup.exe`, `RS-OmniClip-1.4.2-x64-portable.exe`.
+  `RS-OmniTools-1.4.2-arm64.dmg`, `RS-OmniTools-1.4.2-arm64.zip`,
+  `RS-OmniTools-1.4.2-x64-setup.exe`, `RS-OmniTools-1.4.2-x64-portable.exe`.
 - **Isi baru vs v1.4.1**: modal notifikasi update otomatis (`UpdateModal.tsx`)
   + catatan rilis Markdown. Alasan bump: artefak v1.4.1 dibuat sebelum modal
   update; agar modal update terpicu, versi harus lebih tinggi dari 1.4.1.
@@ -82,8 +82,8 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
   squash.
 - **Tag**: `v1.4.1` dibuat di commit merge `9b000e2` + dipush.
 - **GitHub Release v1.4.1 DIBUAT** dengan catatan rilis lengkap + **4 artefak**:
-  `RS-OmniClip-1.4.1-arm64.dmg`, `RS-OmniClip-1.4.1-arm64.zip`,
-  `RS-OmniClip-1.4.1-x64-setup.exe`, `RS-OmniClip-1.4.1-x64-portable.exe`.
+  `RS-OmniTools-1.4.1-arm64.dmg`, `RS-OmniTools-1.4.1-arm64.zip`,
+  `RS-OmniTools-1.4.1-x64-setup.exe`, `RS-OmniTools-1.4.1-x64-portable.exe`.
 - **Catatan rilis**: `release-notes/RELEASE_NOTES_v1.4.1.md`.
 - **Referensi pengerjaan**: `docs/IMPLEMENTATION_v1.4.md` (semua keputusan teknis).
 - **Semua 5 fitur SELESAI diimplementasi & DIVALIDASI** (tsc/lint/build PASS +
@@ -177,7 +177,7 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 - **Operasional**: dev server dijalankan dgn `env -u ELECTRON_RUN_AS_NODE npm
   run dev` (env sandbox menyuntik `ELECTRON_RUN_AS_NODE=1` → electron jalan sbg
   node → `protocol` undefined). Launch Electron CDP: `npx electron .
-  --remote-debugging-port=9222 --user-data-dir="$TMPDIR/rs-omniclip-cdp"`
+  --remote-debugging-port=9222 --user-data-dir="$TMPDIR/rs-omnitools-cdp"`
   (unsandboxed).
 
 ### Penyempurnaan Auto-Watcher + CSV (2026-08-15, belum commit)
@@ -553,10 +553,10 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 ## Status Rilis v1.3.3 (2026-08-14) — Dukungan unduh Douyin, LIVE
 
 - **Release `v1.3.3` LIVE**:
-  https://github.com/dennsoe/rs-omniclip/releases/tag/v1.3.3
-  - macOS: `RS-OmniClip-1.3.3-arm64.dmg` (99 MB) + `.zip` (95 MB).
-  - Windows: `RS-OmniClip-1.3.3-x64-setup.exe` (NSIS, 82 MB) +
-    `RS-OmniClip-1.3.3-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
+  https://github.com/dennsoe/rs-omnitools/releases/tag/v1.3.3
+  - macOS: `RS-OmniTools-1.3.3-arm64.dmg` (99 MB) + `.zip` (95 MB).
+  - Windows: `RS-OmniTools-1.3.3-x64-setup.exe` (NSIS, 82 MB) +
+    `RS-OmniTools-1.3.3-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
   - API `releases/latest` = `v1.3.3`.
 - **PR #23** (`db8649cd`, fitur Douyin) + **PR #24** (`1d4c31e0`, bump 1.3.3) —
   merge commit.
@@ -590,10 +590,10 @@ Audit forensik menyeluruh + uji lapangan:
 ## Status Rilis v1.3.2 (2026-08-14) — Bugfix UI block + Douyin, LIVE
 
 - **Release `v1.3.2` LIVE**:
-  https://github.com/dennsoe/rs-omniclip/releases/tag/v1.3.2
-  - macOS: `RS-OmniClip-1.3.2-arm64.dmg` (99 MB) + `.zip` (95 MB).
-  - Windows: `RS-OmniClip-1.3.2-x64-setup.exe` (NSIS, 82 MB) +
-    `RS-OmniClip-1.3.2-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
+  https://github.com/dennsoe/rs-omnitools/releases/tag/v1.3.2
+  - macOS: `RS-OmniTools-1.3.2-arm64.dmg` (99 MB) + `.zip` (95 MB).
+  - Windows: `RS-OmniTools-1.3.2-x64-setup.exe` (NSIS, 82 MB) +
+    `RS-OmniTools-1.3.2-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
   - API `releases/latest` = `v1.3.2`.
 - **PR #20** (`a260a1f`, fix UI block + Douyin) + **PR #21** (`44591d0`, bump
   1.3.2) — merge commit.
@@ -625,10 +625,10 @@ tidak masuk aplikasi; (2) tidak bisa unduh Douyin.
 ## Status Rilis v1.3.1 (2026-08-14) — Bugfix kritis FFmpeg arm64, LIVE
 
 - **Release `v1.3.1` LIVE**:
-  https://github.com/dennsoe/rs-omniclip/releases/tag/v1.3.1
-  - macOS: `RS-OmniClip-1.3.1-arm64.dmg` (99 MB) + `.zip` (95 MB).
-  - Windows: `RS-OmniClip-1.3.1-x64-setup.exe` (NSIS, 82 MB) +
-    `RS-OmniClip-1.3.1-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
+  https://github.com/dennsoe/rs-omnitools/releases/tag/v1.3.1
+  - macOS: `RS-OmniTools-1.3.1-arm64.dmg` (99 MB) + `.zip` (95 MB).
+  - Windows: `RS-OmniTools-1.3.1-x64-setup.exe` (NSIS, 82 MB) +
+    `RS-OmniTools-1.3.1-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
   - `latest-mac.yml` + `latest.yml` ikut diunggah. API `releases/latest` =
     `v1.3.1`.
 - **PR #17** (`4d04c83`, fix FFmpeg arm64) + **PR #18** (`139b511`, bump 1.3.1) —
@@ -672,10 +672,10 @@ Audit forensik menemukan akar masalah NYATA (bukan asumsi):
 ## Status Rilis v1.3.0 (2026-08-14) — LIVE (macOS + Windows)
 
 - **Release `v1.3.0` LIVE**:
-  https://github.com/dennsoe/rs-omniclip/releases/tag/v1.3.0
-  - macOS: `RS-OmniClip-1.3.0-arm64.dmg` (99 MB) + `.zip` (95 MB).
-  - Windows: `RS-OmniClip-1.3.0-x64-setup.exe` (NSIS installer, 82 MB) +
-    `RS-OmniClip-1.3.0-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
+  https://github.com/dennsoe/rs-omnitools/releases/tag/v1.3.0
+  - macOS: `RS-OmniTools-1.3.0-arm64.dmg` (99 MB) + `.zip` (95 MB).
+  - Windows: `RS-OmniTools-1.3.0-x64-setup.exe` (NSIS installer, 82 MB) +
+    `RS-OmniTools-1.3.0-x64-portable.exe` (portable, 82 MB) + `latest.yml`.
   - `latest-mac.yml` + `latest.yml` ikut diunggah.
   - API `releases/latest` kini mengembalikan `v1.3.0` → tombol "Periksa Update"
     di aplikasi menunjukkan update tersedia dari v1.2.0.
@@ -763,7 +763,7 @@ codebase (tanpa UI tambah key), failover berurutan otomatis.
   - TikTok URL 1 (`vt.tiktok.com/ZS4c1gE2r/`) → `success` 100%, judul/thumbnail/
     filePath/sizeBytes 7.643.096 B, `description "TikTok · via TikWM"`,
     `complete {total:1, success:1, failed:0}`; MP4 tersimpan di
-    `~/Downloads/RS-OmniClip/Unduhan/`.
+    `~/Downloads/RS-OmniTools/Unduhan/`.
   - TikTok URL 2 (`vt.tiktok.com/ZS4c1gxy2/`) → sukses 5.133.237 B (via UI app).
   - **Failover**: unit-test 4 provider pertama dimatikan (baseUrl invalid) →
     resolve jatuh ke provider k5 & sukses.
@@ -815,7 +815,7 @@ Laporan: "semua video TikTok gagal; kemarin bisa tanpa cookie". Audit menyeluruh
   SEMUA gagal dari jaringan ini. Tidak ada perbaikan yt-dlp yang tersedia saat
   ini; begitu rilis, app akan auto-sembuh.
 - **Akar (bug APP — wajib diperbaiki)**: folder binary app
-  (`~/Library/Application Support/rs-omniclip/bin/`) KOSONG → `ensureYtdlp`
+  (`~/Library/Application Support/rs-omnitools/bin/`) KOSONG → `ensureYtdlp`
   lama **diam-diam jatuh ke yt-dlp SISTEM `2025.06.25`** (setahun lebih tua,
   tidak sanggup menangani TikTok/Facebook modern). Ini bug nyata yang
   memengaruhi SEMUA platform, bukan hanya TikTok.
@@ -893,10 +893,10 @@ thumbnail/judul/deskripsi setelah selesai, UI jelek). Akar masalah & perbaikan:
 ## Status Rilis v1.2.0 (2026-08-13) — MULTI-OS
 
 - **Release `v1.2.0` LIVE** (macOS + Windows):
-  https://github.com/dennsoe/rs-omniclip/releases/tag/v1.2.0
-  - macOS: `RS-OmniClip-1.2.0-arm64.dmg` (94 MB) + `.zip` (91 MB).
-  - Windows: `RS-OmniClip-1.2.0-x64-setup.exe` (NSIS installer, 79 MB) +
-    `RS-OmniClip-1.2.0-x64-portable.exe` (portable, 79 MB) + `latest.yml`.
+  https://github.com/dennsoe/rs-omnitools/releases/tag/v1.2.0
+  - macOS: `RS-OmniTools-1.2.0-arm64.dmg` (94 MB) + `.zip` (91 MB).
+  - Windows: `RS-OmniTools-1.2.0-x64-setup.exe` (NSIS installer, 79 MB) +
+    `RS-OmniTools-1.2.0-x64-portable.exe` (portable, 79 MB) + `latest.yml`.
   - API `releases/latest` kini mengembalikan `v1.2.0` → tombol "Periksa Update"
     di aplikasi menunjukkan update tersedia dari v1.1.0.
   - Dibuat manual lokal (CI terkunci billing): build macOS + Windows dari mesin
@@ -906,10 +906,10 @@ thumbnail/judul/deskripsi setelah selesai, UI jelek). Akar masalah & perbaikan:
 
 ## Status Rilis (2026-08-13)
 
-- Repo **PUBLIC**: `https://github.com/dennsoe/rs-omniclip`.
+- Repo **PUBLIC**: `https://github.com/dennsoe/rs-omnitools`.
 - **PR #6 merged** — merge commit `7626859` (mekanisme pembaruan gratis).
-- **Release `v1.1.0` LIVE**: https://github.com/dennsoe/rs-omniclip/releases/tag/v1.1.0
-  - Artefak: `RS-OmniClip-1.1.0-arm64.dmg` (95 MB) + `.zip` (92 MB), Apple Silicon.
+- **Release `v1.1.0` LIVE**: https://github.com/dennsoe/rs-omnitools/releases/tag/v1.1.0
+  - Artefak: `RS-OmniTools-1.1.0-arm64.dmg` (95 MB) + `.zip` (92 MB), Apple Silicon.
   - Dibuat manual (CI terkunci billing — lihat "Hal yang Belum Dikerjakan").
   - API `releases/latest` mengembalikan `v1.1.0` (tombol "Periksa Update" di
     aplikasi kini berfungsi; saat versi aplikasi sudah sama → status terbaru).
@@ -920,7 +920,7 @@ thumbnail/judul/deskripsi setelah selesai, UI jelek). Akar masalah & perbaikan:
 
 ## Perbaikan Gatekeeper macOS (2026-08-13)
 
-- Gejala: app hasil download menampilkan "RS OmniClip is damaged and can't be
+- Gejala: app hasil download menampilkan "RS OmniTools is damaged and can't be
   opened". Akar: (1) atribut `com.apple.quarantine` dari unduhan browser +
   app tidak Developer-ID signed; (2) build tanpa signing membuat binary
   Electron Framework `linker-signed` + bundle tidak ter-seal → `spctl` =
@@ -929,7 +929,7 @@ thumbnail/judul/deskripsi setelah selesai, UI jelek). Akar masalah & perbaikan:
   ulang SELURUH bundle secara adhoc dengan urutan dalam-ke-luar (dylib →
   framework → helper .app → app) + verifikasi. `codesign --deep` TIDAK cukup
   (tidak rekursif penuh).
-- Fix pengguna: `xattr -cr "/Applications/RS OmniClip.app"` atau klik kanan →
+- Fix pengguna: `xattr -cr "/Applications/RS OmniTools.app"` atau klik kanan →
   Open. Terverifikasi: app hasil build berjalan; app dalam DMG baru lolos
   `codesign --verify --deep --strict` (exit 0).
 
@@ -954,19 +954,19 @@ thumbnail/judul/deskripsi setelah selesai, UI jelek). Akar masalah & perbaikan:
     jalur utama ffbinaries sudah lintas-OS.
   - `paths.ts`/`net.ts`: sudah memakai API lintas-OS (`app.getPath`, `https`).
 - **Windows artifact DIPRODUKSI & DIUNGGAH (2026-08-13)**: `npm run build:win`
-  (`--x64`) → `dist/RS-OmniClip-1.2.0-x64-setup.exe` (NSIS) +
+  (`--x64`) → `dist/RS-OmniTools-1.2.0-x64-setup.exe` (NSIS) +
   `...-portable.exe` (portable) + `latest.yml`. Tervalidasi `file`: PE32
   Nullsoft Installer. Sudah diunggah ke release **v1.2.0**.
 
 ## Ringkasan
 
-RS OmniClip telah dimigrasi penuh dari ekspor Next.js ke arsitektur desktop
+RS OmniTools telah dimigrasi penuh dari ekspor Next.js ke arsitektur desktop
 **Electron-Vite (React + TypeScript)** dengan backend Node.js (FFmpeg + yt-dlp).
 Aplikasi berfungsi end-to-end dan telah di-push ke GitHub.
 
 ## Repositori
 
-- Repo: `https://github.com/dennsoe/rs-omniclip`
+- Repo: `https://github.com/dennsoe/rs-omnitools`
 - Branch: `main`
 - Commit: `47d3720` (inisialisasi), `c7d9a6c` (dokumentasi), `6133f9e`
   (audit B1–B15), lalu **PR #1 merged** — merge commit `fe530b5`
@@ -1109,9 +1109,9 @@ Aplikasi kini punya **mekanisme pembaruan 100% gratis** (tanpa biaya apa pun):
 
 - **Versi dinamis**: `package.json` naik ke **1.1.0**; versi lokal diambil dari
   `app.getVersion()` dan tampil di halaman **Tentang & Update** (kartu
-  "RS OmniClip v1.1.0" pada bagian "Versi, Pembaruan & Resource").
+  "RS OmniTools v1.1.0" pada bagian "Versi, Pembaruan & Resource").
 - **Cek update aplikasi**: main process memanggil
-  `GET https://api.github.com/repos/dennsoe/rs-omniclip/releases/latest`
+  `GET https://api.github.com/repos/dennsoe/rs-omnitools/releases/latest`
   (repo publik, **tanpa token**) → `tag_name` dibandingkan dengan versi lokal
   (`compareVersions`). Bila lebih baru → badge "Update tersedia" + tombol
   "Unduh Versi Baru" aktif. Tombol "Periksa Update" selalu tersedia.
@@ -1149,7 +1149,7 @@ Aplikasi kini punya **mekanisme pembaruan 100% gratis** (tanpa biaya apa pun):
   **"Bersihkan" di header "Antrean Video"** pada halaman Pembersih Video
   (hanya tampil saat ada file & tidak sedang memproses; memicu modal
   konfirmasi "Hapus Semua?").
-- **Versi "RS OmniClip v1.1.0" HANYA di halaman Tentang & Update** (kartu
+- **Versi "RS OmniTools v1.1.0" HANYA di halaman Tentang & Update** (kartu
   "Versi Aplikasi" pada bagian "Versi, Pembaruan & Resource") — footer
   sidebar yang menampilkan versi dihapus.
 
@@ -1174,7 +1174,7 @@ setelah konfirmasi, modal "Hapus Semua?" dan panel antrean tetap menumpuk.
 
 - Aplikasi dapat dijalankan dengan `npm run dev`.
 - Engine FFmpeg ter-provision end-to-end di
-  `~/Library/Application Support/rs-omniclip/bin/`:
+  `~/Library/Application Support/rs-omnitools/bin/`:
   - `ffmpeg` (~80 MB, ffmpeg 6.1-tessus, build evermeet.cx via ffbinaries-prebuilt)
   - `ffprobe` (~80 MB)
 - Di lingkungan dengan akses ffbinaries.com terbatas, provisioning memakai

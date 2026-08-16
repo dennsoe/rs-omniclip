@@ -1,7 +1,7 @@
-# Panduan Implementasi RS OmniClip (ACUAN UTAMA)
+# Panduan Implementasi RS OmniTools (ACUAN UTAMA)
 
 Dokumen ini adalah **satu-satunya acuan** untuk mengimplementasikan, mengubah,
-dan memverifikasi apa pun di RS OmniClip. Baca sebelum memulai pekerjaan dan
+dan memverifikasi apa pun di RS OmniTools. Baca sebelum memulai pekerjaan dan
 perbarui setiap ada keputusan baru.
 
 Tanggal pembuatan: 2026-08-13.
@@ -21,7 +21,7 @@ Tanggal pembuatan: 2026-08-13.
 7. **PUSH WAJIB UNSANDBOXED** — `git push` di VS Code WAJIB mode unsandboxed
    (sandbox memblokir `~/.config/gh/hosts.yml` → "Missing or invalid credentials").
 8. **SINKRONKAN SEMUA FILE + MEMORI** — Setiap perubahan: update kode terkait,
-   docs terkait, `docs/CURRENT_STATE.md`, dan memori (`/memories/repo/rs-omniclip.md`).
+   docs terkait, `docs/CURRENT_STATE.md`, dan memori (`/memories/repo/rs-omnitools.md`).
 
 ---
 
@@ -44,7 +44,7 @@ Renderer (src/) ──window.api──> Preload ──ipcMain──> Main (Node.
 | Kontrak `window.api` | `electron/preload/index.ts` ↔ `src/types/global.d.ts` ↔ `docs/IPC_CONTRACT.md` ↔ pemakaian di `src/` |
 | UI sidebar / halaman | `src/App.tsx` ↔ komponen terkait ↔ `docs/PRD.md` |
 | Versi/stack | `package.json` ↔ `docs/TECHNICAL_SPEC.md` |
-| Apa pun selesai | `docs/CURRENT_STATE.md` + `/memories/repo/rs-omniclip.md` + `README.md` |
+| Apa pun selesai | `docs/CURRENT_STATE.md` + `/memories/repo/rs-omnitools.md` + `README.md` |
 
 ## 4. Kontrak IPC (ringkas + cara menambah channel)
 

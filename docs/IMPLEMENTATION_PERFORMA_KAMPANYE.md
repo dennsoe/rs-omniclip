@@ -2,7 +2,7 @@
 
 > Dokumen ini adalah **acuan pengerjaan** untuk fitur besar: analisis performa
 > iklan Meta Ads vs komisi Shopee Affiliate (pencocokan tag otomatis + ROI +
-> AI advisor), disatukan ke dalam RS OmniClip sebagai menu baru.
+> AI advisor), disatukan ke dalam RS OmniTools sebagai menu baru.
 > Baca SELURUHNYA sebelum menulis kode. Update dokumen ini bila ada keputusan baru.
 > Tanggal: 2026-08-16. Branch basis: `main` (v1.4.2). Fitur baru → branch `feat:` → PR.
 >

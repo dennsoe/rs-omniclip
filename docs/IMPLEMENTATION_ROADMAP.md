@@ -1,4 +1,4 @@
-# Peta Jalan Implementasi (Roadmap) — RS OmniClip
+# Peta Jalan Implementasi (Roadmap) — RS OmniTools
 
 Versi: 1.0
 Tanggal: 2026-08-13
@@ -23,7 +23,7 @@ Legenda status: `[x]` selesai, `[ ]` belum.
 - [x] Pemotongan lossless inline.
 - [x] Smoke test mesin (8/8 lolos).
 - [x] Dokumentasi lengkap di `docs/`.
-- [x] Push ke GitHub (`dennsoe/rs-omniclip`, branch `main`).
+- [x] Push ke GitHub (`dennsoe/rs-omnitools`, branch `main`).
 
 ## Fase 2 — Penyempurnaan Engine (SEBAGIAN)
 
