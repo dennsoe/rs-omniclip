@@ -242,8 +242,8 @@ tidak punya jalur nyata.
 ### 4.8 Pembaruan Aplikasi (`update:check` / `update:open`)
 
 - `checkForUpdate()` (invoke) → proses utama memanggil
-  `GET api.github.com/repos/dennsoe/rs-omniclip/releases/latest` (repo publik,
-  tanpa token; `User-Agent: RS-OmniClip`; timeout 15 dtk). Mengembalikan
+  `GET api.github.com/repos/dennsoe/rs-omnitools/releases/latest` (repo publik,
+  tanpa token; `User-Agent: RS-OmniTools`; timeout 15 dtk). Mengembalikan
   `UpdateInfo { current, latest, hasUpdate, url, notes }`. Bila API gagal/404
   (repo belum publik / belum ada rilis), `latest` = `null` & `hasUpdate` =
   `false` (aplikasi tetap berjalan normal).

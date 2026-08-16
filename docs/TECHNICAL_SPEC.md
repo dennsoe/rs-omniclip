@@ -1,11 +1,11 @@
-# Spesifikasi Teknis — RS OmniClip
+# Spesifikasi Teknis — RS OmniTools
 
 Versi: 1.0
 Tanggal: 2026-08-13
 
 ## 1. Arsitektur Aplikasi
 
-RS OmniClip adalah aplikasi desktop **Electron-Vite** dengan tiga proses:
+RS OmniTools adalah aplikasi desktop **Electron-Vite** dengan tiga proses:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -150,7 +150,7 @@ Hasil build ke `out/main/index.js`, `out/preload/index.js`,
 8. **Metadata** `title/thumbnail/description/filePath` dari baris `__RSMETA__`
    (JSON setelah `after_move`) disertakan pada event sukses.
 9. Selesai semua → `download:complete { total, success, failed }`.
-10. Output: `~/Downloads/RS-OmniClip/Unduhan/`; "Buka folder" via `folder:reveal`.
+10. Output: `~/Downloads/RS-OmniTools/Unduhan/`; "Buka folder" via `folder:reveal`.
 
 ### 8.2 Ambil Daftar Akun / Halaman
 

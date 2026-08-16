@@ -1,4 +1,4 @@
-# Strategi Pengujian — RS OmniClip
+# Strategi Pengujian — RS OmniTools
 
 ## 1. Tingkatan Pengujian
 
@@ -91,7 +91,7 @@ Dan pastikan panel Problems di VS Code tidak menunjukkan error
   header-bar label), aksen biru, tombol pill dengan shadow.
 - [ ] Tempel beberapa URL (satu per baris) → "Unduh Semua (N)" → progress tampil
   per URL; ringkasan akhir muncul.
-- [ ] Selesai → status "Selesai"; file ada di `~/Downloads/RS-OmniClip/Unduhan/`.
+- [ ] Selesai → status "Selesai"; file ada di `~/Downloads/RS-OmniTools/Unduhan/`.
 - [ ] URL tidak valid / akun privat → status "Gagal" + pesan error informatif.
 - [ ] Mode "Akun / Halaman": masukkan tautan akun/halaman (mis.
   `https://www.youtube.com/@Channel`) → "Ambil Daftar" → daftar video muncul.

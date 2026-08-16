@@ -59,7 +59,7 @@ async function drain(): Promise<void> {
           job.options
         )
       } catch (err) {
-        console.error('[RS OmniClip] Batch unduhan gagal (queue):', err)
+        console.error('[RS OmniTools] Batch unduhan gagal (queue):', err)
         job.onComplete?.({ total: job.urls.length, success: 0, failed: job.urls.length })
       }
     }

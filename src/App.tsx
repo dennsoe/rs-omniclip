@@ -6,7 +6,6 @@ import {
   UploadCloud,
   ShieldCheck,
   MonitorUp,
-  Clapperboard,
   PlayCircle,
   Trash2,
   Sun,
@@ -87,6 +86,7 @@ import FloatingSelect, { type SelectOption } from '@components/ui/FloatingSelect
 import { FloatingInput, FloatingTextarea } from '@components/ui/FloatingField'
 import Toggle from '@components/ui/Toggle'
 import CampaignView from '@/views/CampaignView'
+import rsomniLogo from '@/assets/rsomni.png'
 
 /** Satu item antrean unduhan di renderer — kontrak onDownloadProgress + asal tab.
  *  `source` memisahkan progres per tab: Banyak Link vs Akun/Halaman. */
@@ -995,15 +995,17 @@ export default function App(): React.ReactElement {
           {/* Brand header — pt-12 agar tidak menabrak traffic light macOS (x16-68, y16-28) */}
           <div className="flex items-center justify-between pt-12 px-5 pb-4">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25 shrink-0">
-                <Clapperboard className="w-5 h-5 text-white" />
-              </div>
+              <img
+                src={rsomniLogo}
+                alt="RS OmniTools"
+                className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-blue-500/25 shrink-0"
+              />
               <div className="flex flex-col leading-tight min-w-0">
                 <span className="font-bold text-sm tracking-wide text-slate-800 dark:text-slate-100 truncate">
-                  RS OMNICLIP
+                  RS OMNITOOLS
                 </span>
                 <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
-                  Video Processing Studio
+                  Alat Serbaguna
                 </span>
               </div>
             </div>
@@ -1313,7 +1315,7 @@ export default function App(): React.ReactElement {
                         <UploadCloud className="w-12 h-12" />
                       </div>
                       <h2 className="text-xl sm:text-2xl font-semibold text-slate-800 dark:text-slate-100 transition-colors text-center px-4">
-                        Tarik &amp; Lepas Video ke RS OmniClip
+                        Tarik &amp; Lepas Video ke RS OmniTools
                       </h2>
                       <p className="text-slate-500 dark:text-slate-400 mt-2 transition-colors">
                         Atau klik untuk menelusuri file .mp4, .mov
@@ -1853,7 +1855,7 @@ export default function App(): React.ReactElement {
                     </div>
                     <div className="min-w-0">
                       <h3 className="font-semibold text-slate-800 dark:text-slate-100 text-xs sm:text-sm leading-tight">
-                        RS OmniClip{' '}
+                        RS OmniTools{' '}
                         <span className="text-blue-600 dark:text-blue-400">v{updateInfo?.current ?? ''}</span>
                       </h3>
                       <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">

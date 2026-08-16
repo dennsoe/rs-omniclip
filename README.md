@@ -1,4 +1,4 @@
-# RS OmniClip
+# RS OmniTools
 
 **Super App desktop** untuk pemrosesan massal video pendek (< 1 menit) yang dibangun
 dengan **Electron-Vite (React + TypeScript)** dan mesin lokal **Node.js + FFmpeg + yt-dlp**.
@@ -142,7 +142,7 @@ Auto-Watcher (auto-clean privasi).
 ## Provisioning Binary (Pertama Kali Dijalankan)
 
 Mesin otomatis mengunduh binary saat pertama kali dijalankan (butuh koneksi internet)
-ke folder data aplikasi (`~/Library/Application Support/rs-omniclip/bin`):
+ke folder data aplikasi (`~/Library/Application Support/rs-omnitools/bin`):
 
 1. **FFmpeg/FFprobe** via `ffbinaries` (ffbinaries.com). Jika API tidak terjangkau atau
    ekstraksi tidak lengkap, mesin **fallback ke rilis GitHub langsung**
@@ -171,10 +171,10 @@ node scripts/engine-smoke-test.mjs   # smoke test mesin (verifikasi preset FFmpe
 
 ## Pembaruan (Gratis)
 
-RS OmniClip memakai mekanisme pembaruan **tanpa biaya** (repo publik + GitHub):
+RS OmniTools memakai mekanisme pembaruan **tanpa biaya** (repo publik + GitHub):
 
 - **Cek versi terbaru**: aplikasi membaca rilis terbaru dari
-  `api.github.com/repos/dennsoe/rs-omniclip/releases/latest` (tanpa token).
+  `api.github.com/repos/dennsoe/rs-omnitools/releases/latest` (tanpa token).
 - **Unduh manual (macOS)**: tombol "Unduh Versi Baru" membuka halaman rilis
   GitHub; user mengunduh dmg/zip dan membukanya sendiri — tidak butuh
   Developer ID/notarisasi.
@@ -194,10 +194,10 @@ diunduh dari browser, macOS menambahkan atribut *quarantine* dan bisa
 memblokir. Jika muncul pesan seperti *"is damaged and can't be opened"* atau
 *"unidentified developer"*, lakukan salah satu:
 
-1. **Klik kanan** pada `RS OmniClip.app` → **Open** → pilih **Open** (sekali).
+1. **Klik kanan** pada `RS OmniTools.app` → **Open** → pilih **Open** (sekali).
 2. Atau hapus atribut quarantine di Terminal:
    ```bash
-   xattr -cr "/Applications/RS OmniClip.app"
+   xattr -cr "/Applications/RS OmniTools.app"
    ```
    lalu buka aplikasi seperti biasa.
 
@@ -207,7 +207,7 @@ memblokir. Jika muncul pesan seperti *"is damaged and can't be opened"* atau
 ## Catatan Keluaran
 
 - Hasil batch: `[CLEANED] - YYYY-MM-DD/` di folder berkas sumber pertama.
-- Hasil unduhan: `~/Downloads/RS-OmniClip/Unduhan/`.
+- Hasil unduhan: `~/Downloads/RS-OmniTools/Unduhan/`.
 - Folder `[CLEANED] - YYYY-MM-DD` dan `Unduhan` tidak pernah menimpa berkas asli.
 
 ## Dokumentasi

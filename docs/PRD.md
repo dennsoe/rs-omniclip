@@ -1,4 +1,4 @@
-# Product Requirements Document (PRD) — RS OmniClip
+# Product Requirements Document (PRD) — RS OmniTools
 
 Versi: 1.0
 Tanggal: 2026-08-13
@@ -6,7 +6,7 @@ Status: Aktif (dipelihara)
 
 ## 1. Ringkasan Produk
 
-**RS OmniClip** adalah aplikasi desktop (Electron) untuk pemrosesan massal video
+**RS OmniTools** adalah aplikasi desktop (Electron) untuk pemrosesan massal video
 pendek (< 1 menit) yang digunakan oleh tim internal. Aplikasi menggabungkan
 beberapa alat video umum menjadi satu "Super App": pembersih metadata, peningkat
 video (HD/FullHD/4K), pengunduh universal, pemotong inline, arsip kualitas maks,
@@ -76,7 +76,7 @@ data yang dikirim ke server.
 - **RF-14** Sistem menampilkan antrean unduhan dengan persentase dan status
   (Mengunduh / Selesai / Gagal) per URL, plus ringkasan akhir
   (total / sukses / gagal).
-- **RF-15** Hasil unduhan disimpan ke `~/Downloads/RS-OmniClip/Unduhan/`.
+- **RF-15** Hasil unduhan disimpan ke `~/Downloads/RS-OmniTools/Unduhan/`.
 - **RF-15a** Mode "Akun / Halaman": pengguna memasukkan tautan **akun/halaman**
   (YouTube channel/@user, TikTok @user, Instagram username, dll) lalu "Ambil
   Daftar"; sistem menampilkan daftar video (judul + tautan) tanpa mengunduh.

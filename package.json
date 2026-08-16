@@ -1,7 +1,7 @@
 {
-  "name": "rs-omniclip",
+  "name": "rs-omnitools",
   "version": "1.5.0",
-  "description": "RS OmniClip - Super App desktop untuk pemrosesan massal video pendek: pembersih metadata, peningkat video, pengunduh universal, pemotong, watermark, dan kompresor WhatsApp.",
+  "description": "RS OmniTools - Super App desktop: pemrosesan massal video pendek (pembersih metadata, peningkat, pengunduh, pemotong, watermark, kompresor WhatsApp) + analisis performa kampanye Meta Ads vs Shopee Affiliate.",
   "main": "./out/main/index.js",
   "author": "RS STUDIO",
   "license": "UNLICENSED",
@@ -62,8 +62,8 @@
     "vite": "^6.0.0"
   },
   "build": {
-    "appId": "id.rsstudio.omniclip",
-    "productName": "RS OmniClip",
+    "appId": "id.rsstudio.omnitools",
+    "productName": "RS OmniTools",
     "directories": {
       "output": "dist"
     },
@@ -76,26 +76,26 @@
         "dmg",
         "zip"
       ],
-      "artifactName": "RS-OmniClip-${version}-${arch}.${ext}"
+      "artifactName": "RS-OmniTools-${version}-${arch}.${ext}"
     },
     "win": {
       "target": [
         "nsis",
         "portable"
       ],
-      "artifactName": "RS-OmniClip-${version}-${arch}.${ext}"
+      "artifactName": "RS-OmniTools-${version}-${arch}.${ext}"
     },
     "nsis": {
-      "artifactName": "RS-OmniClip-${version}-${arch}-setup.${ext}"
+      "artifactName": "RS-OmniTools-${version}-${arch}-setup.${ext}"
     },
     "portable": {
-      "artifactName": "RS-OmniClip-${version}-${arch}-portable.${ext}"
+      "artifactName": "RS-OmniTools-${version}-${arch}-portable.${ext}"
     },
     "afterSign": "scripts/afterSign.js",
     "publish": {
       "provider": "github",
       "owner": "dennsoe",
-      "repo": "rs-omniclip"
+      "repo": "rs-omnitools"
     }
   }
 }

@@ -9,7 +9,7 @@ export function getEngineBinDir(): string {
 
 /** Folder akar hasil keluaran unduhan. */
 export function getOutputBaseDir(): string {
-  return path.join(app.getPath('downloads'), 'RS-OmniClip')
+  return path.join(app.getPath('downloads'), 'RS-OmniTools')
 }
 
 /** Folder khusus hasil unduhan yt-dlp. */

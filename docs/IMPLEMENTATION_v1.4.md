@@ -42,7 +42,7 @@
 
 ### electron/main/engine/paths.ts
 - `getEngineBinDir()` → `userData/bin`
-- `getOutputBaseDir()` → `~/Downloads/RS-OmniClip`
+- `getOutputBaseDir()` → `~/Downloads/RS-OmniTools`
 - `getDownloadDir()` → `.../Unduhan`
 - `formatDateKey(date)` → `YYYY-MM-DD`
 - `createOutputFolderForBatch(firstSourcePath)` → `[CLEANED] - YYYY-MM-DD` di folder sumber.
@@ -322,7 +322,7 @@ export async function checkAccountOnce(acc: WatchedAccount): Promise<{ newItems:
 - **STALE MAIN PROCESS**: setiap ubah `electron/main/**` ATAU tambah IPC/protocol → **restart `npm run dev`** (electron-vite TIDAK hot-reload main). Gejala: "No handler registered for X".
 - **CSP**: video via `media://` TIDAK akan diputar bila `media-src` tidak punya `media:` (readyState 0 tanpa error). Sama pola dgn fix `https:` sebelumnya.
 - **CUSTOM SCHEME**: `protocol.registerSchemesAsPrivileged` harus dipanggil SEBELUM `app.whenReady()`.
-- **Launch Electron**: env wrapper punya `ELECTRON_RUN_AS_NODE=1` → HARUS `env -u ELECTRON_RUN_AS_NODE npx electron . --remote-debugging-port=9222 --user-data-dir="$TMPDIR/rs-omniclip-cdp"`; butuh `requestUnsandboxedExecution=true` (sandbox blokir SingletonLock/Mach).
+- **Launch Electron**: env wrapper punya `ELECTRON_RUN_AS_NODE=1` → HARUS `env -u ELECTRON_RUN_AS_NODE npx electron . --remote-debugging-port=9222 --user-data-dir="$TMPDIR/rs-omnitools-cdp"`; butuh `requestUnsandboxedExecution=true` (sandbox blokir SingletonLock/Mach).
 - **Background tab**: tab browser tak terlihat TIDAK mengirim event fokus → verifikasi interaksi di window Electron nyata (CDP), bukan tab browser.
 - **Mock E2E**: id/url mock harus < 2^53 (presisi JS).
 - **localStorage vs config main**: JANGAN simpan kredensial proxy di localStorage. Gunakan config.ts.

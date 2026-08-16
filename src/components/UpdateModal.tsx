@@ -54,7 +54,7 @@ export default function UpdateModal({
                   Versi Baru Tersedia
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  RS OmniClip v{info.current} → v{info.latest}
+                  RS OmniTools v{info.current} → v{info.latest}
                 </p>
               </div>
               <button

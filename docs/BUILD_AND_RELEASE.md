@@ -1,4 +1,4 @@
-# Panduan Menjalankan, Membangun, dan Merilis — RS OmniClip
+# Panduan Menjalankan, Membangun, dan Merilis — RS OmniTools
 
 ## 1. Prasyarat
 
@@ -19,7 +19,7 @@ npm run dev        # jalankan Electron (dev server + hot reload)
 ```
 
 Saat pertama kali, aplikasi menampilkan layar "Menyiapkan Mesin Video..." sambil
-mengunduh FFmpeg ke `~/Library/Application Support/rs-omniclip/bin/`.
+mengunduh FFmpeg ke `~/Library/Application Support/rs-omnitools/bin/`.
 
 ### Port dev server
 
@@ -60,12 +60,12 @@ npm run build:mac
 
 Konfigurasi packaging ada di field `build` pada `package.json`:
 
-- `appId`: `id.rsstudio.omniclip`
-- `productName`: `RS OmniClip`
+- `appId`: `id.rsstudio.omnitools`
+- `productName`: `RS OmniTools`
 - Target: `dmg` + `zip`
-- `artifactName`: `RS-OmniClip-<version>-<arch>.<ext>`
+- `artifactName`: `RS-OmniTools-<version>-<arch>.<ext>`
 - Output: folder `dist/`
-- `publish`: `{ provider: "github", owner: "dennsoe", repo: "rs-omniclip" }`
+- `publish`: `{ provider: "github", owner: "dennsoe", repo: "rs-omnitools" }`
   (untuk `electron-builder --publish` mengunggah ke GitHub Release)
 - `afterSign`: `scripts/afterSign.js` — menandatangani ulang bundle secara
   **adhoc** (urutan dalam-ke-luar: dylib → framework → helper .app → app)
@@ -85,8 +85,8 @@ Konfigurasi packaging ada di field `build` pada `package.json`:
 Aplikasi TIDAK ditandatangani Developer ID (gratis). Saat pertama diunduh
 via browser, macOS menambah atribut *quarantine* dan bisa memblokir. Solusi:
 
-1. Klik kanan `RS OmniClip.app` → **Open** → **Open** (sekali saja).
-2. Atau `xattr -cr "/Applications/RS OmniClip.app"` lalu buka kembali.
+1. Klik kanan `RS OmniTools.app` → **Open** → **Open** (sekali saja).
+2. Atau `xattr -cr "/Applications/RS OmniTools.app"` lalu buka kembali.
 
 Signing yang sudah benar (setelah `scripts/afterSign.js`) memastikan error
 "damaged"/"internal error" tidak muncul lagi — cukup workaround quarantine
@@ -128,9 +128,9 @@ npm run build:win        # = electron-builder --win --x64
 Konfigurasi di `package.json`:
 
 - `build.win.target`: `nsis` (installer `.exe`) + `portable` (single-file `.exe`).
-- `build.nsis.artifactName`: `RS-OmniClip-<version>-<arch>-setup.<ext>`
+- `build.nsis.artifactName`: `RS-OmniTools-<version>-<arch>-setup.<ext>`
   (installer).
-- `build.portable.artifactName`: `RS-OmniClip-<version>-<arch>-portable.<ext>`.
+- `build.portable.artifactName`: `RS-OmniTools-<version>-<arch>-portable.<ext>`.
 - Hook `afterSign` otomatis dilewati bila target bukan macOS (guard
   `electronPlatformName !== 'darwin'`), jadi tidak perlu `codesign`.
 - Arsitektur x64 ditetapkan via flag CLI `--x64` (properti `win.arch` TIDAK
@@ -153,7 +153,7 @@ Konfigurasi di `package.json`:
 - Engine lintas-OS: yt-dlp diunduh sebagai `yt-dlp.exe`, pencari perintah
   `where`, `procmon` memakai PowerShell, fallback FFmpeg memakai arsip
   `win-64`.
-- Folder binary: `%APPDATA%/rs-omniclip/bin/`; hasil unduhan di folder
+- Folder binary: `%APPDATA%/rs-omnitools/bin/`; hasil unduhan di folder
   Downloads pengguna.
 
 ## 5d. Mekanisme Pembaruan Aplikasi (Gratis)
@@ -171,16 +171,16 @@ Konfigurasi di `package.json`:
 
 | Data | Lokasi |
 |---|---|
-| Binary engine (ffmpeg, ffprobe, yt-dlp) | `~/Library/Application Support/rs-omniclip/bin/` |
+| Binary engine (ffmpeg, ffprobe, yt-dlp) | `~/Library/Application Support/rs-omnitools/bin/` |
 | Hasil batch (folder `[CLEANED] - YYYY-MM-DD`) | di samping berkas sumber |
-| Hasil unduhan | `~/Downloads/RS-OmniClip/Unduhan/` |
+| Hasil unduhan | `~/Downloads/RS-OmniTools/Unduhan/` |
 
 ## 7. Menghapus Data Aplikasi (Reset)
 
 Untuk mengatur ulang (mis. memaksa unduh binary ulang):
 
 ```bash
-rm -rf ~/Library/"Application Support"/rs-omniclip
+rm -rf ~/Library/"Application Support"/rs-omnitools
 ```
 
 ## 8. Troubleshooting Cepat
@@ -192,5 +192,5 @@ rm -rf ~/Library/"Application Support"/rs-omniclip
 | Unduhan video gagal | yt-dlp belum siap / URL tidak didukung | Cek internet; pastikan URL valid |
 | Port 5173 terpakai | Proses dev lain | Hentikan proses lain lalu `npm run dev` |
 | Error editor di `electron.vite.config.ts` | tsserver belum pakai TS workspace | Pastikan `.vscode/settings.json` ada (`typescript.tsdk`) lalu reload window |
-| "RS OmniClip is damaged and can't be opened" | App diunduh browser (quarantine) | `xattr -cr "/Applications/RS OmniClip.app"` atau klik kanan → Open |
+| "RS OmniTools is damaged and can't be opened" | App diunduh browser (quarantine) | `xattr -cr "/Applications/RS OmniTools.app"` atau klik kanan → Open |
 | `spctl`/launch error "internal error in Code Signing subsystem" | Signature adhoc tidak konsisten | Build ulang (afterSign) atau sign ulang adhoc seluruh bundle |

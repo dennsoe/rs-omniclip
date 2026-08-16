@@ -1,6 +1,6 @@
-# Dokumentasi RS OmniClip
+# Dokumentasi RS OmniTools
 
-Pusat dokumentasi lengkap untuk aplikasi desktop **RS OmniClip** — Super App
+Pusat dokumentasi lengkap untuk aplikasi desktop **RS OmniTools** — Super App
 pemrosesan massal video pendek berbasis Electron-Vite (React + TypeScript).
 
 ## Daftar Dokumen
@@ -33,4 +33,4 @@ pemrosesan massal video pendek berbasis Electron-Vite (React + TypeScript).
 - Build produksi: `npm run build`
 - Paket macOS: `npm run build:mac`
 - Smoke test mesin: `node scripts/engine-smoke-test.mjs`
-- Repo: `https://github.com/dennsoe/rs-omniclip` (branch `main`)
+- Repo: `https://github.com/dennsoe/rs-omnitools` (branch `main`)
