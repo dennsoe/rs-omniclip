@@ -3,7 +3,16 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 
-## FITUR BARU: Performa Kampanye (SELESAI DIIMPLEMENTASI — BELUM DIRILIS)
+## Status Rilis v1.5.0 (DALAM PROSES — build artefak & upload)
+
+- **Branch**: `release/v1.5.0` (dari `main`). **Versi**: `1.5.0`.
+- **PR #30** ke `main` **MERGED** (merge commit `53ce562`, 2026-08-16) — fitur
+  Performa Kampanye lengkap.
+- **Release notes**: `release-notes/RELEASE_NOTES_v1.5.0.md`.
+- **NEXT**: build artefak (`npm run build:mac` + `build:win`), tag `v1.5.0`,
+  GitHub Release + 4 artefak, PR release ke main.
+
+## FITUR BARU: Performa Kampanye (SELESAI — MERGED via PR #30)
 
 - **Acuan pengerjaan**: `docs/IMPLEMENTATION_PERFORMA_KAMPANYE.md` (9 fase).
 - **Menu sidebar baru "Performa Kampanye"** (`activeMenu: 'performa'`, ikon
@@ -24,7 +33,7 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
   `electron/preload/index.ts`. Deps baru: `papaparse`, `recharts`.
 - **Catatan**: AI memakai `GEMINI_API_KEY` di Pengaturan (config main, bukan login);
   tanpa kunci, seluruh tabel/grafik tetap berfungsi (AI graceful error).
-- **BELUM**: commit/push/PR/rilis. Menunggu instruksi user.
+- **Status**: MERGED ke `main` (PR #30, merge commit `53ce562`); rilis v1.5.0 sedang diproses.
 
 ## Status Rilis v1.4.2 (SELESAI — RELEASE v1.4.2 DIPUBLIKASI)
 
