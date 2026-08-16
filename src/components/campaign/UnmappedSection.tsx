@@ -16,7 +16,7 @@ export default function UnmappedSection({
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {/* Iklan Meta tanpa tag */}
-      <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800/60">
+      <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800/60">
         <div className="flex shrink-0 items-center gap-2.5 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
             <Megaphone className="h-4 w-4" />
@@ -28,20 +28,20 @@ export default function UnmappedSection({
             </p>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div>
           {unmappedAds.length === 0 ? (
             <Empty text="Semua iklan Meta berhasil dipetakan ke tag Shopee." />
           ) : (
             <table className="w-full table-fixed text-left">
               <thead>
                 <tr className="bg-slate-50/95 backdrop-blur dark:bg-slate-900/95">
-                  <th className="sticky top-0 z-10 w-[55%] bg-slate-50/95 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 backdrop-blur dark:bg-slate-900/95 dark:text-slate-500">
+                  <th className="w-[55%] bg-slate-50/95 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-900/95 dark:text-slate-500">
                     Nama Iklan
                   </th>
-                  <th className="sticky top-0 z-10 w-[20%] bg-slate-50/95 px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 backdrop-blur dark:bg-slate-900/95 dark:text-slate-500">
+                  <th className="w-[20%] bg-slate-50/95 px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-900/95 dark:text-slate-500">
                     Spend
                   </th>
-                  <th className="sticky top-0 z-10 w-[25%] bg-slate-50/95 px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 backdrop-blur dark:bg-slate-900/95 dark:text-slate-500">
+                  <th className="w-[25%] bg-slate-50/95 px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-900/95 dark:text-slate-500">
                     Klik
                   </th>
                 </tr>
@@ -67,7 +67,7 @@ export default function UnmappedSection({
       </div>
 
       {/* Pesanan Shopee organik / tanpa iklan */}
-      <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800/60">
+      <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800/60">
         <div className="flex shrink-0 items-center gap-2.5 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-slate-900/60 dark:text-blue-400">
             <PackageX className="h-4 w-4" />
@@ -77,23 +77,23 @@ export default function UnmappedSection({
             <p className="text-[11px] text-slate-400 dark:text-slate-500">{unmappedOrders.length} pesanan tidak terpetakan ke kampanye</p>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div>
           {unmappedOrders.length === 0 ? (
             <Empty text="Semua pesanan Shopee terpetakan ke kampanye iklan." />
           ) : (
             <table className="w-full table-fixed text-left">
               <thead>
                 <tr className="bg-slate-50/95 backdrop-blur dark:bg-slate-900/95">
-                  <th className="sticky top-0 z-10 w-[40%] bg-slate-50/95 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 backdrop-blur dark:bg-slate-900/95 dark:text-slate-500">
+                  <th className="w-[40%] bg-slate-50/95 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-900/95 dark:text-slate-500">
                     Produk
                   </th>
-                  <th className="sticky top-0 z-10 w-[20%] bg-slate-50/95 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 backdrop-blur dark:bg-slate-900/95 dark:text-slate-500">
+                  <th className="w-[20%] bg-slate-50/95 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-900/95 dark:text-slate-500">
                     Status
                   </th>
-                  <th className="sticky top-0 z-10 w-[25%] bg-slate-50/95 px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 backdrop-blur dark:bg-slate-900/95 dark:text-slate-500">
+                  <th className="w-[25%] bg-slate-50/95 px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-900/95 dark:text-slate-500">
                     Komisi
                   </th>
-                  <th className="sticky top-0 z-10 w-[15%] bg-slate-50/95 px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 backdrop-blur dark:bg-slate-900/95 dark:text-slate-500">
+                  <th className="w-[15%] bg-slate-50/95 px-4 py-2 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:bg-slate-900/95 dark:text-slate-500">
                     Tag
                   </th>
                 </tr>

@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import { motion } from 'motion/react'
 import {
   BarChart,
   Bar,
@@ -14,7 +15,7 @@ import {
 } from 'recharts'
 import { Calendar, TrendingUp, TrendingDown, ChevronDown, ChevronUp, Clock, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import type { MappedCampaign, ShopeeAffiliateRow, DailyPerformanceRow } from '@lib/campaign/types'
-import { formatIDR } from '@lib/campaign/format'
+import { formatIDR, formatDateFullID } from '@lib/campaign/format'
 
 const STATUS_COLORS: Record<string, string> = {
   Tertunda: '#f59e0b',
@@ -291,7 +292,7 @@ export default function CampaignCharts({
                             <span className="text-slate-300 dark:text-slate-600">
                               {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                             </span>
-                            {new Date(row.date).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                            {formatDateFullID(row.date)}
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-right font-mono text-xs tabular-nums text-slate-600 dark:text-slate-300">{formatIDR(row.metaSpend)}</td>
@@ -322,7 +323,12 @@ export default function CampaignCharts({
                       {isExpanded && row.hourlyPerformance && row.hourlyPerformance.length > 0 && (
                         <tr className="bg-slate-50/60 dark:bg-slate-900/30">
                           <td colSpan={8} className="px-4 py-3">
-                            <div className="space-y-2 border-l-2 border-blue-500 pl-4">
+                            <motion.div
+                              initial={{ opacity: 0, y: -4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="space-y-2 border-l-2 border-blue-500 pl-4"
+                            >
                               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300">
                                 <Clock className="h-4 w-4 text-blue-500" /> Rincian Transaksi per Jam
                               </div>
@@ -358,7 +364,7 @@ export default function CampaignCharts({
                                   })}
                                 </tbody>
                               </table>
-                            </div>
+                            </motion.div>
                           </td>
                         </tr>
                       )}

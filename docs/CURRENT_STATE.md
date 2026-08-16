@@ -19,6 +19,354 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 - Ikon aplikasi kustom terpasang (`icon.icns` 1,5MB di bundle macOS; ikon juga
   dipakai installer Windows) — bukan lagi ikon default Electron.
 
+## Perubahan Terbaru (2026-08-16 — MODAL SETTINGS: PORTAL KE BODY + BUG WIZARD)
+
+**Permintaan user: saat modal Pengaturan Performa Kampanye muncul, sidebar
+tidak terblur/teredup. Audit forensik ketat → 2 bug ditemukan & diperbaiki.**
+
+- **Bug 1 — sidebar tidak terblur (akar masalah stacking context)**:
+  - Bukti CDP Electron: overlay modal `position:fixed inset-0` GEOMETRIS
+    menutupi seluruh viewport, TAPI `elementFromPoint(150,300)` (area sidebar)
+    mengembalikan menu sidebar → sidebar mengecat DI ATAS overlay.
+  - Akar: shell CampaignView `z-10` membuat stacking context; modal `z-70`
+    BERADA DI DALAM context itu → efektif z-10 < sidebar `z-20` (root context)
+    → sidebar menang. (Modal lain — Confirm/Update/Preview — dirender di level
+    App, jadi benar; hanya modal dalam-view yang kena.)
+  - FIX (`CampaignView.tsx`): modal di-PORTAL ke `document.body` (`createPortal`)
+    → overlay langsung di root context, `z-70` > sidebar `z-20` → sidebar kini
+    terblur + teredup. Pola sama dgn `CampaignDateRange`/`FloatingSelect`.
+  - Verifikasi CDP: parent overlay = BODY, `elementFromPoint` sidebar = overlay.
+- **Bug 2 — tombol Settings di wizard tidak menampilkan modal**:
+  - Akar: modal hanya dirender di render DASHBOARD, sementara wizard punya
+    tombol `setShowSettings(true)` → klik di wizard tidak menampilkan apa-apa.
+  - Bukti CDP: wizard tampil, gear ada, `modalAppearsInWizard:false`.
+  - FIX: modal diekstrak jadi `const settingsModal = showSettings &&
+    createPortal(...)` → dirender di return WIZARD dan DASHBOARD.
+  - Verifikasi CDP: wizard `open:true coversSidebar:true`, dashboard
+    `open:true coversSidebar:true`, keduanya `parentIsBody:true`.
+- **Audit menyeluruh lain**: get_errors bersih, typecheck/lint/build PASS, 0
+  error/warning console (reload + navigasi + buka modal), tidak ada
+  TODO/FIXME/console.log/@ts-ignore/as any, hanya 1 elemen `fixed` di views
+  (sudah diperbaiki), `<div>` balance 54/54. Komponen CampaignTable/
+  UnmappedSection/DiagnosticsPanel/format.ts ditinjau — solid.
+- Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — TABEL AUTO-RESIZE + ANIMASI ACCORDION)
+
+**Permintaan user: tabel harus menyesuaikan (auto-resize) mengikuti isi — tidak
+dikunci tinggi maksimal; tabel panjang tidak boleh "pendek". Accordion diberi
+efek & animasi. Semua tabel super responsive.**
+
+- **Hapus tinggi terkunci** (`CampaignView.tsx`): wrapper `h-[480px]`
+  (CampaignTable) & `h-[520px]` (AiAdvisor) DIHAPUS → konten tab natural.
+- **CampaignTable / UnmappedSection** (`CampaignTable.tsx`,
+  `UnmappedSection.tsx`): hapus pola scroll-internal (`h-full` +
+  `min-h-0 flex-1 overflow-y-auto`) → tabel natural-height, SEMUA baris tampil,
+  halaman yang scroll (auto-resize). Hapus `sticky top-0 z-10` pada thead (agar
+  tidak bentrok dengan strip tab sticky di page-scroll).
+- **CampaignCharts (Laporan Kinerja Harian)**: sudah natural-height; thead
+  non-sticky; row expand tanggal tetap tumbuh menyesuaikan isi.
+- **AiAdvisor**: wrapper `h-[520px]` dihapus → grid `h-full` jadi natural;
+  area chat tumbuh mengikuti pesan (page scroll).
+- **Animasi accordion**:
+  - `DiagnosticsPanel`: konten dibungkus `AnimatePresence` + `motion.div`
+    `height:0 → auto` (0.3s, ease) saat buka/tutup + `overflow-hidden`;
+    chevron kini `ChevronDown` dengan rotasi 0°→180°.
+  - Row-expand `CampaignTable` (detail kampanye) & `CampaignCharts` (rincian
+    per jam): `motion.div` fade + slide (opacity 0→1, y -4→0, 0.2s).
+- **Audit CDP Electron**: CampaignTable `hasInternalScroll:false`,
+  `bodyOverflow:visible`, 5 baris tampil semua, tinggi kartu alami (451px —
+  tidak terkunci 480px); accordion buka 407px → tutup unmount (animasi exit);
+  page scrollH 1572 (halaman tumbuh); 0 error/warning console; modal & blur
+  sidebar tetap bekerja.
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS.
+  Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — KARTU FILTER STATUS SUPER RESPONSIVE)
+
+**Permintaan user: 3 kartu filter status pesanan harus responsive — ukuran
+menyesuaikan, super responsive.**
+
+- **Akar masalah**: grid status `grid-cols-1 sm:grid-cols-2 md:grid-cols-3
+  lg:grid-cols-4` → dengan 3 status di layar lebar tersisa 1 kolom kosong
+  (kartu tidak mengisi lebar penuh).
+- **FIX** (`CampaignView.tsx`):
+  - Grid → **`grid-cols-[repeat(auto-fit,minmax(170px,1fr))]`** — kartu otomatis
+    menyesuaikan lebar (isi penuh, tanpa kolom kosong) & membungkus rapi di
+    semua ukuran layar (1 kolom → 3 kolom sesuai ruang).
+  - Konten kartu responsif: footer `gap-2`, jumlah pesanan `shrink-0`, komisi
+    `min-w-0 truncate` (angka panjang tidak meluber).
+  - Baris aksi (Pilih Semua / Selesai Saja) `flex flex-wrap` — membungkus di
+    layar sempit.
+- **Audit CDP Electron** (viewport 400/640/900/1280): `fillsWidth:true` di
+  semua lebar — kartu 323px (1 kolom) / 176px (3 kolom) / 170px / 297px, selalu
+  mengisi penuh kontainer tanpa kolom kosong; baris menyesuaikan.
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS.
+  Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — SEMBUNYIKAN SPINNER INPUT ANGKA)
+
+**Permintaan user: hilangkan tombol naik/turun (panah tambah/kurang angka)
+bawaan browser pada SEMUA input angka.**
+
+- **FIX** (`src/assets/main.css` @layer base, global):
+  - `input[type='number']::-webkit-outer/inner-spin-button` →
+    `-webkit-appearance: none; margin: 0` (Chromium/Electron).
+  - `input[type='number']` → `-moz-appearance: textfield; appearance:
+    textfield` (Firefox + jaring pengaman).
+- Mencakup semua input number: `CampaignMetrics` (Pajak/Persentase),
+  `ProxyManager` (port/proxy), `WatcherPanel`. Angka tetap bisa diketik manual.
+- **Verifikasi CDP Electron**: input number computed `appearance: textfield`;
+  screenshot saat input fokus — TANPA panah spinner.
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS.
+  Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — Audit UI Halaman Performa Kampanye)
+
+**Audit forensik konsistensi desain halaman "Performa Kampanye" vs halaman lain
+(Pembersih/Pengunduh) → akar masalah ditemukan & diperbaiki.**
+
+- **Akar masalah**: halaman kampanye memakai pola UI yang menyimpang dari design
+  system — (1) shell halaman scroll penuh tanpa `pt-16`/`z-10`/`min-h-0`; (2) kartu
+  header besar di atas; (3) tab track putih, tombol `text-xs`, rata-kiri, pill
+  gradient; (4) tombol primer `rounded-xl` gradient; (5) `<input>`/`<select>`
+  native (profil, workspace) alih-alih komponen Floating; (6) toolbar 5 tombol
+  + select native alih-alih tombol ikon kanonik.
+- **Perbaikan** (hanya renderer, `src/views/CampaignView.tsx`):
+  - Shell halaman kanonik: `flex-1 flex flex-col min-h-0 relative z-10` +
+    konten `pt-16 md:pt-8 px-4 sm:px-6 md:px-8 pb-4`; konten scroll INTERNAL
+    (`flex-1 min-h-0 overflow-y-auto`) — halaman tidak scroll penuh lagi.
+  - Header ringkas (ikon + judul + subjudul) + aksi kanan: Demo / Impor /
+    Pengaturan (wizard), Date Range + Simpan / Ekspor CSV / Bersihkan /
+    Pengaturan (dashboard). Kartu header besar dihapus.
+  - Tab kanonik: track `bg-slate-100 dark:bg-slate-900`, tombol
+    `rounded-lg px-4 py-2 text-sm sm:px-5`, pill solid `bg-blue-600
+    shadow-md shadow-blue-600/30` + `layoutId="campaign-tab-pill"`, rata-tengah.
+  - Tombol primer "Mulai Proses" → `rounded-lg bg-blue-600 px-3.5 py-2 text-sm`.
+  - `<select>` native "Muat Workspace" dihapus → pindah ke modal Pengaturan
+    via `FloatingSelect`; input native profil/gemini/workspace → `FloatingInput`
+    (modal Pengaturan dirombak: header badge ikon + Profil + Kunci Gemini +
+    Nama Workspace + Muat (FloatingSelect) + Ekspor).
+  - `ToolbarBtn` → tombol ikon kanonik (`h-9 w-9 rounded-xl border bg-white
+    shadow-sm`), konsisten dgn tombol gear Pengunduh.
+- **Validasi**: `get_errors` bersih, `npm run typecheck` PASS, `npm run lint`
+  PASS, `npm run build` PASS. Verifikasi E2E browser: wizard (header ringkas),
+  dashboard (header + tab bar tengah + toolbar ikon), perpindahan tab, modal
+  Pengaturan (FloatingInput/FloatingSelect). Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — RANGE DATE PICKER Performa Kampanye)
+
+**Filter tanggal halaman "Performa Kampanye" dirombak menjadi RANGE DATE PICKER**
+(desain mengikuti referensi gambar user: preset cepat + dua kalender bulan
+berdampingan + input Dari/Sampai + bandingkan periode + Batal/Update).
+
+- **File**: `src/components/campaign/CampaignDateRange.tsx` ditulis ulang total.
+- **Trigger**: pill kanonik (ikon `Calendar` + rentang "1 Agt 2026 — 31 Agt 2026"
+  atau "Pilih rentang tanggal" + chevron) + tombol ikon Reset (`RotateCcw`) saat
+  rentang aktif. Popover via PORTAL ke `<body>` (`position:fixed`, `z-90`,
+  right-align ke trigger + clamp viewport), tutup pada klik luar/scroll/Escape,
+  reposisi saat resize.
+- **Isi popover** (tema app: biru, dark mode, tanpa emoji, lucide icons):
+  1. Header pill rentang draft + tombol Tutup.
+  2. Daftar preset kiri: **Hari Ini / Kemarin / 7 hari terakhir / Bulan ini /
+     Kustom** (aktif = `bg-blue-600`).
+  3. Dua kalender bulan berdampingan (Min–Sab, navigasi chevron kiri/kanan,
+     hari hari ini ber-ring, start/end `bg-blue-600`, rentang `bg-blue-500/15`).
+  4. **Dari / Sampai — FloatingInput** (floating label, ikon `CalendarDays`/
+     `CalendarCheck`, helper format, terima input manual DD/MM/YYYY atau
+     YYYY-MM-DD dengan clamp agar start≤end; parse di blur).
+  5. Checkbox **"Bandingkan dengan periode sebelumnya"** → chip periode
+     pembanding (rentang sama panjang sebelum rentang aktif).
+  6. Footer: catatan zona waktu + **Batal** (batal) / **Update** (terapkan).
+- **Logika tanggal 100% LOKAL** (hindari pergeseran UTC): helper `toISO`/
+  `parseISO`/`parseInput`/`formatDisplay`/`formatInput`, `buildMonth` (offset
+  hari Minggu), `presetFor`, `previousRange`. State draft lokal, diterapkan ke
+  orang tua hanya saat Update → `onChange(start,end)` (string `YYYY-MM-DD`,
+  konsisten dengan `filterByDateRange`). Sinkronisasi teks input via helper
+  `setDraft` (TANPA setState-in-effect — konvensi react-hooks app).
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS. E2E browser:
+  popover render (preset+2 kalender+Dari/Sampai+Bandingkan+Batal/Update),
+  preset "Bulan ini" (pill "1 Agt 2026 — 16 Agt 2026", Dari/Sampai terisi),
+  Update → filter data diterapkan (0 kampanye utk rentang yg tak cocok),
+  Reset → data kembali, pemilihan kustom kalender (1–10 Agt), Bandingkan
+  ("22 Jul 2026 — 31 Jul 2026"), input manual Dari/Sampai (parse + clamp),
+  dark mode (panel `slate-800`, border `slate-700`). Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — KONSISTENSI TANGGAL + HAPUS JUDUL HEADER)
+
+**Permintaan user: (1) text tanggal tidak konsisten → diseragamkan; (2) icon &
+teks "Performa Kampanye" di header dihapus.**
+
+- **Akar masalah tanggal**: range picker memakai singkatan bulan kustom
+  ("Agt"), sedangkan tabel harian (`CampaignCharts`) & `formatDateID` memakai
+  `toLocaleDateString('id-ID')` yang menghasilkan "Agu" → dua format berbeda
+  untuk bulan yang sama.
+- **Fix konsistensi** (`src/lib/campaign/format.ts`): tambah konstanta bersama
+  `MONTHS_SHORT`/`MONTHS_ID`/`WEEKDAYS_SHORT` (baku "Agt") + `formatDateID`
+  (tulis ulang, parsing LOKAL tanpa Intl) + `formatDateFullID`
+  ("Jum, 10 Jul 2026"). `CampaignDateRange` mengimpor konstanta tsb (hapus
+  duplikasi lokal). `CampaignCharts` tabel harian kini pakai
+  `formatDateFullID(row.date)`. Semua tampilan tanggal kini konsisten "Agt".
+- **Hapus judul header** (`src/views/CampaignView.tsx`, wizard + dashboard):
+  blok ikon `BarChart3` + judul "Performa Kampanye" + subjudul DIHAPUS →
+  halaman kini mulai dengan baris aksi kanan (date picker + tombol ikon) lalu
+  tab tengah (pola konsisten dgn Pembersih/Pengunduh). Info "Mode Demo"
+  dipertahankan sebagai badge kecil di baris aksi dashboard.
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS. E2E: judul
+  header hilang (h2 kosong, "Performa Kampanye" hanya di sidebar), aksi kanan +
+  tab tetap, tabel harian "Jum, 10 Jul 2026", picker pill "1 Agt 2026 —
+  16 Agt 2026" tetap konsisten. Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — FONT TANGGAL KONSISTEN + TANGGAL MASA DEPAN DITOLAK)
+
+**Permintaan user: (1) font teks "Pilih rentang tanggal" & "Pilih tanggal mulai &
+selesai" berbeda dari tema; (2) tanggal masa depan tidak boleh dipilih.**
+
+- **Font**: `font-mono` dihapus dari 3 tempat di `CampaignDateRange.tsx` —
+  span trigger ("Pilih rentang tanggal"/rentang), span header pill popover
+  ("Pilih tanggal mulai & selesai"/rentang), dan chip periode pembanding.
+  Semua tampilan tanggal kini memakai font tema (Plus Jakarta Sans Variable),
+  konsisten dengan tabel harian (angka tetap `font-mono`).
+- **Tanggal masa depan tidak bisa dipilih** (`CampaignDateRange.tsx`):
+  - `DayCell` + `future` flag di `buildMonth` (semua sel, termasuk sel blank).
+  - Tombol hari: `disabled={c.future}` + `aria-disabled` + gaya redup
+    `cursor-not-allowed text-slate-300 dark:text-slate-600`.
+  - Input manual Dari/Sampai: tanggal masa depan di-**clamp ke hari ini**
+    saat blur (`parsed > today → today`), sehingga tidak ada rentang masa depan
+    yang bisa diterapkan.
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS. E2E: font trigger
+  & header = `Plus Jakarta Sans Variable` (sama dgn body), 55 sel masa depan
+  `[disabled]` (17–31 Agt + seluruh Sep + blank), input "01/12/2026" → clamp
+  "16/08/2026" (pill "16 Agt 2026 — 16 Agt 2026"). Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — BULAN BERJALAN DI POSISI KANAN PICKER)
+
+**Permintaan user: default bulan berjalan pada range picker harus di KANAN
+(sebelumnya di kiri).**
+
+- **Akar masalah**: `viewYear/viewMonth` picker adalah bulan KIRI, dan anchor
+  default memakai bulan `dateStart` (atau hari ini) → bulan berjalan tampil di
+  kiri; preset "7 hari terakhir" juga menaruh view di bulan mulai.
+- **Perbaikan** (`CampaignDateRange.tsx`): `viewYear/viewMonth` kini = bulan
+  KANAN (utama); bulan kiri = sebelumnya (`firstYear/firstMonth`). Anchor
+  default = bulan `dateEnd` (atau hari ini). Preset "7 hari terakhir" &
+  "Bulan ini" menaruh view di bulan akhir (hari ini). Navigasi chevron tetap
+  menggeser pasangan bulan bersama-sama.
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS. E2E: buka picker
+  → kiri "Juli 2026", kanan "Agustus 2026" (bulan berjalan); preset "7 hari
+  terakhir" → tetap [Juli, Agustus]; chevron berikutnya → [Agustus, September].
+  Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — TAB KAMPANYE DI BAWAH KPI + STICKY)
+
+**Permintaan user: kembalikan 4 tab (Ringkasan & Grafik / Kampanye / Tidak
+Terpetakan / Asisten AI) ke bawah bagian KPI (Total Klik Iklan, Total Klik
+Shopee), lalu jadikan STICKY — saat scroll dan tab menyentuh atas (tepat di
+bawah header/baris aksi), tab menempel di sana.**
+
+- **Perubahan** (`src/views/CampaignView.tsx`, dashboard):
+  - Tab DIHAPUS dari posisi atas (setelah baris aksi) — baris aksi kini langsung
+    diikuti konten scroll.
+  - Tab DIPINDAHKAN ke dalam konten scroll, tepat SETELAH `CampaignMetrics` (KPI).
+  - Tab dibungkus strip **`sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm
+    dark:bg-slate-900/95 py-3`** (bg menyamai area konten `bg-slate-50
+    dark:bg-slate-900`) → saat konten digulir, strip menempel di atas scroll
+    container dan konten tab mengalir di bawahnya.
+- **Catatan**: sticky aktif bila ada cukup konten di bawah tab (dengan data
+  nyata/tabel harian panjang, pasti aktif; terverifikasi di viewport pendek
+  → strip `top:0`).
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS. E2E: tab
+  berada setelah KPI (offset awal 1452px), `position: sticky`, saat scroll
+  strip menempel `top:0` (tabTopRel 0), perpindahan tab tetap berfungsi
+  (tabel Kampanye tampil), bg strip dark `oklab(0.208 … / 0.95)`.
+  Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — POSISI/UKURAN STICKY TAB DIKETATKAN)
+
+**Permintaan user: saat sticky, posisi tab kurang tinggi sedikit → sesuaikan
+posisi & ukuran strip sticky.**
+
+- **Akar masalah**: strip sticky memakai padding `py-3` (12px atas/bawah) →
+  saat menempel di `top:0`, pill tab berada 12px dari tepi atas (terasa rendah)
+  dan strip terlalu tinggi.
+- **Perbaikan** (`CampaignView.tsx`): padding strip sticky `py-3` → `py-1.5`
+  (6px) → saat sticky pill kini 6px dari atas (lebih tinggi) dan strip lebih
+  ramping.
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS. E2E: pill
+  sticky `top` 12px → **6px**, tinggi strip 70px → **58px**, natural position
+  tetap (1495px), sticky tetap menempel `top:0`. Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — STICKY TAB BENAR-BENAR MENEMPEL + CHECKBOX STATUS)
+
+**Permintaan user: (1) posisi tab sticky masih kurang atas; (2) checkbox di
+filter status pesanan shopee berdempetan dengan status → harus di kanan.**
+
+- **Akar masalah sticky (audit ketat)**: strip sticky sudah `top:0` & pill 6px,
+  TAPI dengan konten di bawah tab yang pendek (data demo), tab tidak pernah
+  mencapai paling atas → berhenti ~91px → terlihat "kurang tinggi". FIX:
+  konten tab diberi **`min-h-[calc(100dvh-6rem)]`** agar SELALU setinggi
+  viewport → tab benar-benar menempel ke puncak (strip `top:0`, pill `py-1`=4px).
+- **Akar masalah checkbox**: audit DOM membuktikan checkbox SUDAH di kanan
+  (`justify-between`, gap ~96px) — perbaiki agar lebih tegas & jelas: tambah
+  `gap-2` (jarak minimum 8px), status `min-w-0 truncate`, checkbox `shrink-0`,
+  dan latar terlihat saat belum terpilih (`bg-white dark:bg-slate-800`).
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS. E2E: dengan
+  data demo pun `stuckAtTop:true` (strip `top:0`, pill `4px`), scroll cukup
+  (2248px); checkbox kanan 13px dari tepi kartu, gap 116px dari status,
+  `gap:8px` terpasang. Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — AKAR MASALAH CHECKBOX: UA `align-items` BUTTON)
+
+**Permintaan user: checkbox status masih berdampingan status & tab masih kurang
+atas; user melihat perbedaan antara localhost (benar) vs Electron (tidak).
+
+- **Inspeksi CDP renderer Electron asli membuktikan**:
+  - Browser (Chromium baru): `<button>` computed `align-items: normal` (→ stretch)
+    → header row full-width → checkbox di kanan.
+  - Electron (Chromium UA lama): `<button>` computed `align-items: flex-start`
+    → header row **shrink-to-fit** (86px vs 230px) → `justify-between` tanpa
+    ruang → checkbox berdampingan status.
+- **Akar masalah**: UA Chromium/Electron menetapkan `align-items: flex-start`
+  pada elemen `<button>`. Button status card (`flex flex-col`) tidak punya
+  `items-*` eksplisit → row menyusut.
+- **Fix root-cause** (`src/assets/main.css` @layer base): tambah
+  `button { align-items: stretch }` → semua tombol flex berperilaku standar
+  (stretch), konsisten di browser & Electron.
+- **Tab sticky**: diverifikasi via CDP Electron `stripTop:0` & `pillTop:4`
+  (menempel puncak) — sebelumnya user melihat window Electron STALE (belum
+  direstart). Setelah restart fresh, semua perubahan termuat.
+- **Validasi**: typecheck/lint/build PASS; CDP Electron — checkbox kanan
+  (13px dari tepi, gap 126px), `align-items:stretch`, row 204px; tab sticky
+  `pillTop:4`. Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-16 — KONTEN TAB RESPONSIF: HAPUS RUANG KOSONG)
+
+**Permintaan user: scrollbar sampai bawah tapi ada area kosong yang sangat
+banyak; halaman harus mengikuti fundamental aplikasi = SUPER RESPONSIF (tanpa
+ruang kosong artifisial).**
+
+- **Akar masalah**: fix sticky sebelumnya memberi konten tab
+  `min-h-[calc(100dvh-6rem)]` (agar tab selalu menempel puncak) → blok konten
+  DIPAKSA setinggi viewport (761px) padahal isi asli (tabel) hanya 480px →
+  muncul area kosong besar (±281px) di bawah konten → scrollbar turun jauh
+  melewati akhir konten.
+- **Perbaikan** (`src/views/CampaignView.tsx`): konten tab
+  `min-h-[calc(100dvh-6rem)]` → **`min-h-0`** (tinggi konten tab mengikuti isi,
+  TANPA area kosong artifisial). Tidak menambah min-height viewport.
+- **Audit CDP renderer Electron (ketat)**:
+  - Overview: konten 628px, `min-height:0px`, gap dalam tab 0 → natural.
+  - Kampanye: tabel `h-[480px]` (container scroll internal), struktur natural
+    berakhir tepat di 2008px.
+  - Asisten AI: konten 520px, `min-height:0px`, gap 0 → natural.
+  - Scrollbar berakhir TEPAT di akhir konten — tidak ada ruang kosong.
+- **Trade-off sticky (disengaja)**: sticky tab hanya aktif bila konten di bawah
+  tab ≥ tinggi viewport (data nyata / tabel panjang). Dengan data demo pendek,
+  tab berhenti ~307px (tidak sampai top-0) — TANPA memaksa ruang kosong. Ini
+  sesuai prioritas user (responsif > sticky). JANGAN kembalikan min-height
+  viewport.
+- **Validasi**: `get_errors` bersih, typecheck/lint/build PASS; CDP Electron
+  semua tab natural tanpa celah. Belum di-commit/branch.
+
 ## Status Rilis v1.5.0 (SELESAI — LIVE 2026-08-16)
 
 - **PR #30** ke `main` **MERGED** (merge commit `53ce562`) — fitur Performa

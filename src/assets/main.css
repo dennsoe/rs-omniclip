@@ -12,6 +12,14 @@
   a {
     text-decoration: none;
   }
+  /* Chromium/Electron UA menetapkan `align-items: flex-start` pada <button>
+     (tombol lama). Untuk <button> yang dibuat kontainer flex, ini membuat
+     child menyusut (shrink-to-fit) sehingga justify-between/justify-center
+     tak bekerja. Reset ke `stretch` (perilaku flex standar) agar konsisten
+     di browser & Electron. */
+  button {
+    align-items: stretch;
+  }
   * {
     -webkit-user-select: none;
     user-select: none;
@@ -20,6 +28,18 @@
   textarea {
     -webkit-user-select: text;
     user-select: text;
+  }
+  /* Sembunyikan tombol naik/turun (spinner) bawaan browser pada input angka —
+     panah tambah/kurang dihilangkan, angka tetap bisa diketik manual.
+     Berlaku global (Electron/Chromium & Firefox). */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
   }
   /* Scrollbar ramping — warna & desain menyesuaikan tema (terang/gelap). */
   * {
