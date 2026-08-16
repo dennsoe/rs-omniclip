@@ -3,6 +3,16 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 
+## Master Terbaru — PR #34 MERGED (2026-08-16)
+
+- **PR #34** (`feat/campaign-ui-polish` → `main`) **MERGED** dengan **merge
+  commit** `e8423cd` (BUKAN squash — pola graph bercabang dipertahankan).
+- Isi: poles UI Performa Kampanye + workspace + AI multi-provider + asisten AI
+  bubble chat + label status Diproses + fix Ambil Daftar akun TikTok (UA
+  Chrome/126) + docs rencana Winning Product.
+- Branch `feat/campaign-ui-polish` **terhapus** (lokal & remote). HEAD `main` =
+  `e8423cd`.
+
 ## Status Rilis v2.0.0 (SELESAI — RELEASE v2.0.0 DIPUBLIKASI)
 
 - **Branch**: `release/v2.0.0` (dari `main`). **Versi**: `2.0.0`.
