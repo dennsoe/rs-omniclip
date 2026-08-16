@@ -3,14 +3,22 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 
-## Status Rilis v1.5.0 (DALAM PROSES — build artefak & upload)
+## Status Rilis v2.0.0 (DALAM PROSES — build artefak & upload)
 
-- **Branch**: `release/v1.5.0` (dari `main`). **Versi**: `1.5.0`.
-- **PR #30** ke `main` **MERGED** (merge commit `53ce562`, 2026-08-16) — fitur
-  Performa Kampanye lengkap.
-- **Release notes**: `release-notes/RELEASE_NOTES_v1.5.0.md`.
-- **NEXT**: build artefak (`npm run build:mac` + `build:win`), tag `v1.5.0`,
-  GitHub Release + 4 artefak, PR release ke main.
+- **Branch**: `release/v2.0.0` (dari `main`). **Versi**: `2.0.0`.
+- **REBRANDING**: RS OmniClip → **RS OmniTools** — repo `dennsoe/rs-omnitools`,
+  brand logo `rsomni.png` (ikon app, sidebar, favicon), migrasi userData otomatis.
+- **PR #32** (rebrand) ke `main` **MERGED** (merge commit `b5e3659`, 2026-08-16).
+- **Release notes**: `release-notes/RELEASE_NOTES_v2.0.0.md`.
+- **NEXT**: build artefak (`npm run build:mac` + `build:win` dengan ikon baru),
+  tag `v2.0.0`, GitHub Release + 4 artefak, PR release ke main.
+
+## Status Rilis v1.5.0 (SELESAI — LIVE 2026-08-16)
+
+- **PR #30** ke `main` **MERGED** (merge commit `53ce562`) — fitur Performa
+  Kampanye lengkap. Tag `v1.5.0` + GitHub Release + 4 artefak (nama lama
+  `RS-OmniClip-1.5.0-*`) sudah live.
+- **PR #31** (release v1.5.0) **MERGED** (merge commit `b8a73ba`).
 
 ## FITUR BARU: Performa Kampanye (SELESAI — MERGED via PR #30)
 
