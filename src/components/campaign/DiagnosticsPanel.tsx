@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { CheckCircle2, AlertTriangle, Info, ChevronDown, ChevronUp, FileSpreadsheet, Tag } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { CheckCircle2, AlertTriangle, Info, ChevronDown, FileSpreadsheet, Tag } from 'lucide-react'
 import type { MetaAdRow, ShopeeAffiliateRow, ShopeeClickRow } from '@lib/campaign/types'
 import { findKey } from '@lib/campaign/csv'
 
@@ -88,11 +89,26 @@ export default function DiagnosticsPanel({
           >
             {metaAds.length > 0 && shopeeOrders.length > 0 ? 'Siap Analisis' : 'Menunggu File'}
           </span>
-          {isOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+          <motion.span
+            animate={{ rotate: isOpen ? 180 : 0 }}
+            transition={{ duration: 0.25 }}
+            className="inline-flex shrink-0"
+          >
+            <ChevronDown className="h-4 w-4 text-slate-400" />
+          </motion.span>
         </div>
       </button>
 
+      <AnimatePresence initial={false}>
       {isOpen && (
+        <motion.div
+          key="diag-panel-content"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+          className="overflow-hidden"
+        >
         <div className="space-y-5 p-4">
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             {/* Meta */}
@@ -234,7 +250,9 @@ export default function DiagnosticsPanel({
             </div>
           )}
         </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }

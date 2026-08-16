@@ -42,10 +42,11 @@ import {
   loadWorkspace,
   saveWorkspace,
   deleteWorkspace,
-  getGeminiApiKey,
-  setGeminiApiKey,
-  analyzeWithGemini,
-  type AiAnalyzePayload
+  getAiSettings,
+  setAiSettings,
+  analyzeWithAI,
+  type AiAnalyzePayload,
+  type AiSettings
 } from '@engine/campaign'
 
 let mainWindow: BrowserWindow | null = null
@@ -538,10 +539,10 @@ function registerIpc(): void {
     if (typeof id !== 'string') return false
     return deleteWorkspace(id)
   })
-  ipcMain.handle('ai:getKey', () => getGeminiApiKey())
-  ipcMain.handle('ai:setKey', (_event, key: string) => setGeminiApiKey(typeof key === 'string' ? key : ''))
+  ipcMain.handle('ai:getSettings', (): AiSettings => getAiSettings())
+  ipcMain.handle('ai:setSettings', (_event, patch: Partial<AiSettings>) => setAiSettings(patch ?? {}))
   ipcMain.handle('ai:analyze', async (_event, payload: AiAnalyzePayload) => {
-    return analyzeWithGemini(payload ?? {})
+    return analyzeWithAI(payload ?? {})
   })
 
   ipcMain.on('processing:start', (_event, payload) => {

@@ -184,7 +184,8 @@ export interface ResolvedPreview {
 const SCRAPE_FETCH_LIMIT = 200
 
 /** Pola error transien scrape (mis. HTTP 429 TikTok) yang memicu retry + rotasi endpoint. */
-const SCRAPE_TRANSIENT_RE = /HTTP Error 429|Too Many Requests|Unable to download JSON metadata/i
+const SCRAPE_TRANSIENT_RE =
+  /HTTP Error 429|Too Many Requests|Unable to download JSON metadata|Unable to extract secondary user ID|Unable to extract profile/i
 
 /** Batas unduhan paralel saat opsi `parallel` aktif (agar stabil & tidak kena rate-limit berlebihan). */
 const MAX_PARALLEL_DOWNLOADS = 2
@@ -245,10 +246,13 @@ const EXTRACTOR_ISSUE_RE =
 /**
  * User-Agent Chrome yang dikirim saat ekstraktor gagal — TikTok mulai menolak
  * permintaan non-browser (bot-detection baru, lihat yt-dlp issue #17403).
- * Dilaporkan memulihkan sebagian besar unduhan TikTok/Facebook.
+ * DITETAPKAN ke Chrome/126 (bukan 140): audit forensik 2026-08-16 membuktikan
+ * TikTok kini mem-flag UA Chrome/140 (profil akun gagal di-resolve →
+ * "Unable to extract secondary user ID") sementara Chrome/126 & 124 lolos
+ * konsisten (3/3 uji manual & watcher).
  */
 const CHROME_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 /** Sudahkah yt-dlp di-update sendiri pada sesi proses ini (self-heal sekali saja). */
 let ytdlpSelfHealed = false
@@ -666,14 +670,17 @@ async function runScrapeOnce(
   })
 }
 
-/** Menerjemahkan error scrape agar ramah & informatif (khususnya 429 TikTok). */
+/** Menerjemahkan error scrape agar ramah & INFORMATIF (jujur, bukan menakut-nakuti). */
 function friendlyScrapeError(raw: string): string {
   const tail = lastLines(raw)
-  if (/HTTP Error 429|Too Many Requests/i.test(raw)) {
-    return `${tail} — TikTok sedang membatasi permintaan (429, sementara). Sudah dicoba ulang otomatis dgn user-agent browser & endpoint cadangan. Tunggu beberapa menit lalu coba lagi, atau aktifkan Cookies Browser di Pengaturan Unduhan untuk mengurangi pembatasan.`
+  if (/HTTP Error 404|Not Found/i.test(raw)) {
+    return `${tail} — Akun/halaman tidak ditemukan (mungkin dihapus, username diubah, atau tidak ada). Periksa kembali tautan yang dimasukkan.`
   }
-  if (/\[tiktok:user\]|Unable to extract secondary user ID|Unable to extract/i.test(raw)) {
-    return 'TikTok memblokir pemeriksaan akun otomatis saat ini (perlindungan anti-bot di pihak TikTok). Ambil daftar maupun pemantauan otomatis akun TikTok belum dapat berjalan. Coba lagi nanti, atau gunakan akun YouTube/platform lain untuk Auto-Watcher.'
+  if (/HTTP Error 429|Too Many Requests/i.test(raw)) {
+    return `${tail} — TikTok sedang membatasi permintaan (429, sementara). Sudah dicoba ulang otomatis dengan user-agent browser & endpoint cadangan. Tunggu beberapa menit lalu coba lagi, atau aktifkan Cookies Browser di Pengaturan Unduhan untuk mengurangi pembatasan.`
+  }
+  if (/\[tiktok:user\]|Unable to extract secondary user ID|Unable to extract profile/i.test(raw)) {
+    return `${tail} — TikTok tidak dapat diverifikasi saat ini. Kemungkinan: (1) sedang dibatasi sementara oleh anti-bot TikTok (tunggu beberapa menit lalu coba lagi), atau (2) akun tidak ditemukan / privat / dihapus (periksa kembali username). Aktifkan Cookies Browser di Pengaturan Unduhan untuk mengurangi pembatasan.`
   }
   return tail
 }

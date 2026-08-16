@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
+import { motion } from 'motion/react'
 import {
   Search,
   ArrowUp,
@@ -140,7 +141,7 @@ export default function CampaignTable({ campaigns }: { campaigns: MappedCampaign
   }, [campaigns, search, sortField, sortDirection])
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800/60">
+    <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800/60">
       {/* Header + Search */}
       <div className="flex shrink-0 flex-col gap-3 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700">
         <div className="flex items-center gap-2.5">
@@ -164,8 +165,8 @@ export default function CampaignTable({ campaigns }: { campaigns: MappedCampaign
         </div>
       </div>
 
-      {/* Tabel super-responsif: body scroll internal, header sticky */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* Tabel auto-resize: tinggi mengikuti isi (semua baris tampil), halaman yang scroll */}
+      <div>
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-400 dark:text-slate-500">
             <Tag className="h-8 w-8" />
@@ -175,13 +176,13 @@ export default function CampaignTable({ campaigns }: { campaigns: MappedCampaign
           <table className="w-full table-fixed text-left">
             <thead>
               <tr className="bg-slate-50/95 backdrop-blur dark:bg-slate-900/95">
-                <SortHeader label="Tag / Nama Iklan" field="tag" currentField={sortField} direction={sortDirection} onSort={handleSort} className="sticky top-0 z-10 w-[26%] py-3 pl-4" />
-                <SortHeader label="Spend (Meta)" field="spend" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="sticky top-0 z-10 w-[14%]" />
-                <SortHeader label="Klik Meta" field="clicks" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="sticky top-0 z-10 w-[11%]" />
-                <SortHeader label="Klik Shopee" field="shopeeClicks" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="sticky top-0 z-10 w-[11%]" />
-                <SortHeader label="Orders" field="orders" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="sticky top-0 z-10 w-[8%]" />
-                <SortHeader label="Komisi (Shopee)" field="commission" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="sticky top-0 z-10 w-[14%]" />
-                <SortHeader label="ROI / Status" field="roi" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="sticky top-0 z-10 w-[16%] py-3 pr-4" />
+                <SortHeader label="Tag / Nama Iklan" field="tag" currentField={sortField} direction={sortDirection} onSort={handleSort} className="w-[26%] py-3 pl-4" />
+                <SortHeader label="Spend (Meta)" field="spend" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="w-[14%]" />
+                <SortHeader label="Klik Meta" field="clicks" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="w-[11%]" />
+                <SortHeader label="Klik Shopee" field="shopeeClicks" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="w-[11%]" />
+                <SortHeader label="Orders" field="orders" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="w-[8%]" />
+                <SortHeader label="Komisi (Shopee)" field="commission" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="w-[14%]" />
+                <SortHeader label="ROI / Status" field="roi" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" className="w-[16%] py-3 pr-4" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -247,6 +248,11 @@ export default function CampaignTable({ campaigns }: { campaigns: MappedCampaign
                     {isExpanded && (
                       <tr className="bg-slate-50/60 dark:bg-slate-900/30">
                         <td colSpan={7} className="border-y border-slate-100 px-4 py-3 dark:border-slate-700/50">
+                          <motion.div
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                             <div className="rounded-xl border border-slate-100 bg-white p-3 dark:border-slate-700/50 dark:bg-slate-800/40">
                               <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 dark:text-slate-500">
@@ -298,6 +304,7 @@ export default function CampaignTable({ campaigns }: { campaigns: MappedCampaign
                               )}
                             </div>
                           )}
+                          </motion.div>
                         </td>
                       </tr>
                     )}

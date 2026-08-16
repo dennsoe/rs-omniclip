@@ -146,8 +146,16 @@ declare global {
         payload: Partial<CampaignWorkspace>
       ) => Promise<{ id: string; savedAt: string }>
       deleteCampaignWorkspace: (id: string) => Promise<boolean>
-      getGeminiApiKey: () => Promise<string>
-      setGeminiApiKey: (key: string) => Promise<string>
+      getAiSettings: () => Promise<{
+        provider: 'gemini' | 'openai'
+        geminiKey: string
+        openaiKey: string
+      }>
+      setAiSettings: (patch: {
+        provider?: 'gemini' | 'openai'
+        geminiKey?: string
+        openaiKey?: string
+      }) => Promise<{ provider: 'gemini' | 'openai'; geminiKey: string; openaiKey: string }>
       aiAnalyze: (payload: {
         campaignsSummary: Array<{
           adName: string

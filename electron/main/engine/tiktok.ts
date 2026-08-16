@@ -50,9 +50,10 @@ export const TIKWM_PROVIDERS: TikWmProvider[] = [
   { id: 'k5', baseUrl: TIKWM_API_BASE, apiKey: '1b5d259dfaa7da94b7bc70649060f85e' }
 ]
 
-/** User-Agent Chrome agar permintaan API/CDN tidak ditolak sebagai bot. */
+/** User-Agent Chrome agar permintaan API/CDN tidak ditolak sebagai bot.
+ *  Chrome/126 (bukan 140) — TikTok mem-flag UA Chrome/140 (audit 2026-08-16). */
 const CHROME_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
 /** Referer wajib saat mengunduh `data.play` dari CDN TikTok. */
 const TIKTOK_REFERER = 'https://www.tiktok.com/'

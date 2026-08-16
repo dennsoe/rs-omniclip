@@ -56,6 +56,10 @@ export interface AppConfig {
   history: HistoryEntry[]
   /** Kunci Gemini untuk Asisten AI Performa Kampanye (disimpan lokal, BUKAN auth/login). */
   geminiApiKey: string
+  /** Kunci OpenAI (GPT) untuk Asisten AI Performa Kampanye. */
+  openaiApiKey: string
+  /** Provider AI yang dipilih user untuk Asisten AI: 'gemini' | 'openai'. */
+  aiProvider: 'gemini' | 'openai'
 }
 
 export const CONFIG_DEFAULTS: AppConfig = {
@@ -64,7 +68,9 @@ export const CONFIG_DEFAULTS: AppConfig = {
   hwAccel: { mode: 'auto' },
   analyticsExport: false,
   history: [],
-  geminiApiKey: ''
+  geminiApiKey: '',
+  openaiApiKey: '',
+  aiProvider: 'gemini'
 }
 
 /** Batas maksimum entri riwayat yang disimpan (terbaru di depan). */
@@ -77,6 +83,8 @@ type ConfigPatch = {
   analyticsExport?: boolean
   history?: HistoryEntry[]
   geminiApiKey?: string
+  openaiApiKey?: string
+  aiProvider?: 'gemini' | 'openai'
 }
 
 let cache: AppConfig | null = null
@@ -94,7 +102,9 @@ export function getConfig(): AppConfig {
     hwAccel: { ...CONFIG_DEFAULTS.hwAccel },
     analyticsExport: CONFIG_DEFAULTS.analyticsExport,
     history: [],
-    geminiApiKey: ''
+    geminiApiKey: '',
+    openaiApiKey: '',
+    aiProvider: 'gemini'
   }
   try {
     const raw = fs.readFileSync(getConfigPath(), 'utf8')
@@ -105,7 +115,9 @@ export function getConfig(): AppConfig {
       hwAccel: { ...defaults.hwAccel, ...(parsed.hwAccel ?? {}) },
       analyticsExport: parsed.analyticsExport ?? defaults.analyticsExport,
       history: Array.isArray(parsed.history) ? parsed.history : [],
-      geminiApiKey: typeof parsed.geminiApiKey === 'string' ? parsed.geminiApiKey : ''
+      geminiApiKey: typeof parsed.geminiApiKey === 'string' ? parsed.geminiApiKey : '',
+      openaiApiKey: typeof parsed.openaiApiKey === 'string' ? parsed.openaiApiKey : '',
+      aiProvider: parsed.aiProvider === 'openai' ? 'openai' : 'gemini'
     }
   } catch {
     cache = defaults
@@ -122,7 +134,10 @@ export function setConfig(patch: ConfigPatch): AppConfig {
     hwAccel: { ...cur.hwAccel, ...(patch.hwAccel ?? {}) },
     analyticsExport: patch.analyticsExport ?? cur.analyticsExport,
     history: patch.history ?? cur.history,
-    geminiApiKey: patch.geminiApiKey ?? cur.geminiApiKey
+    geminiApiKey: patch.geminiApiKey ?? cur.geminiApiKey,
+    openaiApiKey: patch.openaiApiKey ?? cur.openaiApiKey,
+    aiProvider:
+      patch.aiProvider === 'openai' || patch.aiProvider === 'gemini' ? patch.aiProvider : cur.aiProvider
   }
   cache = next
   const p = getConfigPath()

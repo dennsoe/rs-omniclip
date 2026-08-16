@@ -218,4 +218,8 @@ export interface CampaignWorkspaceSummary {
   name: string
   profileName: string
   updatedAt: string
+  /** Penanda isi workspace — untuk label pengenalan cepat (Meta / Shopee / Klik). */
+  hasMeta?: boolean
+  hasShopee?: boolean
+  hasClicks?: boolean
 }
