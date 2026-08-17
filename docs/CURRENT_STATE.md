@@ -47,6 +47,37 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
 - Ikon aplikasi kustom terpasang (`icon.icns` 1,5MB di bundle macOS; ikon juga
   dipakai installer Windows) — bukan lagi ikon default Electron.
 
+## Perubahan Terbaru (2026-08-17 — UX COOKIE DOUYIN: VALIDASI LIVE + PANDUAN + BUKA DOUYIN.COM)
+
+**Permintaan user: implementasikan rekomendasi "sekarang" jalur tengah untuk
+Douyin — perbaiki UX ambil cookie + pesan error jujur + retry/UA. Validasi
+bertahap & ketat.**
+
+- **Main (`electron/main/engine/douyin.ts`)**: tambah `parseDouyinCookie(raw)` →
+  `{ count, invalid, keys, hasSession }` — **satu sumber kebenaran** (aturan
+  validasi SAMA dengan `writeNetscapeCookieFile`) sehingga status UI selalu
+  akurat dengan yang benar-benar dipakai yt-dlp. `hasSession` = ada cookie sesi
+  penting (`ttwid/msToken/odin_tt/passport_csrf_token/sid_guard`).
+- **IPC (`index.ts` + `preload` + `global.d.ts`)**: `douyin:validate` →
+  `window.api.validateDouyinCookie(raw)`.
+- **Renderer (`DownloadSettingsModal.tsx`)**:
+  - Status **validasi live** (debounce 400ms) dengan 4 kondisi: kosong / format
+    tidak dikenali / valid tapi tanpa cookie sesi (warning) / cookie sesi
+    terdeteksi (success hijau).
+  - Tombol **"Kosongkan"** + **"Buka douyin.com"** (anchor `target=_blank` →
+    `setWindowOpenHandler` → `shell.openExternal` — tanpa IPC baru).
+  - Panduan **"Cara ambil cookie"** 3 langkah (buka+login → F12 → Application →
+    Cookies → salin header) dalam `<details>` yang bisa dilipat.
+- **Retry/UA Douyin**: di-audit — jalur sudah benar (lapisan 1 retry, lapisan 2
+  UA Chrome/126, lapisan 3 self-heal yt-dlp; `friendlyDownloadError` sudah
+  cocokkan pola nyata "Fresh cookies (not necessarily logged in) are needed").
+  **Tidak ada perubahan spekulatif.**
+- **Verifikasi CDP Electron** (restart): `validateDouyinCookie('ttwid=a; …')` →
+  `{count:4, invalid:0, keys:[…], hasSession:true}`; 4 status UI ter-render
+  benar (invalid / tanpa-sesi / sesi / kosong); tombol + panduan muncul;
+  screenshot premium. `get_errors` bersih, typecheck (node+web)/lint/build
+  PASS. Belum di-commit/branch.
+
 ## Perubahan Terbaru (2026-08-16 — FIX SCRAPE/AMBIL DAFTAR TIKTOK: UA CHROME/126 + RETRY + PESAN JUJUR)
 
 **Permintaan user: audit forensik kenapa "Ambil Daftar" akun TikTok error

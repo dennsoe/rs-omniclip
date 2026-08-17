@@ -80,6 +80,8 @@ declare global {
       // --- Pembaruan aplikasi & resource (gratis, repo publik) ---
       checkForUpdate: () => Promise<UpdateInfo>
       openUpdatePage: (url: string) => Promise<boolean>
+      /** Memvalidasi header Cookie Douyin (diproses di main — satu sumber kebenaran). */
+      validateDouyinCookie: (raw: string) => Promise<{ count: number; invalid: number; keys: string[]; hasSession: boolean }>
       checkResources: () => Promise<ResourceInfo[]>
       updateResources: (force?: boolean) => Promise<ResourceInfo[]>
       onResourceStatus: (cb: (message: string) => void) => () => void

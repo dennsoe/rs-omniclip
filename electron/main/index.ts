@@ -24,6 +24,7 @@ import {
   type ResourceInfo
 } from '@engine/updater'
 import { getTrackedPids, sampleProcess } from '@engine/procmon'
+import { parseDouyinCookie, type DouyinCookieParse } from '@engine/douyin'
 import { enqueueBatch } from '@engine/queue'
 import { testProxy, resetRotation } from '@engine/proxy'
 import { registerMediaScheme, registerMediaProtocol } from './media'
@@ -586,6 +587,10 @@ function registerIpc(): void {
     }
     return true
   })
+
+  // Validasi header Cookie Douyin (satu sumber kebenaran dengan penulis file
+  // Netscape) — dipakai UI untuk memberi umpan balik akurat saat user menempel.
+  ipcMain.handle('douyin:validate', (_e, raw: string): DouyinCookieParse => parseDouyinCookie(raw))
 
   ipcMain.handle('resource:check', (): Promise<ResourceInfo[]> => getResourceStatus())
 

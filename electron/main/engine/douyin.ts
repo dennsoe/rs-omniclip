@@ -129,3 +129,45 @@ export function writeNetscapeCookieFile(rawCookie: string, filePath: string): vo
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   fs.writeFileSync(filePath, lines.join('\n') + '\n', 'utf8')
 }
+
+/** Hasil pemeriksaan header Cookie Douyin (satu sumber kebenaran: main process). */
+export interface DouyinCookieParse {
+  /** Jumlah pasangan name=value yang valid (sama dengan yang ditulis ke file). */
+  count: number
+  /** Jumlah segmen yang diabaikan (format tidak valid / kosong). */
+  invalid: number
+  /** Daftar nama cookie yang terdeteksi (urutan kemunculan). */
+  keys: string[]
+  /** true bila memuat cookie sesi penting Douyin (ttwid/msToken/odin_tt/passport_csrf_token/sid_guard). */
+  hasSession: boolean
+}
+
+/** Cookie sesi Douyin yang menandakan login/anti-bot (bagian dari set yang lazim). */
+const DOUYIN_SESSION_KEYS = ['ttwid', 'msToken', 'odin_tt', 'passport_csrf_token', 'sid_guard']
+
+/**
+ * Memeriksa header Cookie mentah Douyin. Aturan validasi SAMA dengan
+ * `writeNetscapeCookieFile` (name di kiri '=', value tidak kosong) agar UI
+ * menampilkan status yang akurat dengan apa yang benar-benar dipakai yt-dlp.
+ */
+export function parseDouyinCookie(raw: string): DouyinCookieParse {
+  const keys: string[] = []
+  let invalid = 0
+  for (const part of String(raw ?? '').split(';')) {
+    const idx = part.indexOf('=')
+    if (idx <= 0) {
+      invalid++
+      continue
+    }
+    const name = part.slice(0, idx).trim()
+    const value = part.slice(idx + 1).trim()
+    if (!name || !value) {
+      invalid++
+      continue
+    }
+    keys.push(name)
+  }
+  const lower = keys.map((k) => k.toLowerCase())
+  const hasSession = DOUYIN_SESSION_KEYS.some((k) => lower.includes(k))
+  return { count: keys.length, invalid, keys, hasSession }
+}

@@ -332,6 +332,16 @@ const api = {
     return ipcRenderer.invoke('update:open', url)
   },
 
+  /** Memvalidasi header Cookie Douyin (diproses di main — satu sumber kebenaran). */
+  validateDouyinCookie: (raw: string): Promise<{
+    count: number
+    invalid: number
+    keys: string[]
+    hasSession: boolean
+  }> => {
+    return ipcRenderer.invoke('douyin:validate', raw)
+  },
+
   /** Memeriksa status resource ffmpeg/yt-dlp terhadap manifest repo. */
   checkResources: (): Promise<ResourceInfoData[]> => {
     return ipcRenderer.invoke('resource:check')
