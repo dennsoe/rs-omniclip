@@ -26,6 +26,141 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-17**.
   Pengunduh + info unduhan lengkap (platform/durasi/akun) + preview dari
   thumbnail + info engagement di hasil scrape.
 
+## Perubahan Terbaru (2026-08-17 — SYSTEM MONITOR DIPERBAIKI: CPU NORMALISASI PER CORE + EMA + DATA BARU)
+
+**Audit forensik**: metrik CPU lama MENJUMLAHKAN kerja lintas semua core tanpa
+dibagi jumlah core (mesin 12 core) lalu dijepit 100 → tampil "100%" saat app
+baru memakai sebagian core (menyesatkan); tanpa smoothing → angka meloncat liar
+antar sampel (0↔100).
+
+**Perbaikan** (`electron/main/index.ts`):
+- `LOGICAL_CORES = os.cpus().length` — CPU **dinormalisasi** ÷ jumlah core:
+  100% = seluruh kapasitas mesin terpakai (FFmpeg 6 core = 50%, bukan 100%).
+- **EMA smoothing** (`CPU_EMA_ALPHA = 0.3`) — nilai halus, tidak meloncat.
+- Payload `system:stats` kini memuat **`workers`** = jumlah pekerja aktif
+  (FFmpeg/yt-dlp).
+
+**UI** (`src/components/SystemMonitor.tsx`):
+- **RAM %** + tampilan "terpakai / total GB".
+- **Badge "Memproses ×N"** (amber, spinner) saat FFmpeg/yt-dlp aktif — lonjakan
+  CPU jadi jelas sumbernya.
+- **Sparkline CPU** (riwayat 24 sampel, SVG) — tren terbaca, bukan nilai sesaat.
+- Ikon lucide profesional (Cpu/MemoryStick/Loader2).
+
+**Redesain UI (2026-08-17, perbaikan "berantakan")** — layout bersih, konsisten,
+super responsif, realtime & interaktif:
+- Blok metrik seragam (`MetricBlock`): label kiri (icon+teks truncate), nilai
+  kanan (tabular-nums anti-jitter), bar tipis, sparkline — semua sejajar.
+- **Warna ambang batas** diterapkan pada NILAI + BAR + GRAFIK (sparkline):
+  CPU >50% amber / >80% rose; RAM >60% amber / >85% rose; Disk >75% amber /
+  >90% rose.
+- **Disk** ringkas: "Dipakai/Total GB + %" (bar = % terpakai); rincian bebas
+  tersedia di tooltip (teks layar diminimalkan).
+- **Jaringan** bersih: "↓ unduh · ↑ unggah" (panah SEBELUM nilai, urutan jelas).
+- **Interaktif**: hover highlight tiap baris + `title` tooltip (detail per metrik).
+- **Teks berlebih dihapus**: subtitle "Pemakaian Aplikasi & Sistem" & baris
+  "Unduh (App)" dihilangkan (Jaringan sudah menampilkan unduh/unggah sistem).
+- Header: ikon Activity dalam kotak rounded (selaras dgn gaya nav).
+
+**Redesain kompak + animasi (2026-08-17, lanjutan)** — hemat ruang & lebih hidup:
+- **Grid 2 kolom** (CPU|RAM · Disk|Jaringan) → tinggi widget jauh berkurang;
+  Disk `col-span-2` saat jaringan idle (layout tetap seimbang).
+- Sel metrik kompak (`MetricCell`): label uppercase kecil + nilai besar + bar
+  tipis + sub "GB" + sparkline mini — semua dalam satu kartu.
+- **Animasi realtime (framer-motion)**:
+  - Nilai **pop** (spring scale) setiap kali data berubah.
+  - Bar **spring** (pertumbuhan halus mengikuti %).
+  - **Dot "live"** berdenyut (animate-ping) di header + teks "live".
+  - **Titik live di sparkline** berdenyut (SVG animate) — menandakan realtime.
+  - **Hover lift** kartu (+ translate + shadow).
+  - **Danger**: saat diambang batas, nilai `animate-pulse` + bar glow merah
+    (CPU>80, RAM>85, Disk>90).
+- Teks semakin diminimalkan: nilai = "%" besar, detail "GB" di sub kecil.
+
+**Efek & animasi grafik/jaringan (2026-08-17, lanjutan)**:
+- **Grafik HALUS (tidak patah)**: morph line via CSS `transition: d 0.7s` pada
+  `<path>` (didukung penuh Chromium/Electron). CATATAN audit: animasi atribut
+  `points`/`d` via framer-motion MENGHASILKAN error "undefined" → dipakai CSS
+  native (robust).
+- **Efek ujung grafik**: ring ekspansi (radar ping, 2 ring) + titik inti
+  menyala (glow drop-shadow) — SVG `<animate>` native.
+- **Jaringan — baris full-width sederhana & jelas** (bukan bar vertikal): label
+  kiri + **↓ unduh (sky) · ↑ unggah (violet)** — warna & icon mengikuti
+  ↓/↑ (`DownloadCloud`/`UploadCloud`), teks tabular-nums, pop animasi saat data
+  berubah. CATATAN audit: versi "meter analog" (bar vertikal h-9 + teks 8px)
+  dianggap jelek/tidak responsif → dikembalikan ke baris tunggal yang jelas.
+  **Audit lanjutan (2026-08-17)**: baris jaringan TIDAK punya `col-span-2`
+  sehingga render setengah lebar (kolom 2 kosong) → label+kecepatan berjejal &
+  icon Network bentrok dengan Download/UploadCloud → **FIX**: `col-span-2`
+  (sejajar Disk), hapus icon `Network` dari label (cukup icon ↓/↑).
+  **FIX lanjutan (2026-08-17)**: label teks "Jaringan" DIHAPUS total (keputusan
+  user — tanpa teks/icon label) → baris jaringan hanya berisi `↓ unduh (sky) ·
+  ↑ unggah (violet)` rata kanan; tooltip title jadi "Unduh X · Unggah Y" (tanpa
+  kata "Jaringan"); kata "Jaringan" hanya tersisa di komentar kode.
+- **Grafik Disk DIHAPUS (2026-08-17)**: nilai Disk hampir statis (tidak
+  berubah real-time) → sparkline cuma noise visual. `spark` di `MetricCell`
+  kini opsional (`spark?: number[]`); state `diskHistory` & `setDiskHistory`
+  dibuang. Grafik tetap ada untuk CPU & RAM (dinamis).
+- **Lebar kontainer dimaksimalkan (2026-08-17, audit "space kiri kanan
+  kosong")**: dulu container `mx-4` (16px margin tiap sisi) + `p-3` (12px
+  padding) → grid cuma 201px di sidebar 260px (~29px ruang kosong tiap sisi,
+  semua bagian tampak kecil). FIX: `mx-2` (8px) + `p-2` (8px) → box 243px &
+  grid 225px (93.5% lebar sidebar); sel CPU/RAM 97px → 109px; Disk/Jaringan
+  full width ikut lebih lebar. Verifikasi ukur DOM: sidebar 260 → box 243 →
+  grid 225.
+- **Animasi jaringan HALUS + icon STATIS (2026-08-17, audit "kasar & patah")**:
+  versi lama memakai `key={formatSpeed(...)}` pada `motion.span` → tiap sampel
+  baru (1,5 dtk) React UNMOUNT+REMOUNT seluruh elemen (icon+teks) & replay
+  pop → tampak kasar/patah, icon berkedip. FIX: komponen `SpeedPill` — icon di
+  LUAR elemen berubah (chip `motion.span` berdenyut halus scale 1→1.12→1 +
+  opacity glow via `useAnimationControls`, tanpa remount), ANGKA digerakkan
+  spring (`useSpring` stiffness 110/damping 24) → rolling number meluncur mulus
+  antar nilai. Dua pill: Unduh (sky, `DownloadCloud`) · Unggah (violet,
+  `UploadCloud`), rata kanan, full-width col-span-2, truncate responsif.
+  Verifikasi: 2 pill title "Unduh 87.9 KB/s"/"Unggah 63.5 KB/s", row 225px,
+  0 console error, typecheck/lint/build/get_errors PASS.
+
+**Verifikasi**: typecheck/lint/build/get_errors PASS; bundle memuat
+`MetricCell`/`grid-cols-2`/`animate-ping`/`animate-pulse`/glow ambang; preview
+browser layout kompak terverifikasi; jendela Electron aktif dgn data realtime.
+Audit: 0 console error setelah module bersih (error `points`/`d` framer-motion
+teratasi pakai CSS transition + SVG native).
+
+**Perbaikan kecil (2026-08-17)**: sub "GB" di baris RAM dihapus (nilai hanya %;
+detail GB tetap di tooltip). **CATATAN realtime**: preview browser (localhost:5173)
+tanpa `window.api` → tanpa data → grafik tampak statis (bukan bug). Dibuktikan:
+injeksi mock realtime → CPU animasi & grafik bergerak. Di app Electron asli data
+realtime 1,5 dtk (CPU datar saat idle = data nyata).
+
+**Perluasan data nyata (2026-08-17, lanjutan)** — semua dari OS/downloader,
+BUKAN dummy:
+- **Ruang Disk** — bar = **% TERPAKAI** (konsisten dgn CPU/RAM), label eksplisit
+  "**Dipakai X / Y GB (Z%) · bebas W GB**" sehingga total vs kosong jelas.
+  Data: `fs.promises.statfs()` pada folder output (`getOutputBaseDir`, fallback
+  home). (Catatan: versi lama bar = % bebas & label ambigu → diperbaiki.)
+- **Jaringan** (sistem) — kecepatan **↓ unduh & ↑ unggah** nyata dari akumulator
+  OS: macOS `netstat -ib`, Linux `/proc/net/dev`, Windows `netstat -e` (delta
+  antar sampel).
+- **Kecepatan Unduh (App)** — agregat `speedBytesPerSec` dari downloader
+  (Map per URL, dihapus saat selesai).
+- **Sparkline RAM app** (riwayat 24 sampel) — pola sama dengan sparkline CPU.
+- **RAM Sistem DIHAPUS** (2026-08-17, keputusan user: tidak diperlukan) — baris
+  UI, payload (`ramSysUsedMb/TotalMb`), helper `computeSysMem`/`readMacVmStat`
+  (vm_stat) dihapus total dari kode & kontrak.
+- Payload `system:stats` final: `cpu`, `ramUsedMb`, `ramTotalMb`, `workers`,
+  `diskFreeMb`, `diskTotalMb`, `downloadSpeedBps`, `netRxBps`, `netTxBps`
+  (kontrak preload + global.d.ts + IPC doc sinkron).
+- **CATATAN dev**: perubahan `electron/main/index.ts` di electron-vite dev TIDAK
+  me-restart main process otomatis (HMR hanya renderer) → perlu restart dev
+  server agar data baru termuat. Di build produksi tidak terjadi.
+
+**Verifikasi**: simulasi 12 core — OLD: FFmpeg 6 core→100%, UI aktif→100%,
+idle→30%; NEW: 50%/10%/3%, 10 core penuh→83% (100% HANYA bila 12 core penuh);
+EMA: spike 100→naik 3→turun 0 (halus). typecheck/lint/build/get_errors PASS.
+Bundle main memuat `LOGICAL_CORES`/`CPU_EMA_ALPHA`/`smoothedCpu`/`workers`/
+`statfs`/`downloadSpeeds`/`readNetworkBytes` (tanpa sisa ramSys/vm_stat).
+Verifikasi data OS nyata: disk 86,1/460,4 GB bebas, jaringan 0.08↓/0.06↑ MB/s.
+
 ## Perubahan Terbaru (2026-08-17 — FITUR FRAMERATE DI PEMBERSIH VIDEO: 60/30/24 FPS)
 
 **Fitur baru**: dropdown **Framerate** di halaman Pembersih Video (panel

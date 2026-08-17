@@ -2,6 +2,9 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
+import { execFile } from 'node:child_process'
+import { statfs } from 'node:fs/promises'
+import { getOutputBaseDir } from '@engine/paths'
 import { ensureFfmpeg, detectEncoders, type EncoderId } from '@engine/ffmpeg'
 import {
   processBatch,
@@ -67,6 +70,21 @@ let statsTimer: NodeJS.Timeout | null = null
 let statsInFlight = false
 let prevCpuSamples = new Map<number, number>() // pid -> waktu CPU kumulatif (ms)
 let prevSampleTime = 0
+/** Jumlah core logis — CPU dinormalisasi agar 100% = SELURUH kapasitas mesin. */
+const LOGICAL_CORES = Math.max(1, os.cpus().length)
+/** Bobot EMA (0–1): makin kecil makin halus gerak angka CPU antar sampel. */
+const CPU_EMA_ALPHA = 0.3
+/** Kecepatan unduh aktif per URL (byte/dtk) — data NYATA dari downloader. */
+const downloadSpeeds = new Map<string, number>()
+
+/** Menjumlahkan kecepatan unduh aktif semua URL (byte/dtk). */
+function aggregateDownloadSpeed(): number {
+  let total = 0
+  for (const s of downloadSpeeds.values()) total += s
+  return total
+}
+let smoothedCpu = 0
+let hasSmoothedCpu = false
 
 /** Kumpulkan PID aplikasi (Electron) + PID pekerja (FFmpeg/yt-dlp). */
 function collectProcessPids(): number[] {
@@ -79,8 +97,10 @@ function collectProcessPids(): number[] {
 }
 
 /**
- * CPU (%) yang dipakai aplikasi ini, dihitung dari selisih waktu CPU
- * kumulatif setiap proses antar sampel (realtime, bukan rata-rata seumur hidup).
+ * CPU (%) kapasitas MESIN yang dipakai aplikasi ini — dihitung dari selisih
+ * waktu CPU kumulatif setiap proses antar sampel, lalu DINORMALISASI dengan
+ * jumlah core logis (mis. 12 core: pemakaian 6 core penuh = 50%, bukan 100%).
+ * Ditambah EMA agar nilai tidak meloncat liar antar sampel (0 ↔ 100).
  */
 async function computeAppCpuPercent(nowMs: number): Promise<number> {
   const pids = collectProcessPids()
@@ -105,7 +125,15 @@ async function computeAppCpuPercent(nowMs: number): Promise<number> {
   }
   prevCpuSamples = current
   prevSampleTime = nowMs
-  return Math.min(100, Math.max(0, Math.round(total)))
+
+  // Normalisasi: jumlah kerja lintas semua core → % kapasitas mesin (0–100).
+  const normalized = Math.min(100, Math.max(0, total / LOGICAL_CORES))
+  // EMA: haluskan fluktuasi antar sampel (akar masalah "gerak sangat cepat").
+  smoothedCpu = hasSmoothedCpu
+    ? smoothedCpu * (1 - CPU_EMA_ALPHA) + normalized * CPU_EMA_ALPHA
+    : normalized
+  hasSmoothedCpu = true
+  return Math.round(smoothedCpu)
 }
 
 /** RAM (MB) yang dipakai aplikasi ini (jumlah RSS seluruh proses). */
@@ -117,6 +145,106 @@ async function computeAppRamUsedMb(): Promise<number> {
   return Math.round(totalBytes / 1024 / 1024)
 }
 
+/**
+ * Ruang disk bebas/total (MB) pada volume folder output/download (fallback ke
+ * home bila folder belum ada). Data NYATA dari sistem file (statfs).
+ */
+async function getDiskStats(): Promise<{ freeMb: number; totalMb: number }> {
+  const targets = [getOutputBaseDir(), os.homedir()]
+  for (const target of targets) {
+    try {
+      const s = await statfs(target)
+      if (s && s.bavail > 0 && s.bsize > 0 && s.blocks > 0) {
+        return {
+          freeMb: Math.round((s.bavail * s.bsize) / 1024 / 1024),
+          totalMb: Math.round((s.blocks * s.bsize) / 1024 / 1024)
+        }
+      }
+    } catch {
+      // Coba target berikutnya (folder output mungkin belum dibuat).
+    }
+  }
+  return { freeMb: 0, totalMb: 0 }
+}
+
+// --- Akumulator trafik jaringan (System Monitor): kecepatan unduh/unggah ---
+let prevNetBytes: { rx: number; tx: number } | null = null
+let prevNetTime = 0
+
+/** Membaca akumulator byte jaringan sistem (rx/tx) — data nyata dari OS. */
+function readNetworkBytes(): Promise<{ rx: number; tx: number } | null> {
+  if (process.platform === 'darwin') return readNetworkBytesMac()
+  if (process.platform === 'linux') return readNetworkBytesLinux()
+  if (process.platform === 'win32') return readNetworkBytesWindows()
+  return Promise.resolve(null)
+}
+
+/** macOS: `netstat -ib` — jumlah Ibytes/Obytes antarmuka en* (kumulatif). */
+function readNetworkBytesMac(): Promise<{ rx: number; tx: number } | null> {
+  return new Promise((resolve) => {
+    execFile('netstat', ['-ib'], { timeout: 2000 }, (err, stdout) => {
+      if (err) {
+        resolve(null)
+        return
+      }
+      let rx = 0
+      let tx = 0
+      for (const line of stdout.split('\n')) {
+        // en0 1500 <Link#14> c2:83:...  Ipkts Ierrs Ibytes Opkts Oerrs Obytes Coll
+        const m = line.trim().match(/^en\d+\s+\d+\s+<Link#\d+>\s+\S+\s+(\d+)\s+\d+\s+(\d+)\s+(\d+)\s+\d+\s+(\d+)/)
+        if (m) {
+          rx += Number.parseInt(m[2], 10) // Ibytes
+          tx += Number.parseInt(m[4], 10) // Obytes
+        }
+      }
+      resolve(rx + tx > 0 ? { rx, tx } : null)
+    })
+  })
+}
+
+/** Linux: `/proc/net/dev` — baris antarmuka en/eth/wlan (rx bytes, tx bytes). */
+function readNetworkBytesLinux(): Promise<{ rx: number; tx: number } | null> {
+  return new Promise((resolve) => {
+    fs.readFile('/proc/net/dev', 'utf8', (err, data) => {
+      if (err) {
+        resolve(null)
+        return
+      }
+      let rx = 0
+      let tx = 0
+      for (const line of data.split('\n')) {
+        const m = line.match(/^\s*(en|eth|wlan)\w+:\s+(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)/)
+        if (m) {
+          rx += Number.parseInt(m[2], 10)
+          tx += Number.parseInt(m[3], 10)
+        }
+      }
+      resolve(rx + tx > 0 ? { rx, tx } : null)
+    })
+  })
+}
+
+/** Windows: `netstat -e` — baris "Bytes Received/Sent". */
+function readNetworkBytesWindows(): Promise<{ rx: number; tx: number } | null> {
+  return new Promise((resolve) => {
+    execFile('netstat', ['-e'], { timeout: 2000 }, (err, stdout) => {
+      if (err) {
+        resolve(null)
+        return
+      }
+      let rx = 0
+      let tx = 0
+      for (const line of stdout.split('\n')) {
+        const rm = line.match(/Bytes\s+Received\s*=\s*(\d+)/i)
+        const tm = line.match(/Bytes\s+Sent\s*=\s*(\d+)/i)
+        if (rm) rx = Number.parseInt(rm[1], 10)
+        if (tm) tx = Number.parseInt(tm[1], 10)
+      }
+      resolve(rx + tx > 0 ? { rx, tx } : null)
+    })
+  })
+}
+
 function startSystemStats(): void {
   if (statsTimer) return
   statsTimer = setInterval(async () => {
@@ -124,14 +252,40 @@ function startSystemStats(): void {
     statsInFlight = true
     try {
       const now = Date.now()
-      const [cpu, ramUsedMb] = await Promise.all([
+      const [cpu, ramUsedMb, disk] = await Promise.all([
         computeAppCpuPercent(now),
-        computeAppRamUsedMb()
+        computeAppRamUsedMb(),
+        getDiskStats()
       ])
+      // Kecepatan jaringan sistem (delta akumulator byte rx/tx).
+      const net = await readNetworkBytes()
+      let netRxBps = 0
+      let netTxBps = 0
+      if (net && prevNetBytes) {
+        const netElapsedSec = (Date.now() - prevNetTime) / 1000
+        if (netElapsedSec > 0) {
+          netRxBps = Math.max(0, Math.round((net.rx - prevNetBytes.rx) / netElapsedSec))
+          netTxBps = Math.max(0, Math.round((net.tx - prevNetBytes.tx) / netElapsedSec))
+        }
+      }
+      if (net) {
+        prevNetBytes = net
+        prevNetTime = Date.now()
+      }
       emit('system:stats', {
         cpu,
         ramUsedMb,
-        ramTotalMb: Math.round(os.totalmem() / 1024 / 1024)
+        ramTotalMb: Math.round(os.totalmem() / 1024 / 1024),
+        // Jumlah pekerja aktif (FFmpeg/yt-dlp) — membuat lonjakan CPU jadi jelas sumbernya.
+        workers: getTrackedPids().length,
+        // Ruang disk bebas/total pada volume output (nyata dari statfs).
+        diskFreeMb: disk.freeMb,
+        diskTotalMb: disk.totalMb,
+        // Kecepatan unduh aktif app (nyata dari downloader).
+        downloadSpeedBps: aggregateDownloadSpeed(),
+        // Kecepatan jaringan sistem (nyata dari akumulator OS).
+        netRxBps,
+        netTxBps
       })
     } finally {
       statsInFlight = false
@@ -316,6 +470,13 @@ function handleDownload(payload: { urls?: string[]; options?: DownloadOptions })
     urls,
     options,
     onProgress: (p: DownloadProgress) => {
+      // Lacak kecepatan unduh aktif utk System Monitor (data NYATA dari downloader).
+      const key = p.id ?? p.url
+      if (p.status === 'downloading' && typeof p.speedBytesPerSec === 'number' && p.speedBytesPerSec > 0) {
+        downloadSpeeds.set(key, p.speedBytesPerSec)
+      } else if (p.status === 'success' || p.status === 'failed') {
+        downloadSpeeds.delete(key)
+      }
       // Catat riwayat saat unduhan berhasil (dipakai tab Riwayat).
       if (p.status === 'success' && p.filePath) {
         appendHistory({

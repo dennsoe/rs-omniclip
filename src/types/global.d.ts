@@ -72,7 +72,17 @@ declare global {
 
       /** Statistik sistem nyata (CPU & RAM) dari proses utama. */
       onSystemStats: (
-        cb: (data: { cpu: number; ramUsedMb: number; ramTotalMb: number }) => void
+        cb: (data: {
+          cpu: number
+          ramUsedMb: number
+          ramTotalMb: number
+          workers: number
+          diskFreeMb: number
+          diskTotalMb: number
+          downloadSpeedBps: number
+          netRxBps: number
+          netTxBps: number
+        }) => void
       ) => () => void
       trimVideo: (payload: { id: string; path: string; start: string; end: string }) => void
       onTrimComplete: (

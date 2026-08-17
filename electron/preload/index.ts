@@ -313,10 +313,32 @@ const api = {
   },
 
   /** Statistik sistem nyata (CPU & RAM) dari proses utama. */
-  onSystemStats: (cb: (data: { cpu: number; ramUsedMb: number; ramTotalMb: number }) => void): Unsubscribe => {
+  onSystemStats: (
+    cb: (data: {
+      cpu: number
+      ramUsedMb: number
+      ramTotalMb: number
+      workers: number
+      diskFreeMb: number
+      diskTotalMb: number
+      downloadSpeedBps: number
+      netRxBps: number
+      netTxBps: number
+    }) => void
+  ): Unsubscribe => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { cpu: number; ramUsedMb: number; ramTotalMb: number }
+      data: {
+        cpu: number
+        ramUsedMb: number
+        ramTotalMb: number
+        workers: number
+        diskFreeMb: number
+        diskTotalMb: number
+        downloadSpeedBps: number
+        netRxBps: number
+        netTxBps: number
+      }
     ): void => cb(data)
     ipcRenderer.on('system:stats', listener)
     return () => {
