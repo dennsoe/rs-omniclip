@@ -65,8 +65,10 @@ Menjalankan:
 ffprobe -v error -print_format json -show_format -show_streams <file>
 ```
 
-Menghasilkan `{ duration, width, height, hasVideo, hasAudio }`. `duration`
-dipakai untuk menghitung persentase kemajuan.
+Menghasilkan `{ duration, width, height, frameRate, hasVideo, hasAudio }`.
+`duration` dipakai untuk menghitung persentase kemajuan; `frameRate` (parse
+`avg_frame_rate` ffprobe, dibulatkan 2 desimal) dipakai untuk memutuskan
+konversi FPS.
 
 ## 5. Eksekusi FFmpeg — `runFfmpeg(options)`
 
@@ -91,11 +93,24 @@ pernah ditimpa, berkas asli dan hasil sebelumnya tetap aman.
 
 `options: ProcessOptions { hwAccel?, processingMode?: 'privacy' | 'enhance',
 cleanMetadata?, quality?: 'auto'|'best'|'balanced'|'compact',
-audio?: 'original'|'aac128'|'aac192'|'aac256' }`.
+audio?: 'original'|'aac128'|'aac192'|'aac256',
+fps?: 'source'|'fps24'|'fps30'|'fps60' }`.
 Metadata dibuang bila `cleanMetadata` (default true) → `-map_metadata -1`;
 selalu `-movflags +faststart` (siap streaming). `quality` memetakan preset
 x264 + CRF (`crfForQuality`/`x264QualityArgs`); `audio` memetakan
 `audioModeArgs` (original = `-c:a copy`).
+
+**Konversi FPS (`fps`, default `source` = pertahankan FPS asli)**: engine
+membaca `frameRate` sumber dari `probe()` (parse `avg_frame_rate` ffprobe, mis.
+`30/1` → 30, `30000/1001` → 29.97). `buildFpsFilter()` menghasilkan filter:
+- `source` atau target == FPS sumber (pembulatan) → tanpa konversi.
+- NAIKKAN FPS + mode `enhance` + preset BUKAN `uhd` → `minterpolate=fps=T:mi_mode=mci`
+  (interpolasi gerak sejati — halus, lebih lambat).
+- Selainnya (privacy, atau `uhd` 4K, atau menurunkan FPS) → `fps=T`
+  (duplikasi/buang frame — cepat; interpolasi diblokir di 4K karena sangat lambat).
+- Konversi FPS memaksa re-encode: pada `privacy`+`archive` jalur `-c copy`
+  dilewati (re-encode wajib). Preset `metadata` (remux lossless) TIDAK
+  menerapkan konversi FPS.
 
 ### 6.1 `metadata` — Hapus Metadata (lossless, khusus Auto-Watcher auto-clean)
 
@@ -119,17 +134,21 @@ filter berat (denoise/CAS/eq); encode mengikuti `quality` (default `auto` =
 
 - `archive` (Kualitas Asli) → `-c copy` (audio original) / `-c:v copy` +
   re-encode audio (audio != original) — instan, tanpa re-encode video.
+  **Kecuali konversi FPS aktif**: re-encode wajib → langsung `libx264` +
+  filter FPS.
 - `hd`/`fullhd`/`uhd` → `scale='if(gt(iw,ih),-2,T)':'if(gt(iw,ih),T,-2)'`
   (short-side = target: 720p→1280×720, 1080p→1920×1080, 2160p→3840×2160;
-  otomatis genap via `-2`) + `libx264 veryfast`.
-- `vertical` → `VERTICAL_PAD_BLUR` (lihat 6.4) + `libx264 veryfast`.
+  otomatis genap via `-2`) + `libx264 veryfast` (+ filter FPS bila aktif).
+- `vertical` → `VERTICAL_PAD_BLUR` (lihat 6.4) + `libx264 veryfast`
+  (+ filter FPS bila aktif).
+- Konversi FPS di mode ini selalu memakai `fps=T` (duplikasi/buang frame).
 
 ### 6.3 Mode `enhance` — Penjernihan Maksimal (default)
 
 Mode dipilih via tab di UI (ikon `Focus`; pill aktif biru geser). Wajib
 re-encode + pipeline jernih:
 ```
-atadenoise=0a=0.04:0b=0.04 → [scale long-side + flags=lanczos] → cas=0.7 → eq(saturation=1.15:contrast=1.04)
+hqdn3d=2.5:2.5:12:9 → deband → [scale long-side + flags=lanczos | pad-blur] → cas=0.95 → unsharp=7:7:0.7:5:5:0.3 → eq(saturation=1.15:contrast=1.04)
 ```
 - `archive` → pipeline tanpa scale, encoder mengikuti `quality`.
 - `hd`/`fullhd`/`uhd` → `buildEnhance` (pipeline + scale lanczos), encoder
@@ -137,6 +156,12 @@ atadenoise=0a=0.04:0b=0.04 → [scale long-side + flags=lanczos] → cas=0.7 →
 - `vertical` → `buildEnhance` (pipeline + pad-blur 9:16).
 - Audio mengikuti `audio` (original → `-c:a copy` tanpa filter; selainnya
   AAC + `afftdn=nr=12:nf=-30`, dgn fallback tanpa filter audio).
+- Konversi FPS (lihat catatan atas): naikkan + bukan `uhd` → `minterpolate`
+  disisipkan di AKHIR chain (setelah `eq`); `uhd`/menurunkan → `fps=`.
+
+Catatan empiris (2026-08-17, klip 720p): chain ini memberi detail bersih
++6.9% vs sumber & noise −36%. `cas=1.0` di build ini justru menurunkan detail
+→ batas aman 0.95.
 
 ### 6.4 `vertical` — Vertikal 9:16 Story/Shorts/Reels
 

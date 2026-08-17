@@ -26,8 +26,21 @@ export interface ProcessProgress {
 export type QualityLevel = 'auto' | 'best' | 'balanced' | 'compact'
 /** Penanganan audio keluaran. */
 export type AudioMode = 'original' | 'aac128' | 'aac192' | 'aac256'
+/**
+ * Framerate keluaran video. 'source' = pertahankan FPS asli (default);
+ * lainnya memaksa konversi (naikkan/turunkan). Nilai 24/30/60 dipakai engine.
+ */
+export type FpsOption = 'source' | 'fps24' | 'fps30' | 'fps60'
 
-/** Opsi pemrosesan global (mode + hardware + kualitas/audio/metadata). */
+/** Framerate target per opsi FPS (null = pertahankan asli). */
+const FPS_TARGET: Record<FpsOption, number | null> = {
+  source: null,
+  fps24: 24,
+  fps30: 30,
+  fps60: 60
+}
+
+/** Opsi pemrosesan global (mode + hardware + kualitas/audio/metadata/FPS). */
 export interface ProcessOptions {
   hwAccel?: HwAccelMode
   /** Mode pemrosesan (default 'enhance'). */
@@ -38,6 +51,8 @@ export interface ProcessOptions {
   quality?: QualityLevel
   /** Penanganan audio (default 'original'). */
   audio?: AudioMode
+  /** Framerate keluaran (default 'source' = pertahankan FPS asli). */
+  fps?: FpsOption
 }
 
 /** Target resolusi sumbu panjang (piksel). */
@@ -107,6 +122,34 @@ function audioModeArgs(audio: AudioMode): string[] {
   }
 }
 
+/**
+ * Membangun filter konversi FPS bila diperlukan; '' bila tidak ada konversi.
+ * - 'source' atau target == FPS sumber (pembulatan) → tanpa konversi.
+ * - NAIKKAN FPS (mis. 30→60):
+ *   - mode enhance + bukan preset UHD → `minterpolate` (interpolasi gerak
+ *     sejati, halus). Terverifikasi empiris di FFmpeg 9.0 (kompatibel dgn
+ *     chain penjernihan, output 60/1).
+ *   - selainnya (privacy / UHD 4K) → `fps=` (duplikasi frame, cepat) —
+ *     interpolasi di 4K sangat lambat, jadi diblokir di preset uhd.
+ * - TURUNKAN FPS (mis. 60→30) → `fps=` (buang frame, tidak butuh interpolasi).
+ */
+function buildFpsFilter(
+  fps: FpsOption,
+  sourceFrameRate: number,
+  processingMode: ProcessingMode,
+  preset: PresetType
+): string {
+  const target = FPS_TARGET[fps]
+  if (target === null || sourceFrameRate <= 0) return ''
+  const src = Math.round(sourceFrameRate)
+  if (src === target) return ''
+  const upscale = target > src
+  if (upscale && processingMode === 'enhance' && preset !== 'uhd') {
+    return `minterpolate=fps=${target}:mi_mode=mci`
+  }
+  return `fps=${target}`
+}
+
 /** Encode cepat mode privacy (libx264 + kualitas/audio) — fallback tanpa filter bila gagal. */
 function privacyEncode(
   common: string[],
@@ -153,6 +196,7 @@ export async function processBatch(
   const cleanMetadata = options.cleanMetadata !== false
   const quality: QualityLevel = options.quality ?? 'auto'
   const audio: AudioMode = options.audio ?? 'original'
+  const fps: FpsOption = options.fps ?? 'source'
 
   const { ffmpeg, ffprobe } = await ensureFfmpeg()
   const outputFolder = createOutputFolderForBatch(files[0].path)
@@ -170,7 +214,8 @@ export async function processBatch(
         processingMode,
         cleanMetadata,
         quality,
-        audio
+        audio,
+        fps
       )
       const totalDuration = info.duration || 0
 
@@ -239,17 +284,19 @@ function buildArgSets(
   preset: PresetType,
   input: string,
   output: string,
-  _info: ProbeResult,
+  info: ProbeResult,
   hwAccel: HwAccelMode = 'auto',
   processingMode: ProcessingMode = 'enhance',
   cleanMetadata = true,
   quality: QualityLevel = 'auto',
-  audio: AudioMode = 'original'
+  audio: AudioMode = 'original',
+  fps: FpsOption = 'source'
 ): string[][] {
   // Metadata dibuang sesuai saklar "Hapus Metadata" (default dibuang).
   const common = ['-y', '-i', input, ...(cleanMetadata ? ['-map_metadata', '-1'] : [])]
 
   // Preset 'metadata' (khusus Auto-Watcher auto-clean): remux lossless.
+  // Konversi FPS TIDAK berlaku di sini (jalur -c copy tidak dapat re-encode).
   if (preset === 'metadata') {
     return [
       [...common, '-c', 'copy', '-movflags', '+faststart', output],
@@ -269,10 +316,17 @@ function buildArgSets(
     ]
   }
 
+  // Filter konversi FPS ('' bila tidak perlu). Memakai FPS sumber hasil probe.
+  const fpsFilter = buildFpsFilter(fps, info.frameRate, processingMode, preset)
+
   // --- Mode PRIVACY: cepat, tanpa filter berat (denoise/CAS/eq). ---
   if (processingMode === 'privacy') {
-    // Kualitas Asli → salin instan (tanpa re-encode video).
+    // Kualitas Asli → salin instan (tanpa re-encode video). Kecuali bila
+    // diminta konversi FPS: re-encode wajib → langsung jalur encode.
     if (preset === 'archive') {
+      if (fpsFilter) {
+        return [privacyEncode(common, fpsFilter, output, quality, audio)]
+      }
       if (audio === 'original') {
         return [
           [...common, '-c', 'copy', '-movflags', '+faststart', output],
@@ -287,16 +341,18 @@ function buildArgSets(
     }
     // Vertikal 9:16 → pad-blur + encode cepat.
     if (preset === 'vertical') {
+      const vfPad = fpsFilter ? `${VERTICAL_PAD_BLUR},${fpsFilter}` : VERTICAL_PAD_BLUR
       return [
-        privacyEncode(common, VERTICAL_PAD_BLUR, output, quality, audio),
-        privacyEncode(common, null, output, quality, audio)
+        privacyEncode(common, vfPad, output, quality, audio),
+        privacyEncode(common, fpsFilter || null, output, quality, audio)
       ]
     }
     // Resolusi (hd/fullhd/uhd) → scale biasa + encode cepat.
     const target: ScaleTarget = preset === 'hd' ? 720 : preset === 'fullhd' ? 1080 : 2160
+    const vfScale = fpsFilter ? `${scaleLongSide(target)},${fpsFilter}` : scaleLongSide(target)
     return [
-      privacyEncode(common, scaleLongSide(target), output, quality, audio),
-      privacyEncode(common, null, output, quality, audio)
+      privacyEncode(common, vfScale, output, quality, audio),
+      privacyEncode(common, fpsFilter || null, output, quality, audio)
     ]
   }
 
@@ -308,20 +364,24 @@ function buildArgSets(
   // Uji klip TikTok 720p: detail bersih +6.9% vs sumber, noise −36%; FullHD
   // upscale +2.7% vs perilaku lama (sebelumnya malah menurunkan ketajaman).
   // CATATAN: cas=1.0 dgn build ini justru menurunkan detail (uji) → batas aman 0.95.
-  const enhanceFilter = (extra: string): string =>
-    `hqdn3d=2.5:2.5:12:9,deband${extra ? `,${extra}` : ''},cas=0.95,unsharp=7:7:0.7:5:5:0.3,eq=saturation=1.15:contrast=1.04`
+  // `suffix` (opsional) menyisipkan filter di AKHIR chain — dipakai konversi FPS
+  // (minterpolate/fps) yang terverifikasi kompatibel setelah eq.
+  const enhanceFilter = (extra: string, suffix = ''): string =>
+    `hqdn3d=2.5:2.5:12:9,deband${extra ? `,${extra}` : ''},cas=0.95,unsharp=7:7:0.7:5:5:0.3,eq=saturation=1.15:contrast=1.04${
+      suffix ? `,${suffix}` : ''
+    }`
 
   switch (preset) {
     case 'archive':
-      return buildEnhance(common, enhanceFilter(''), output, hwAccel, quality, audio)
+      return buildEnhance(common, enhanceFilter('', fpsFilter), output, hwAccel, quality, audio)
     case 'vertical':
-      return buildEnhance(common, enhanceFilter(VERTICAL_PAD_BLUR), output, hwAccel, quality, audio)
+      return buildEnhance(common, enhanceFilter(VERTICAL_PAD_BLUR, fpsFilter), output, hwAccel, quality, audio)
     case 'hd':
-      return buildEnhance(common, enhanceFilter(scaleLongSide(720, true)), output, hwAccel, quality, audio)
+      return buildEnhance(common, enhanceFilter(scaleLongSide(720, true), fpsFilter), output, hwAccel, quality, audio)
     case 'fullhd':
-      return buildEnhance(common, enhanceFilter(scaleLongSide(1080, true)), output, hwAccel, quality, audio)
+      return buildEnhance(common, enhanceFilter(scaleLongSide(1080, true), fpsFilter), output, hwAccel, quality, audio)
     case 'uhd':
-      return buildEnhance(common, enhanceFilter(scaleLongSide(2160, true)), output, hwAccel, quality, audio)
+      return buildEnhance(common, enhanceFilter(scaleLongSide(2160, true), fpsFilter), output, hwAccel, quality, audio)
     default:
       throw new Error(`Prasetel tidak dikenal: ${preset}`)
   }

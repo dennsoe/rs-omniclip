@@ -26,6 +26,42 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-17**.
   Pengunduh + info unduhan lengkap (platform/durasi/akun) + preview dari
   thumbnail + info engagement di hasil scrape.
 
+## Perubahan Terbaru (2026-08-17 — FITUR FRAMERATE DI PEMBERSIH VIDEO: 60/30/24 FPS)
+
+**Fitur baru**: dropdown **Framerate** di halaman Pembersih Video (panel
+pengaturan, grid 4 kolom di layar lebar). Opsi: **Pertahankan Asli** (default)
+/ **60 FPS** / **30 FPS** / **24 FPS** — konversi naik/turun otomatis,
+terverifikasi empiris.
+
+**Cara kerja** (`electron/main/engine/`):
+- `ffmpeg.ts` `probe()` kini membaca **`frameRate`** (parse `avg_frame_rate`
+  ffprobe, dibulatkan 2 desimal; 0 bila tidak diketahui) — prasyarat engine
+  tahu FPS sumber.
+- `processor.ts` `buildFpsFilter()`: `source` atau target==sumber → tanpa
+  konversi. **Naikkan FPS** (mis. 30→60): mode **enhance** + preset BUKAN `uhd`
+  → `minterpolate=fps=60:mi_mode=mci` (interpolasi gerak halus); selainnya
+  (privacy / uhd 4K / menurunkan) → `fps=60` (duplikasi/buang frame, cepat).
+- Konversi FPS memaksa re-encode: jalur `-c copy` pada privacy+archive
+  dilewati. Preset `metadata` (remux lossless) tidak menerapkan konversi.
+- UI (`App.tsx`): state `cleanerFps` persist (`omni.cleanerFps`, default
+  `'source'`), diteruskan via preload → main → `processBatch`.
+
+**Verifikasi empiris** (video 30fps nyata, FFmpeg 9.0):
+- `enhance+archive+fps60` → output `60/1` (minterpolate).
+- `enhance+fullhd+fps60` → `60/1` (scale + minterpolate).
+- `enhance+uhd+fps60` → `60/1` (scale + `fps=60` — interpolasi diblokir di 4K).
+- `privacy+archive/fullhd/vertical+fps60` → `60/1` (`fps=60`).
+- `fps30` pd sumber 30fps → tanpa filter, tetap `30/1` (tidak re-encode sia-sia).
+- `fps24` → `24/1` (turunkan).
+- `parseFrameRate('30000/1001')` → 29.97; nilai invalid → 0.
+- **Hasil: 11/11 PASS** (matriks keputusan + ffmpeg nyata).
+
+**Validasi**: typecheck (web+node)/lint/build/get_errors PASS; bundle main
+memuat `buildFpsFilter`+`minterpolate=fps=${target}`+`fps=${target}`; bundle
+renderer memuat dropdown Framerate. CATATAN lingkungan: CDP 9222 tak
+terjangkau antar-namespace sandbox → E2E via harness integrasi setara (salinan
+verbatim matriks + ffmpeg nyata), bukan CDP UI.
+
 ## Perubahan Terbaru (2026-08-17 — PIPELINE PENJERNIHAN MAKSIMAL DIPERBAIKI + FIX VIDEOTOOLBOX)
 
 **Laporan user**: pilih "Kualitas Terbaik" di Pembersih Video tapi hasil tetap

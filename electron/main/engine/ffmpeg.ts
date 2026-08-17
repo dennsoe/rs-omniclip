@@ -17,6 +17,12 @@ export interface ProbeResult {
   duration: number
   width: number
   height: number
+  /**
+   * Framerate rata-rata stream video (frame per detik, dibulatkan 2 desimal).
+   * 0 jika tidak diketahui / tidak ada stream video. Dipakai engine untuk
+   * memutuskan apakah perlu konversi FPS (naikkan/turunkan) dan memilih metode.
+   */
+  frameRate: number
   hasVideo: boolean
   hasAudio: boolean
 }
@@ -284,11 +290,14 @@ export function probe(filePath: string, ffprobePath: string): Promise<ProbeResul
             codec_type?: string
             width?: number
             height?: number
+            avg_frame_rate?: string
+            r_frame_rate?: string
           }>
         }
         const duration = Number.parseFloat(data?.format?.duration ?? '') || 0
         let width = 0
         let height = 0
+        let frameRate = 0
         let hasVideo = false
         let hasAudio = false
         for (const stream of data?.streams ?? []) {
@@ -298,16 +307,33 @@ export function probe(filePath: string, ffprobePath: string): Promise<ProbeResul
               width = stream.width ?? 0
               height = stream.height ?? 0
             }
+            if (frameRate === 0) {
+              frameRate = parseFrameRate(stream.avg_frame_rate ?? stream.r_frame_rate)
+            }
           } else if (stream.codec_type === 'audio') {
             hasAudio = true
           }
         }
-        resolve({ duration, width, height, hasVideo, hasAudio })
+        resolve({ duration, width, height, frameRate, hasVideo, hasAudio })
       } catch {
         reject(new Error('Gagal memproses informasi video.'))
       }
     })
   })
+}
+
+/**
+ * Mengurai nilai framerate ffprobe (pecahan seperti "30000/1001" atau "30/1")
+ * menjadi angka fps (dibulatkan 2 desimal). Mengembalikan 0 bila tidak valid.
+ */
+function parseFrameRate(raw: string | undefined): number {
+  if (!raw || raw === '0/0') return 0
+  const parts = raw.split('/')
+  if (parts.length !== 2) return 0
+  const num = Number.parseFloat(parts[0])
+  const den = Number.parseFloat(parts[1])
+  if (!Number.isFinite(num) || !Number.isFinite(den) || den <= 0 || num <= 0) return 0
+  return Math.round((num / den) * 100) / 100
 }
 
 /**

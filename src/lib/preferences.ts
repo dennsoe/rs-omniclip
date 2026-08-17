@@ -1,5 +1,5 @@
 import { clearPersistedValue } from '../hooks/use-persistent-state'
-import type { PresetType, ProcessingMode, QualityLevel, AudioMode } from './types'
+import type { PresetType, ProcessingMode, QualityLevel, AudioMode, FpsOption } from './types'
 
 /**
  * Preferensi pengguna yang dipersist ke localStorage (per instalasi).
@@ -14,6 +14,7 @@ export const PREF_KEYS = {
   cleanMetadata: 'omni.cleanMetadata',
   cleanerQuality: 'omni.cleanerQuality',
   cleanerAudio: 'omni.cleanerAudio',
+  cleanerFps: 'omni.cleanerFps',
   downloadMaxHeight: 'omni.download.maxHeight',
   downloadCookiesBrowser: 'omni.download.cookiesBrowser',
   downloadDouyinCookie: 'omni.download.douyinCookie',
@@ -44,6 +45,7 @@ export const PREF_DEFAULTS = {
   cleanMetadata: true,
   cleanerQuality: 'auto' as QualityLevel,
   cleanerAudio: 'original' as AudioMode,
+  cleanerFps: 'source' as FpsOption,
   downloadMaxHeight: 0,
   downloadCookiesBrowser: '',
   downloadDouyinCookie: '',
