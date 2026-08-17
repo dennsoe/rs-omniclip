@@ -240,7 +240,6 @@ export default function SystemMonitor(): React.ReactElement {
           icon={<MemoryStick className="h-3 w-3" />}
           label="RAM"
           value={`${ramPercent}%`}
-          sub={`${ramUsedDisplay}/${ramTotalDisplay} GB`}
           tone={ramT}
           pct={ramPercent}
           spark={ramHistory}

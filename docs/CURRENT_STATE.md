@@ -81,6 +81,12 @@ super responsif, realtime & interaktif:
 `MetricCell`/`grid-cols-2`/`animate-ping`/`animate-pulse`/glow ambang; preview
 browser layout kompak terverifikasi; jendela Electron aktif dgn data realtime.
 
+**Perbaikan kecil (2026-08-17)**: sub "GB" di baris RAM dihapus (nilai hanya %;
+detail GB tetap di tooltip). **CATATAN realtime**: preview browser (localhost:5173)
+tanpa `window.api` → tanpa data → grafik tampak statis (bukan bug). Dibuktikan:
+injeksi mock realtime → CPU animasi & grafik bergerak. Di app Electron asli data
+realtime 1,5 dtk (CPU datar saat idle = data nyata).
+
 **Perluasan data nyata (2026-08-17, lanjutan)** — semua dari OS/downloader,
 BUKAN dummy:
 - **Ruang Disk** — bar = **% TERPAKAI** (konsisten dgn CPU/RAM), label eksplisit
