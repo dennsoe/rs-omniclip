@@ -3,19 +3,31 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-18**.
 
-## Status Rilis v2.1.2 (SEDANG DIRILIS — release branch)
+## Status Rilis v2.1.2 (SELESAI — RELEASE v2.1.2 DIPUBLIKASI via CI)
 
 - **Branch**: `release/v2.1.2` (dari `main`). **Versi**: `2.1.2`.
 - **PR #42** (`fix/framerate-4k-nonaktif`) ke `main` **MERGED** (merge commit
   `4495704`, 2026-08-18) — nonaktifkan total konversi FPS saat preset 4K UHD.
 - **PR #43** (`feat/system-monitor`) ke `main` **MERGED** (merge commit
   `5de9ae9`, 2026-08-18) — System Monitor dirombak total.
-- Isi v2.1.2: System Monitor akurat & realtime (CPU ÷ core + EMA, RAM app, Disk,
-  jaringan ↓↑, kecepatan unduh, badge worker, UI kompak + animasi halus) +
-  Framerate nonaktif di 4K UHD.
-- **Release notes**: `release-notes/RELEASE_NOTES_v2.1.2.md`.
-- **Belum**: tag `v2.1.2` + push → CI "Release Multi-OS" (build macOS+Windows +
-  publish).
+- **PR #44** (`release/v2.1.2`) ke `main` **MERGED** (merge commit `2234569`,
+  2026-08-18).
+- **Tag**: `v2.1.2` dibuat di HEAD main `2234569` + dipush.
+- **GitHub Release v2.1.2 DIBUAT OTOMATIS oleh CI** (workflow "Release
+  Multi-OS", run `32050415430` **SUCCESS**) — build macOS + Windows, lalu
+  release dibuat **draft** → di-**publish** manual via `gh release edit`
+  (draft=false) dengan judul & catatan rilis lengkap. **Latest**.
+  - Artefak: `RS-OmniTools-2.1.2-arm64.dmg`,
+    `RS-OmniTools-2.1.2-arm64.zip`, `RS-OmniTools-2.1.2-x64-setup.exe`,
+    `RS-OmniTools-2.1.2-x64-portable.exe` (+ blockmap, latest.yml,
+    latest-mac.yml).
+  - URL: https://github.com/dennsoe/rs-omnitools/releases/tag/v2.1.2
+- **Release notes**: `release-notes/RELEASE_NOTES_v2.1.2.md` (bagian "Body
+  release" dipakai sebagai notes GitHub).
+- Isi v2.1.2: System Monitor dirombak total (CPU akurat ÷ core + EMA, data
+  nyata RAM/Disk/jaringan ↓↑/kecepatan unduh/worker, UI kompak + realtime +
+  animasi halus, kontainer lebar dimaksimalkan) + Framerate nonaktif total di
+  4K UHD.
 
 ## Status Rilis v2.1.1 (SELESAI — RELEASE v2.1.1 DIPUBLIKASI via CI)
 
