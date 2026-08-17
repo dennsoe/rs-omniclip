@@ -204,6 +204,15 @@ export default function App(): React.ReactElement {
     PREF_KEYS.cleanerFps,
     PREF_DEFAULTS.cleanerFps
   )
+
+  // Preset 4K UHD: konversi FPS nonaktif total (Opsi 2) — paksa kembali ke
+  // "Pertahankan Asli" bila user memilih 4K saat FPS non-source aktif.
+  useEffect(() => {
+    if (preset === 'uhd' && cleanerFps !== 'source') {
+      setCleanerFps('source')
+    }
+  }, [preset, cleanerFps, setCleanerFps])
+
   const [isProcessing, setIsProcessing] = useState(false)
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
@@ -1306,7 +1315,7 @@ export default function App(): React.ReactElement {
                       value={cleanerFps}
                       options={fpsOptions}
                       onChange={(v) => setCleanerFps(v as FpsOption)}
-                      disabled={isProcessing}
+                      disabled={isProcessing || preset === 'uhd'}
                       icon={<Gauge className="h-4 w-4" />}
                     />
                     <FloatingSelect

@@ -38,13 +38,16 @@ terverifikasi empiris.
   ffprobe, dibulatkan 2 desimal; 0 bila tidak diketahui) — prasyarat engine
   tahu FPS sumber.
 - `processor.ts` `buildFpsFilter()`: `source` atau target==sumber → tanpa
-  konversi. **Naikkan FPS** (mis. 30→60): mode **enhance** + preset BUKAN `uhd`
-  → `minterpolate=fps=60:mi_mode=mci` (interpolasi gerak halus); selainnya
-  (privacy / uhd 4K / menurunkan) → `fps=60` (duplikasi/buang frame, cepat).
+  konversi; **preset `uhd` (4K) → tanpa konversi total (Opsi 2 — dropdown
+  Framerate nonaktif & dipaksa `source`)**. **Naikkan FPS** (mis. 30→60): mode
+  **enhance** → `minterpolate=fps=60:mi_mode=mci` (interpolasi gerak halus);
+  selainnya (privacy / menurunkan) → `fps=60` (duplikasi/buang frame, cepat).
 - Konversi FPS memaksa re-encode: jalur `-c copy` pada privacy+archive
   dilewati. Preset `metadata` (remux lossless) tidak menerapkan konversi.
 - UI (`App.tsx`): state `cleanerFps` persist (`omni.cleanerFps`, default
-  `'source'`), diteruskan via preload → main → `processBatch`.
+  `'source'`); saat preset 4K dipilih, dropdown Framerate disabled + otomatis
+  reset ke `source` (useEffect guard). Diteruskan via preload → main →
+  `processBatch`.
 
 **Verifikasi empiris** (video 30fps nyata, FFmpeg 9.0):
 - `enhance+archive+fps60` → output `60/1` (minterpolate).
