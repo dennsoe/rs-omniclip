@@ -62,9 +62,24 @@ super responsif, realtime & interaktif:
   "Unduh (App)" dihilangkan (Jaringan sudah menampilkan unduh/unggah sistem).
 - Header: ikon Activity dalam kotak rounded (selaras dgn gaya nav).
 
-**Verifikasi**: typecheck/lint/build/get_errors PASS; bundle renderer memuat
-`MetricBlock`/`cpuTone`/`ramTone`/`diskTone`; preview browser layout terverifikasi
-(label, tooltip, sejajar); jendela Electron aktif dgn data realtime.
+**Redesain kompak + animasi (2026-08-17, lanjutan)** — hemat ruang & lebih hidup:
+- **Grid 2 kolom** (CPU|RAM · Disk|Jaringan) → tinggi widget jauh berkurang;
+  Disk `col-span-2` saat jaringan idle (layout tetap seimbang).
+- Sel metrik kompak (`MetricCell`): label uppercase kecil + nilai besar + bar
+  tipis + sub "GB" + sparkline mini — semua dalam satu kartu.
+- **Animasi realtime (framer-motion)**:
+  - Nilai **pop** (spring scale) setiap kali data berubah.
+  - Bar **spring** (pertumbuhan halus mengikuti %).
+  - **Dot "live"** berdenyut (animate-ping) di header + teks "live".
+  - **Titik live di sparkline** berdenyut (SVG animate) — menandakan realtime.
+  - **Hover lift** kartu (+ translate + shadow).
+  - **Danger**: saat diambang batas, nilai `animate-pulse` + bar glow merah
+    (CPU>80, RAM>85, Disk>90).
+- Teks semakin diminimalkan: nilai = "%" besar, detail "GB" di sub kecil.
+
+**Verifikasi**: typecheck/lint/build/get_errors PASS; bundle memuat
+`MetricCell`/`grid-cols-2`/`animate-ping`/`animate-pulse`/glow ambang; preview
+browser layout kompak terverifikasi; jendela Electron aktif dgn data realtime.
 
 **Perluasan data nyata (2026-08-17, lanjutan)** — semua dari OS/downloader,
 BUKAN dummy:
