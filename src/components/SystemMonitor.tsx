@@ -6,8 +6,8 @@ import {
   MemoryStick,
   HardDrive,
   Network,
-  ArrowDown,
-  ArrowUp,
+  DownloadCloud,
+  UploadCloud,
   Loader2
 } from 'lucide-react'
 
@@ -15,6 +15,8 @@ import {
 const HISTORY_LEN = 24
 const SPARK_W = 100
 const SPARK_H = 24
+/** Referensi 5 MB/s = 100% untuk meter jaringan (skala sqrt agar kecil terlihat). */
+const NET_REF_BPS = 5 * 1024 * 1024
 
 /** Format kecepatan byte/dtk → "12.4 MB/s" (data nyata, bukan simulasi). */
 function formatSpeed(bps: number): string {
@@ -25,14 +27,25 @@ function formatSpeed(bps: number): string {
   return `${(bps / 1024 / 1024 / 1024).toFixed(2)} GB/s`
 }
 
-/** Sparkline mini dengan titik "live" berdenyut di ujung (menandakan realtime). */
+/** Peta kecepatan → tinggi meter (%) — sqrt agar KB/s & MB/s terlihat seimbang. */
+function netPct(bps: number): number {
+  if (bps <= 0) return 0
+  return Math.min(100, Math.max(0, Math.round(Math.sqrt(bps / NET_REF_BPS) * 100)))
+}
+
+/**
+ * Sparkline dengan morph HALUS (CSS `transition: d` — didukung penuh Chromium/
+ * Electron, tidak patah) + efek ujung: ring ekspansi (radar ping) & titik inti
+ * menyala (glow). CATATAN: animasi atribut `points`/`d` via framer-motion
+ * menghasilkan "undefined" (error) → pakai CSS transition native.
+ */
 function Sparkline({ values, className }: { values: number[]; className?: string }): React.ReactElement | null {
   if (values.length < 2) return null
-  const points = values
+  const d = values
     .map((v, i) => {
       const x = (i / (values.length - 1)) * SPARK_W
       const y = SPARK_H - (Math.min(100, v) / 100) * (SPARK_H - 2) - 1
-      return `${x.toFixed(1)},${y.toFixed(1)}`
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
     })
     .join(' ')
   const lastVal = Math.min(100, values[values.length - 1])
@@ -45,19 +58,28 @@ function Sparkline({ values, className }: { values: number[]; className?: string
       className={className}
       aria-hidden
     >
-      <polyline
-        points={points}
+      {/* Garis grafik — morph halus antar sampel (CSS transition pada d) */}
+      <path
+        d={d}
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinejoin="round"
         strokeLinecap="round"
+        style={{ transition: 'd 0.7s ease-in-out' }}
       />
-      {/* Titik live yang berdenyut */}
-      <circle cx={lastX} cy={lastY} r="2.2" fill="currentColor">
-        <animate attributeName="r" values="1.5;3;1.5" dur="1.4s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="0.5;1;0.5" dur="1.4s" repeatCount="indefinite" />
-      </circle>
+      {/* Efek ujung grafik: ring ekspansi + titik inti menyala */}
+      <g>
+        {[0, 0.8].map((delay) => (
+          <circle key={delay} cx={lastX} cy={lastY} r="2" fill="none" stroke="currentColor" strokeWidth="1">
+            <animate attributeName="r" values="2;9" dur="1.6s" begin={`${delay}s`} repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.7;0" dur="1.6s" begin={`${delay}s`} repeatCount="indefinite" />
+          </circle>
+        ))}
+        <circle cx={lastX} cy={lastY} r="2.2" fill="currentColor" style={{ filter: 'drop-shadow(0 0 2.5px currentColor)' }}>
+          <animate attributeName="r" values="1.6;2.8;1.6" dur="1.2s" repeatCount="indefinite" />
+        </circle>
+      </g>
     </svg>
   )
 }
@@ -193,6 +215,9 @@ export default function SystemMonitor(): React.ReactElement {
   const ramT = ramTone(ramPercent)
   const diskT = diskTone(diskUsedPct)
   const networkActive = netRxBps > 0 || netTxBps > 0
+  // Tinggi meter jaringan (dari bawah ke atas) — skala sqrt, warna sesuai ↓/↑.
+  const netRxPct = netPct(netRxBps)
+  const netTxPct = netPct(netTxBps)
   // Status bahaya (diambang batas) → animasi pulse + glow.
   const cpuDanger = cpu > 80
   const ramDanger = ramPercent > 85
@@ -259,7 +284,7 @@ export default function SystemMonitor(): React.ReactElement {
           hint={`Disk: total ${diskTotalDisplay} GB · dipakai ${diskUsedDisplay} GB · bebas ${diskFreeDisplay} GB`}
         />
 
-        {/* Jaringan — hanya saat ada trafik */}
+        {/* Jaringan — meter analog: bar naik dari bawah ke atas, warna ↓/↑ */}
         {networkActive && (
           <div
             title={`Jaringan sistem: unduh ${formatSpeed(netRxBps)} · unggah ${formatSpeed(netTxBps)}`}
@@ -269,26 +294,50 @@ export default function SystemMonitor(): React.ReactElement {
               <Network className="h-3 w-3 shrink-0" />
               <span className="truncate text-[10px] font-bold uppercase tracking-wider">Jaringan</span>
             </div>
-            <motion.div
-              key={formatSpeed(netRxBps)}
-              initial={{ opacity: 0.3, x: -3 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-              className="mt-1 flex items-center gap-1 text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200"
-            >
-              <ArrowDown className="h-3 w-3 text-sky-500" />
-              {formatSpeed(netRxBps)}
-            </motion.div>
-            <motion.div
-              key={formatSpeed(netTxBps)}
-              initial={{ opacity: 0.3, x: -3 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-              className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200"
-            >
-              <ArrowUp className="h-3 w-3 text-violet-500" />
-              {formatSpeed(netTxBps)}
-            </motion.div>
+            <div className="mt-1.5 flex items-end justify-center gap-3">
+              {/* ↓ Unduh */}
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex h-9 w-2.5 items-end overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-800">
+                  <motion.div
+                    className="w-full rounded-full bg-sky-500"
+                    initial={{ height: 0 }}
+                    animate={{ height: `${netRxPct}%` }}
+                    transition={{ type: 'spring', stiffness: 110, damping: 15 }}
+                    style={{ originY: 1 }}
+                  />
+                </div>
+                <motion.span
+                  key={formatSpeed(netRxBps)}
+                  initial={{ opacity: 0.4, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex items-center gap-0.5 text-[8px] font-semibold tabular-nums text-sky-600 dark:text-sky-400"
+                >
+                  <DownloadCloud className="h-2.5 w-2.5 shrink-0" />
+                  <span className="truncate">{formatSpeed(netRxBps)}</span>
+                </motion.span>
+              </div>
+              {/* ↑ Unggah */}
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex h-9 w-2.5 items-end overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-800">
+                  <motion.div
+                    className="w-full rounded-full bg-violet-500"
+                    initial={{ height: 0 }}
+                    animate={{ height: `${netTxPct}%` }}
+                    transition={{ type: 'spring', stiffness: 110, damping: 15 }}
+                    style={{ originY: 1 }}
+                  />
+                </div>
+                <motion.span
+                  key={formatSpeed(netTxBps)}
+                  initial={{ opacity: 0.4, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex items-center gap-0.5 text-[8px] font-semibold tabular-nums text-violet-600 dark:text-violet-400"
+                >
+                  <UploadCloud className="h-2.5 w-2.5 shrink-0" />
+                  <span className="truncate">{formatSpeed(netTxBps)}</span>
+                </motion.span>
+              </div>
+            </div>
           </div>
         )}
       </div>

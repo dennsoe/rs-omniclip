@@ -77,9 +77,23 @@ super responsif, realtime & interaktif:
     (CPU>80, RAM>85, Disk>90).
 - Teks semakin diminimalkan: nilai = "%" besar, detail "GB" di sub kecil.
 
+**Efek & animasi grafik/jaringan (2026-08-17, lanjutan)**:
+- **Grafik HALUS (tidak patah)**: morph line via CSS `transition: d 0.7s` pada
+  `<path>` (didukung penuh Chromium/Electron). CATATAN audit: animasi atribut
+  `points`/`d` via framer-motion MENGHASILKAN error "undefined" → dipakai CSS
+  native (robust).
+- **Efek ujung grafik**: ring ekspansi (radar ping, 2 ring) + titik inti
+  menyala (glow drop-shadow) — SVG `<animate>` native.
+- **Jaringan = meter analog**: dua bar vertikal tumbuh **dari bawah ke atas**
+  (framer-motion spring, `originY:1`), warna **sky (↓ unduh) / violet (↑
+  unggah)** pada bar + teks; icon **`DownloadCloud`/`UploadCloud`**; tinggi bar
+  memakai skala sqrt (ref 5 MB/s) agar KB/s & MB/s terlihat proporsional.
+
 **Verifikasi**: typecheck/lint/build/get_errors PASS; bundle memuat
 `MetricCell`/`grid-cols-2`/`animate-ping`/`animate-pulse`/glow ambang; preview
 browser layout kompak terverifikasi; jendela Electron aktif dgn data realtime.
+Audit: 0 console error setelah module bersih (error `points`/`d` framer-motion
+teratasi pakai CSS transition + SVG native).
 
 **Perbaikan kecil (2026-08-17)**: sub "GB" di baris RAM dihapus (nilai hanya %;
 detail GB tetap di tooltip). **CATATAN realtime**: preview browser (localhost:5173)
