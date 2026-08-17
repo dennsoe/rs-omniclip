@@ -342,6 +342,53 @@ const api = {
     return ipcRenderer.invoke('douyin:validate', raw)
   },
 
+  /** Info jembatan cookie ekstensi: port + kode hubung `<port>:<token>`. */
+  getCookieBridgeInfo: (): Promise<{
+    active: boolean
+    port: number | null
+    code: string | null
+  }> => {
+    return ipcRenderer.invoke('cookieBridge:info')
+  },
+
+  /** Versi ekstensi cookie (baca manifest dari dalam app). */
+  getExtensionInfo: (): Promise<{ version: string | null }> => {
+    return ipcRenderer.invoke('extension:info')
+  },
+
+  /** Menyiapkan ekstensi cookie: salin ZIP ber-versi ke Downloads + ekstrak
+   *  ke folder + membuka foldernya (untuk Load unpacked). */
+  prepareExtension: (): Promise<{
+    ok: boolean
+    zipPath?: string | null
+    folderPath?: string
+    version?: string | null
+    error?: string
+  }> => {
+    return ipcRenderer.invoke('extension:prepare')
+  },
+
+  /** Cookie diterima dari ekstensi MV3 (valid & lolos token). */
+  onCookieReceived: (cb: (data: {
+    site: string
+    cookieHeader: string
+    count: number
+    hasSession: boolean
+    supported: boolean
+  }) => void): Unsubscribe => {
+    const listener = (_event: Electron.IpcRendererEvent, data: {
+      site: string
+      cookieHeader: string
+      count: number
+      hasSession: boolean
+      supported: boolean
+    }): void => cb(data)
+    ipcRenderer.on('cookie:received', listener)
+    return () => {
+      ipcRenderer.removeListener('cookie:received', listener)
+    }
+  },
+
   /** Memeriksa status resource ffmpeg/yt-dlp terhadap manifest repo. */
   checkResources: (): Promise<ResourceInfoData[]> => {
     return ipcRenderer.invoke('resource:check')

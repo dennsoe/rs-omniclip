@@ -10,6 +10,7 @@
     "dev": "electron-vite dev",
     "start": "electron-vite preview",
     "build": "electron-vite build",
+    "build:extension": "node scripts/build-extension.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -69,6 +70,16 @@
     },
     "files": [
       "out/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "extensions/rs-omni-cookie-capturer",
+        "to": "rs-omni-cookie-capturer"
+      },
+      {
+        "from": "extensions/rs-omni-cookie-capturer.zip",
+        "to": "rs-omni-cookie-capturer.zip"
+      }
     ],
     "mac": {
       "category": "public.app-category.video",

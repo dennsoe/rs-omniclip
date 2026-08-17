@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "RS OmniTools — Cookie Capturer",
+  "version": "1.0.0",
+  "description": "Ambil cookie sesi (Douyin / TikTok) dan kirim otomatis ke aplikasi desktop RS OmniTools melalui jembatan lokal (127.0.0.1).",
+  "permissions": ["cookies", "clipboardWrite", "storage"],
+  "host_permissions": [
+    "*://*.douyin.com/*",
+    "*://*.iesdouyin.com/*",
+    "*://*.tiktok.com/*",
+    "http://127.0.0.1/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "RS OmniTools — Cookie Capturer"
+  },
+  "minimum_chrome_version": "102"
+}

@@ -1,7 +1,7 @@
 # Kondisi Terkini — RS OmniTools
 
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
-ada perubahan. Tanggal terakhir diperbarui: **2026-08-16**.
+ada perubahan. Tanggal terakhir diperbarui: **2026-08-17**.
 
 ## Status Rilis v2.1.0 (SELESAI — RELEASE v2.1.0 DIPUBLIKASI)
 
@@ -77,6 +77,102 @@ bertahap & ketat.**
   benar (invalid / tanpa-sesi / sesi / kosong); tombol + panduan muncul;
   screenshot premium. `get_errors` bersih, typecheck (node+web)/lint/build
   PASS. Belum di-commit/branch.
+
+## Perubahan Terbaru (2026-08-17 — EKSTENSI COOKIE MV3 + JEMBATAN LOKAL: ISI OTOMATIS)
+
+**Permintaan user: implementasikan & eksekusi Opsi A — ekstensi browser untuk
+mengambil cookie Douyin/TikTok lalu mengirim otomatis ke aplikasi via jembatan
+lokal. Dikerjakan sangat teliti.**
+
+- **Jembatan lokal (`electron/main/engine/cookieBridge.ts`, baru)**:
+  - HTTP server hanya di **loopback `127.0.0.1`**, **port dinamis** (tidak
+    terbuka ke jaringan).
+  - **Token** acak 48-hex dibuat sekali & disimpan di userData
+    (`cookie-bridge-token`) → stabil antar-restart (paste kode sekali saja).
+    Dibandingkan **constant-time** (`crypto.timingSafeEqual`).
+  - Tanpa header CORS → browser tak bisa membaca respons lintas-origin; token
+    mencegah penulisan dari halaman berbahaya.
+  - Route: `GET /api/health` (`{ok:true}`) & `POST /api/cookies`
+    `{site, cookieHeader, token}` → validasi via `parseDouyinCookie` untuk
+    `douyin` (satu sumber kebenaran), situs lain dihitung jumlah cookie &
+    dilaporkan `supported:false`. Respons `{ok, site, count, hasSession,
+    supported}`; token salah → **401** `invalid_token`; non-loopback → **403**.
+- **Main (`index.ts`)**: `startCookieBridge((d) => emit('cookie:received', d))`
+  saat `app.whenReady`; IPC baru `cookieBridge:info` →
+  `{active, port, code}` dengan `code = "<port>:<token>"`.
+- **Preload + `global.d.ts`**: `getCookieBridgeInfo()`,
+  `onCookieReceived(cb)`.
+- **Renderer**:
+  - `App.tsx`: subscribe `onCookieReceived` → bila `site==='douyin'` &
+    `supported` & `hasSession` → `setDownloadDouyinCookie(header)` (persisted
+    `omni.download.douyinCookie`) + toast sukses; tanpa sesi → toast error;
+    situs tak didukung → toast info.
+  - `DownloadSettingsModal.tsx`: kartu **"Isi otomatis via ekstensi browser"**
+    — kode hubung (mono, selectable) + tombol **Salin** (clipboard + fallback
+    `execCommand`) + tombol muat ulang + status aktif/tidak aktif.
+- **Distribusi ekstensi SEBAGAI ZIP ber-versi (tanpa unduh terpisah)**:
+  - **Build script `scripts/build-extension.mjs`** (+ `npm run build:extension`):
+    baca versi dari `manifest.json` (SATU-SATUNYA sumber kebenaran) → buat
+    `extensions/rs-omni-cookie-capturer.zip` (isi di root, tanpa `.DS_Store`/
+    `__MACOSX`; `zip` CLI macOS / PowerShell Compress-Archive Windows). ZIP
+    di-commit ke repo.
+  - `package.json` `build.extraResources`: bundel **ZIP** +
+    **folder sumber** ke dalam app (`Contents/Resources/rs-omni-cookie-capturer*`)
+    → siapa pun yang menginstal aplikasi otomatis punya ekstensinya (terverifikasi
+    via `electron-builder --dir`: folder 5 file + ZIP valid masuk ke bundle).
+  - IPC baru **`extension:info`** → `{ version }` (baca manifest dari dalam app)
+    → modal menampilkan badge **"vX.Y.Z"** di kartu ekstensi.
+  - **`extension:prepare`** dirombak (main `index.ts` + preload `prepareExtension`
+    + `global.d.ts`): salin ZIP dari dalam app (resources saat packaged /
+    `extensions/…` saat dev; fallback dev salin folder bila ZIP tak ada) →
+    `~/Downloads/RS-OmniTools-Extension/RS-OmniTools-Cookie-Capturer-v{version}.zip`,
+    ekstrak dengan `extract-zip` (dependensi sudah ada) → folder
+    `rs-omni-cookie-capturer/` (selalu disegarkan), lalu `shell.openPath` membuka
+    foldernya. Return `{ok, zipPath, folderPath, version}`.
+  - Tombol **"Siapkan Ekstensi (salin ke Downloads)"** di kartu ekstensi modal
+    (ikon `Download`; state `preparingExt`; toast sukses/gagal via prop `onToast`).
+  - **Panduan lengkap** di modal menggantikan panduan singkat: pasang ekstensi
+    (Siapkan Ekstensi → `chrome://extensions` → Developer mode → Load unpacked →
+    pilih folder hasil ekstrak), hapus-versi-lama dulu, hubungkan kode hubung,
+    ambil otomatis, + cara manual (F12/Network) sebagai fallback.
+  - **Versi di popup ekstensi**: footer menampilkan
+    `RS OmniTools Cookie Capturer · vX.Y.Z` via `chrome.runtime.getManifest()`.
+  - Alur jelas end-to-end: **pasang app → Pengaturan Unduhan → Siapkan
+    Ekstensi → ZIP ber-versi + folder hasil ekstrak terbuka di Downloads →
+    Load unpacked pilih folder → tempel kode hubung → selesai.** README
+    ekstensi diperbarui (jalur termudah + cara maintenance versi/ZIP).
+- **Ekstensi MV3 (`extensions/rs-omni-cookie-capturer/`, baru)**:
+  - `manifest.json` — permissions `cookies/clipboardWrite/storage`, host
+    `*.douyin.com`, `*.iesdouyin.com`, `*.tiktok.com`, `http://127.0.0.1/*`.
+  - `popup.html/js/css` — pilih situs, **Ambil & Kirim Cookie** (baca semua
+    cookie, build header persis urutan browser: dedupe nama by path
+    terpanjang/terlama + sort path menurun), validasi kunci sesi per situs,
+    kirim via `fetch` ke `127.0.0.1` + token, Cek koneksi, Salin cookie, simpan
+    kode hubung di `chrome.storage.local`. Plain JS — tanpa build.
+  - `README.md` — panduan load unpacked + cara pakai + keamanan.
+- **Lint**: `extensions/**` ditambahkan ke `ignores` `eslint.config.mjs`
+  (skrip MV3 environment Chrome terpisah dari app).
+- **Verifikasi E2E (Electron restart + CDP + curl)**:
+  - `getCookieBridgeInfo()` → `{active:true, port:59934, code}`.
+  - `GET /api/health` → 200 `{ok:true}`; token salah → **401**
+    `invalid_token`; listener terbukti hanya `127.0.0.1:59934`.
+  - `POST /api/cookies` douyin (6 cookie, ada sesi) → 200 `{count:6,
+    hasSession:true, supported:true}` → **renderer ter-update otomatis**:
+    `localStorage['omni.download.douyinCookie']` berisi header yang dikirim.
+  - POST situs non-douyin (tiktok) → 200 `{supported:false}`.
+  - `getExtensionInfo()` → `{version:"1.0.0"}`.
+  - `prepareExtension()` via CDP → `{ok:true, zipPath:
+    ~/Downloads/RS-OmniTools-Extension/RS-OmniTools-Cookie-Capturer-v1.0.0.zip,
+    folderPath: …/rs-omni-cookie-capturer, version:"1.0.0"}`; ZIP valid
+    (`unzip -t` → no errors), folder hasil ekstrak identik sumber repo
+    (`diff -r` → IDENTICAL), Finder terbuka.
+  - `electron-builder --dir --mac`: extraResources terbukti masuk ke
+    `Contents/Resources/rs-omni-cookie-capturer/` (5 file) + `.zip` (valid).
+  - Screenshot modal: badge **v1.0.0** di kartu ekstensi + tombol Siapkan
+    Ekstensi + panduan lengkap (verifikasi DOM: guideOpen, Load unpacked,
+    kode hubung, hapus-versi-lama, cara manual, chrome://extensions — semua
+    true). `get_errors` bersih, typecheck (node+web)/lint/build PASS. Belum
+    di-commit (branch `feat/douyin-cookie-ux`).
 
 ## Perubahan Terbaru (2026-08-16 — FIX SCRAPE/AMBIL DAFTAR TIKTOK: UA CHROME/126 + RETRY + PESAN JUJUR)
 
