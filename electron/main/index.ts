@@ -67,6 +67,12 @@ let statsTimer: NodeJS.Timeout | null = null
 let statsInFlight = false
 let prevCpuSamples = new Map<number, number>() // pid -> waktu CPU kumulatif (ms)
 let prevSampleTime = 0
+/** Jumlah core logis — CPU dinormalisasi agar 100% = SELURUH kapasitas mesin. */
+const LOGICAL_CORES = Math.max(1, os.cpus().length)
+/** Bobot EMA (0–1): makin kecil makin halus gerak angka CPU antar sampel. */
+const CPU_EMA_ALPHA = 0.3
+let smoothedCpu = 0
+let hasSmoothedCpu = false
 
 /** Kumpulkan PID aplikasi (Electron) + PID pekerja (FFmpeg/yt-dlp). */
 function collectProcessPids(): number[] {
@@ -79,8 +85,10 @@ function collectProcessPids(): number[] {
 }
 
 /**
- * CPU (%) yang dipakai aplikasi ini, dihitung dari selisih waktu CPU
- * kumulatif setiap proses antar sampel (realtime, bukan rata-rata seumur hidup).
+ * CPU (%) kapasitas MESIN yang dipakai aplikasi ini — dihitung dari selisih
+ * waktu CPU kumulatif setiap proses antar sampel, lalu DINORMALISASI dengan
+ * jumlah core logis (mis. 12 core: pemakaian 6 core penuh = 50%, bukan 100%).
+ * Ditambah EMA agar nilai tidak meloncat liar antar sampel (0 ↔ 100).
  */
 async function computeAppCpuPercent(nowMs: number): Promise<number> {
   const pids = collectProcessPids()
@@ -105,7 +113,15 @@ async function computeAppCpuPercent(nowMs: number): Promise<number> {
   }
   prevCpuSamples = current
   prevSampleTime = nowMs
-  return Math.min(100, Math.max(0, Math.round(total)))
+
+  // Normalisasi: jumlah kerja lintas semua core → % kapasitas mesin (0–100).
+  const normalized = Math.min(100, Math.max(0, total / LOGICAL_CORES))
+  // EMA: haluskan fluktuasi antar sampel (akar masalah "gerak sangat cepat").
+  smoothedCpu = hasSmoothedCpu
+    ? smoothedCpu * (1 - CPU_EMA_ALPHA) + normalized * CPU_EMA_ALPHA
+    : normalized
+  hasSmoothedCpu = true
+  return Math.round(smoothedCpu)
 }
 
 /** RAM (MB) yang dipakai aplikasi ini (jumlah RSS seluruh proses). */
@@ -131,7 +147,9 @@ function startSystemStats(): void {
       emit('system:stats', {
         cpu,
         ramUsedMb,
-        ramTotalMb: Math.round(os.totalmem() / 1024 / 1024)
+        ramTotalMb: Math.round(os.totalmem() / 1024 / 1024),
+        // Jumlah pekerja aktif (FFmpeg/yt-dlp) — membuat lonjakan CPU jadi jelas sumbernya.
+        workers: getTrackedPids().length
       })
     } finally {
       statsInFlight = false

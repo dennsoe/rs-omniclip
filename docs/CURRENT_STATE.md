@@ -26,6 +26,32 @@ ada perubahan. Tanggal terakhir diperbarui: **2026-08-17**.
   Pengunduh + info unduhan lengkap (platform/durasi/akun) + preview dari
   thumbnail + info engagement di hasil scrape.
 
+## Perubahan Terbaru (2026-08-17 — SYSTEM MONITOR DIPERBAIKI: CPU NORMALISASI PER CORE + EMA + DATA BARU)
+
+**Audit forensik**: metrik CPU lama MENJUMLAHKAN kerja lintas semua core tanpa
+dibagi jumlah core (mesin 12 core) lalu dijepit 100 → tampil "100%" saat app
+baru memakai sebagian core (menyesatkan); tanpa smoothing → angka meloncat liar
+antar sampel (0↔100).
+
+**Perbaikan** (`electron/main/index.ts`):
+- `LOGICAL_CORES = os.cpus().length` — CPU **dinormalisasi** ÷ jumlah core:
+  100% = seluruh kapasitas mesin terpakai (FFmpeg 6 core = 50%, bukan 100%).
+- **EMA smoothing** (`CPU_EMA_ALPHA = 0.3`) — nilai halus, tidak meloncat.
+- Payload `system:stats` kini memuat **`workers`** = jumlah pekerja aktif
+  (FFmpeg/yt-dlp).
+
+**UI** (`src/components/SystemMonitor.tsx`):
+- **RAM %** + tampilan "terpakai / total GB".
+- **Badge "Memproses ×N"** (amber, spinner) saat FFmpeg/yt-dlp aktif — lonjakan
+  CPU jadi jelas sumbernya.
+- **Sparkline CPU** (riwayat 24 sampel, SVG) — tren terbaca, bukan nilai sesaat.
+- Ikon lucide profesional (Cpu/MemoryStick/Loader2).
+
+**Verifikasi**: simulasi 12 core — OLD: FFmpeg 6 core→100%, UI aktif→100%,
+idle→30%; NEW: 50%/10%/3%, 10 core penuh→83% (100% HANYA bila 12 core penuh);
+EMA: spike 100→naik 3→turun 0 (halus). typecheck/lint/build/get_errors PASS.
+Bundle main memuat `LOGICAL_CORES`/`CPU_EMA_ALPHA`/`smoothedCpu`/`workers`.
+
 ## Perubahan Terbaru (2026-08-17 — FITUR FRAMERATE DI PEMBERSIH VIDEO: 60/30/24 FPS)
 
 **Fitur baru**: dropdown **Framerate** di halaman Pembersih Video (panel

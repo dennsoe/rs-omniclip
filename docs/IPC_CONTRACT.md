@@ -30,7 +30,7 @@ dapat membersihkan listener saat unmount.
 | M → R | `scrape:complete` | Hasil daftar video `{ id, items, truncated?, error? }` |
 | R → M | `trim:start` | Memotong video (lossless) |
 | M → R | `trim:complete` | Hasil pemotongan |
-| M → R | `system:stats` | Pemakaian CPU/RAM aplikasi ini (realtime, interval ~1,5 detik) |
+| M → R | `system:stats` | Pemakaian CPU/RAM aplikasi ini (realtime, interval ~1,5 detik; CPU ternormalisasi per core + EMA; `workers` = jumlah FFmpeg/yt-dlp aktif) |
 | R → M | `update:check` (invoke) | Cek rilis terbaru aplikasi dari GitHub Releases API → `UpdateInfo` |
 | R → M | `update:open` (invoke) | Buka halaman rilis GitHub di browser (unduh manual macOS) |
 | R → M | `resource:check` (invoke) | Status resource ffmpeg/yt-dlp vs `resources.json` → `ResourceInfo[]` |
@@ -126,7 +126,7 @@ interface Window {
     ) => () => void
 
     onSystemStats: (
-      cb: (data: { cpuPercent: number; ramUsedMb: number; ramTotalMb: number }) => void
+      cb: (data: { cpu: number; ramUsedMb: number; ramTotalMb: number; workers: number }) => void
     ) => () => void
 
     // --- Pembaruan aplikasi & resource (gratis, repo publik) ---
