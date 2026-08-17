@@ -319,8 +319,6 @@ const api = {
       ramUsedMb: number
       ramTotalMb: number
       workers: number
-      ramSysUsedMb: number
-      ramSysTotalMb: number
       diskFreeMb: number
       diskTotalMb: number
       downloadSpeedBps: number
@@ -335,8 +333,6 @@ const api = {
         ramUsedMb: number
         ramTotalMb: number
         workers: number
-        ramSysUsedMb: number
-        ramSysTotalMb: number
         diskFreeMb: number
         diskTotalMb: number
         downloadSpeedBps: number

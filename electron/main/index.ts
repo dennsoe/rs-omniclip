@@ -167,51 +167,6 @@ async function getDiskStats(): Promise<{ freeMb: number; totalMb: number }> {
   return { freeMb: 0, totalMb: 0 }
 }
 
-/**
- * Membaca statistik halaman memori macOS via `vm_stat` (data nyata OS).
- * Dipakai menghitung RAM "dipakai" yang realistis: macOS meng-cache agresif
- * sehingga `os.freemem()` nyaris selalu ~0 → memakai total − free − inactive
- * − speculative (setara metrik tekanan memori Activity Monitor).
- */
-function readMacVmStat(): Promise<{ freeMb: number; inactiveMb: number; speculativeMb: number }> {
-  return new Promise((resolve, reject) => {
-    execFile('vm_stat', [], { timeout: 2000 }, (err, stdout) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      const pageSizeMatch = stdout.match(/page size of (\d+) bytes/)
-      const pageSize = pageSizeMatch ? Number.parseInt(pageSizeMatch[1], 10) : 4096
-      const grab = (label: string): number => {
-        const m = stdout.match(new RegExp(`Pages ${label}:\\s+(\\d+)\\.`))
-        return m ? Number.parseInt(m[1], 10) : 0
-      }
-      const toMb = (pages: number): number => (pages * pageSize) / 1024 / 1024
-      resolve({
-        freeMb: toMb(grab('free')),
-        inactiveMb: toMb(grab('inactive')),
-        speculativeMb: toMb(grab('speculative'))
-      })
-    })
-  })
-}
-
-/** RAM sistem "dipakai" realistis (MB) + total. macOS via vm_stat, lainnya via os.freemem. */
-async function computeSysMem(): Promise<{ usedMb: number; totalMb: number }> {
-  const totalMb = Math.round(os.totalmem() / 1024 / 1024)
-  if (process.platform === 'darwin') {
-    try {
-      const { freeMb, inactiveMb, speculativeMb } = await readMacVmStat()
-      const usedMb = Math.max(0, totalMb - freeMb - inactiveMb - speculativeMb)
-      return { usedMb: Math.round(usedMb), totalMb }
-    } catch {
-      // Fallback ke os.freemem bila vm_stat gagal.
-    }
-  }
-  const usedMb = Math.round((os.totalmem() - os.freemem()) / 1024 / 1024)
-  return { usedMb, totalMb }
-}
-
 // --- Akumulator trafik jaringan (System Monitor): kecepatan unduh/unggah ---
 let prevNetBytes: { rx: number; tx: number } | null = null
 let prevNetTime = 0
@@ -297,11 +252,10 @@ function startSystemStats(): void {
     statsInFlight = true
     try {
       const now = Date.now()
-      const [cpu, ramUsedMb, disk, sysMem] = await Promise.all([
+      const [cpu, ramUsedMb, disk] = await Promise.all([
         computeAppCpuPercent(now),
         computeAppRamUsedMb(),
-        getDiskStats(),
-        computeSysMem()
+        getDiskStats()
       ])
       // Kecepatan jaringan sistem (delta akumulator byte rx/tx).
       const net = await readNetworkBytes()
@@ -324,9 +278,6 @@ function startSystemStats(): void {
         ramTotalMb: Math.round(os.totalmem() / 1024 / 1024),
         // Jumlah pekerja aktif (FFmpeg/yt-dlp) — membuat lonjakan CPU jadi jelas sumbernya.
         workers: getTrackedPids().length,
-        // RAM sistem "dipakai" yang realistis (macOS kurangi cache via vm_stat).
-        ramSysUsedMb: sysMem.usedMb,
-        ramSysTotalMb: sysMem.totalMb,
         // Ruang disk bebas/total pada volume output (nyata dari statfs).
         diskFreeMb: disk.freeMb,
         diskTotalMb: disk.totalMb,

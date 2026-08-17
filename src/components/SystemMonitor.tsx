@@ -3,7 +3,6 @@ import {
   Activity,
   Cpu,
   MemoryStick,
-  Server,
   HardDrive,
   Download,
   Network,
@@ -62,8 +61,6 @@ export default function SystemMonitor(): React.ReactElement {
   const [workers, setWorkers] = useState(0)
   const [history, setHistory] = useState<number[]>([])
   const [ramHistory, setRamHistory] = useState<number[]>([])
-  const [ramSysUsedMb, setRamSysUsedMb] = useState(0)
-  const [ramSysTotalMb, setRamSysTotalMb] = useState(0)
   const [diskFreeMb, setDiskFreeMb] = useState(0)
   const [diskTotalMb, setDiskTotalMb] = useState(0)
   const [downloadSpeedBps, setDownloadSpeedBps] = useState(0)
@@ -83,8 +80,6 @@ export default function SystemMonitor(): React.ReactElement {
       // Riwayat RAM app (%) untuk sparkline.
       const ramPct = data.ramTotalMb > 0 ? Math.min(100, Math.round((data.ramUsedMb / data.ramTotalMb) * 100)) : 0
       setRamHistory((prev) => [...prev.slice(-(HISTORY_LEN - 1)), ramPct])
-      setRamSysUsedMb(data.ramSysUsedMb ?? 0)
-      setRamSysTotalMb(data.ramSysTotalMb ?? 0)
       setDiskFreeMb(data.diskFreeMb ?? 0)
       setDiskTotalMb(data.diskTotalMb ?? 0)
       setDownloadSpeedBps(data.downloadSpeedBps ?? 0)
@@ -99,14 +94,10 @@ export default function SystemMonitor(): React.ReactElement {
   const ramUsedDisplay = (ramUsedMb / 1024).toFixed(1)
   const ramTotalDisplay = ramTotalMb > 0 ? (ramTotalMb / 1024).toFixed(0) : '—'
 
-  // RAM sistem (seluruh mesin) — "dipakai" realistis (macOS kurangi cache).
-  const ramSysTotalSafe = ramSysTotalMb > 0 ? ramSysTotalMb : ramTotalMb
-  const ramSysUsedPct = ramSysTotalSafe > 0 ? Math.min(100, Math.round((ramSysUsedMb / ramSysTotalSafe) * 100)) : 0
-  const ramSysUsedDisplay = (ramSysUsedMb / 1024).toFixed(1)
-  const ramSysTotalDisplay = ramSysTotalSafe > 0 ? (ramSysTotalSafe / 1024).toFixed(0) : '—'
-
-  // Ruang disk (volume output).
-  const diskFreePct = diskTotalMb > 0 ? Math.min(100, Math.round((diskFreeMb / diskTotalMb) * 100)) : 0
+  // Ruang disk (volume output) — bar = % TERPAKAI (konsisten dgn CPU/RAM).
+  const diskUsedMb = Math.max(0, diskTotalMb - diskFreeMb)
+  const diskUsedPct = diskTotalMb > 0 ? Math.min(100, Math.round((diskUsedMb / diskTotalMb) * 100)) : 0
+  const diskUsedDisplay = (diskUsedMb / 1024).toFixed(1)
   const diskFreeDisplay = (diskFreeMb / 1024).toFixed(1)
   const diskTotalDisplay = diskTotalMb > 0 ? (diskTotalMb / 1024).toFixed(0) : '—'
 
@@ -173,28 +164,7 @@ export default function SystemMonitor(): React.ReactElement {
       {/* Pemisah seksi aplikasi → sistem */}
       <div className="my-0.5 h-px bg-slate-100 dark:bg-slate-800/70" />
 
-      {/* RAM sistem (seluruh mesin) */}
-      <div>
-        <div className="flex items-center justify-between text-xs font-medium mb-1.5">
-          <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-            <Server className="w-3.5 h-3.5" />
-            RAM Sistem
-          </span>
-          <span className="text-slate-700 dark:text-slate-200">
-            {ramSysUsedDisplay}
-            <span className="text-slate-400 dark:text-slate-500"> / {ramSysTotalDisplay} GB dipakai</span>
-            <span className="ml-1.5 text-sky-600 dark:text-sky-400">{ramSysUsedPct}%</span>
-          </span>
-        </div>
-        <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-sky-500 transition-all duration-700 rounded-full"
-            style={{ width: `${ramSysUsedPct}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Ruang disk (volume output) */}
+      {/* Ruang disk (volume output) — bar = % terpakai; label eksplisit dipakai/bebas */}
       <div>
         <div className="flex items-center justify-between text-xs font-medium mb-1.5">
           <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
@@ -202,14 +172,16 @@ export default function SystemMonitor(): React.ReactElement {
             Disk
           </span>
           <span className="text-slate-700 dark:text-slate-200">
-            {diskFreeDisplay}
-            <span className="text-slate-400 dark:text-slate-500"> / {diskTotalDisplay} GB bebas</span>
+            Dipakai {diskUsedDisplay}
+            <span className="text-slate-400 dark:text-slate-500"> / {diskTotalDisplay} GB</span>
+            <span className="ml-1.5 text-violet-600 dark:text-violet-400">{diskUsedPct}%</span>
+            <span className="text-slate-400 dark:text-slate-500"> · bebas {diskFreeDisplay} GB</span>
           </span>
         </div>
         <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
           <div
             className="h-full bg-violet-500 transition-all duration-700 rounded-full"
-            style={{ width: `${diskFreePct}%` }}
+            style={{ width: `${diskUsedPct}%` }}
           />
         </div>
       </div>

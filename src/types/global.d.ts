@@ -77,8 +77,6 @@ declare global {
           ramUsedMb: number
           ramTotalMb: number
           workers: number
-          ramSysUsedMb: number
-          ramSysTotalMb: number
           diskFreeMb: number
           diskTotalMb: number
           downloadSpeedBps: number

@@ -49,21 +49,22 @@ antar sampel (0↔100).
 
 **Perluasan data nyata (2026-08-17, lanjutan)** — semua dari OS/downloader,
 BUKAN dummy:
-- **RAM Sistem** — kini "**X / Y GB dipakai (Z%)**" yang realistis: di macOS
-  memakai `vm_stat` (total − free − inactive − speculative) agar tidak selalu
-  ~100% seperti `os.freemem()` mentah (yang mengabaikan cache agresif macOS).
-  Fallback non-macOS: `os.totalmem() − os.freemem()`.
-- **Ruang Disk** (bebas/total GB, bar % bebas) — `fs.promises.statfs()` pada
-  folder output (`getOutputBaseDir`, fallback home).
+- **Ruang Disk** — bar = **% TERPAKAI** (konsisten dgn CPU/RAM), label eksplisit
+  "**Dipakai X / Y GB (Z%) · bebas W GB**" sehingga total vs kosong jelas.
+  Data: `fs.promises.statfs()` pada folder output (`getOutputBaseDir`, fallback
+  home). (Catatan: versi lama bar = % bebas & label ambigu → diperbaiki.)
 - **Jaringan** (sistem) — kecepatan **↓ unduh & ↑ unggah** nyata dari akumulator
   OS: macOS `netstat -ib`, Linux `/proc/net/dev`, Windows `netstat -e` (delta
   antar sampel).
 - **Kecepatan Unduh (App)** — agregat `speedBytesPerSec` dari downloader
   (Map per URL, dihapus saat selesai).
 - **Sparkline RAM app** (riwayat 24 sampel) — pola sama dengan sparkline CPU.
-- Payload `system:stats` baru: `ramSysUsedMb`, `ramSysTotalMb`, `diskFreeMb`,
-  `diskTotalMb`, `downloadSpeedBps`, `netRxBps`, `netTxBps` (kontrak preload +
-  global.d.ts + IPC doc diperbarui).
+- **RAM Sistem DIHAPUS** (2026-08-17, keputusan user: tidak diperlukan) — baris
+  UI, payload (`ramSysUsedMb/TotalMb`), helper `computeSysMem`/`readMacVmStat`
+  (vm_stat) dihapus total dari kode & kontrak.
+- Payload `system:stats` final: `cpu`, `ramUsedMb`, `ramTotalMb`, `workers`,
+  `diskFreeMb`, `diskTotalMb`, `downloadSpeedBps`, `netRxBps`, `netTxBps`
+  (kontrak preload + global.d.ts + IPC doc sinkron).
 - **CATATAN dev**: perubahan `electron/main/index.ts` di electron-vite dev TIDAK
   me-restart main process otomatis (HMR hanya renderer) → perlu restart dev
   server agar data baru termuat. Di build produksi tidak terjadi.
@@ -72,9 +73,8 @@ BUKAN dummy:
 idle→30%; NEW: 50%/10%/3%, 10 core penuh→83% (100% HANYA bila 12 core penuh);
 EMA: spike 100→naik 3→turun 0 (halus). typecheck/lint/build/get_errors PASS.
 Bundle main memuat `LOGICAL_CORES`/`CPU_EMA_ALPHA`/`smoothedCpu`/`workers`/
-`statfs`/`downloadSpeeds`/`computeSysMem`/`readNetworkBytes`. Verifikasi data OS
-nyata: RAM sistem 19.5 GB dipakai (81%, vs 99% menyesatkan), disk 86,1/460,4 GB
-bebas, jaringan 0.08↓/0.06↑ MB/s.
+`statfs`/`downloadSpeeds`/`readNetworkBytes` (tanpa sisa ramSys/vm_stat).
+Verifikasi data OS nyata: disk 86,1/460,4 GB bebas, jaringan 0.08↓/0.06↑ MB/s.
 
 ## Perubahan Terbaru (2026-08-17 — FITUR FRAMERATE DI PEMBERSIH VIDEO: 60/30/24 FPS)
 
