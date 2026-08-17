@@ -47,6 +47,25 @@ antar sampel (0↔100).
 - **Sparkline CPU** (riwayat 24 sampel, SVG) — tren terbaca, bukan nilai sesaat.
 - Ikon lucide profesional (Cpu/MemoryStick/Loader2).
 
+**Redesain UI (2026-08-17, perbaikan "berantakan")** — layout bersih, konsisten,
+super responsif, realtime & interaktif:
+- Blok metrik seragam (`MetricBlock`): label kiri (icon+teks truncate), nilai
+  kanan (tabular-nums anti-jitter), bar tipis, sparkline — semua sejajar.
+- **Warna ambang batas** diterapkan pada NILAI + BAR + GRAFIK (sparkline):
+  CPU >50% amber / >80% rose; RAM >60% amber / >85% rose; Disk >75% amber /
+  >90% rose.
+- **Disk** ringkas: "Dipakai/Total GB + %" (bar = % terpakai); rincian bebas
+  tersedia di tooltip (teks layar diminimalkan).
+- **Jaringan** bersih: "↓ unduh · ↑ unggah" (panah SEBELUM nilai, urutan jelas).
+- **Interaktif**: hover highlight tiap baris + `title` tooltip (detail per metrik).
+- **Teks berlebih dihapus**: subtitle "Pemakaian Aplikasi & Sistem" & baris
+  "Unduh (App)" dihilangkan (Jaringan sudah menampilkan unduh/unggah sistem).
+- Header: ikon Activity dalam kotak rounded (selaras dgn gaya nav).
+
+**Verifikasi**: typecheck/lint/build/get_errors PASS; bundle renderer memuat
+`MetricBlock`/`cpuTone`/`ramTone`/`diskTone`; preview browser layout terverifikasi
+(label, tooltip, sejajar); jendela Electron aktif dgn data realtime.
+
 **Perluasan data nyata (2026-08-17, lanjutan)** — semua dari OS/downloader,
 BUKAN dummy:
 - **Ruang Disk** — bar = **% TERPAKAI** (konsisten dgn CPU/RAM), label eksplisit
