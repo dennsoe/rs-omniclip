@@ -1,7 +1,21 @@
 # Kondisi Terkini — RS OmniTools
 
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
-ada perubahan. Tanggal terakhir diperbarui: **2026-08-17**.
+ada perubahan. Tanggal terakhir diperbarui: **2026-08-18**.
+
+## Status Rilis v2.1.2 (SEDANG DIRILIS — release branch)
+
+- **Branch**: `release/v2.1.2` (dari `main`). **Versi**: `2.1.2`.
+- **PR #42** (`fix/framerate-4k-nonaktif`) ke `main` **MERGED** (merge commit
+  `4495704`, 2026-08-18) — nonaktifkan total konversi FPS saat preset 4K UHD.
+- **PR #43** (`feat/system-monitor`) ke `main` **MERGED** (merge commit
+  `5de9ae9`, 2026-08-18) — System Monitor dirombak total.
+- Isi v2.1.2: System Monitor akurat & realtime (CPU ÷ core + EMA, RAM app, Disk,
+  jaringan ↓↑, kecepatan unduh, badge worker, UI kompak + animasi halus) +
+  Framerate nonaktif di 4K UHD.
+- **Release notes**: `release-notes/RELEASE_NOTES_v2.1.2.md`.
+- **Belum**: tag `v2.1.2` + push → CI "Release Multi-OS" (build macOS+Windows +
+  publish).
 
 ## Status Rilis v2.1.1 (SELESAI — RELEASE v2.1.1 DIPUBLIKASI via CI)
 
