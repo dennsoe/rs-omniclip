@@ -15,8 +15,6 @@ import {
 const HISTORY_LEN = 24
 const SPARK_W = 100
 const SPARK_H = 24
-/** Referensi 5 MB/s = 100% untuk meter jaringan (skala sqrt agar kecil terlihat). */
-const NET_REF_BPS = 5 * 1024 * 1024
 
 /** Format kecepatan byte/dtk → "12.4 MB/s" (data nyata, bukan simulasi). */
 function formatSpeed(bps: number): string {
@@ -25,12 +23,6 @@ function formatSpeed(bps: number): string {
   if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(1)} KB/s`
   if (bps < 1024 * 1024 * 1024) return `${(bps / 1024 / 1024).toFixed(1)} MB/s`
   return `${(bps / 1024 / 1024 / 1024).toFixed(2)} GB/s`
-}
-
-/** Peta kecepatan → tinggi meter (%) — sqrt agar KB/s & MB/s terlihat seimbang. */
-function netPct(bps: number): number {
-  if (bps <= 0) return 0
-  return Math.min(100, Math.max(0, Math.round(Math.sqrt(bps / NET_REF_BPS) * 100)))
 }
 
 /**
@@ -215,9 +207,6 @@ export default function SystemMonitor(): React.ReactElement {
   const ramT = ramTone(ramPercent)
   const diskT = diskTone(diskUsedPct)
   const networkActive = netRxBps > 0 || netTxBps > 0
-  // Tinggi meter jaringan (dari bawah ke atas) — skala sqrt, warna sesuai ↓/↑.
-  const netRxPct = netPct(netRxBps)
-  const netTxPct = netPct(netTxBps)
   // Status bahaya (diambang batas) → animasi pulse + glow.
   const cpuDanger = cpu > 80
   const ramDanger = ramPercent > 85
@@ -280,64 +269,42 @@ export default function SystemMonitor(): React.ReactElement {
           pct={diskUsedPct}
           spark={diskHistory}
           danger={diskDanger}
-          className={networkActive ? '' : 'col-span-2'}
+          className="col-span-2"
           hint={`Disk: total ${diskTotalDisplay} GB · dipakai ${diskUsedDisplay} GB · bebas ${diskFreeDisplay} GB`}
         />
 
-        {/* Jaringan — meter analog: bar naik dari bawah ke atas, warna ↓/↑ */}
+        {/* Jaringan — baris full-width, warna ↓/↑, icon Download/UploadCloud */}
         {networkActive && (
           <div
             title={`Jaringan sistem: unduh ${formatSpeed(netRxBps)} · unggah ${formatSpeed(netTxBps)}`}
-            className="group rounded-lg border border-slate-100 bg-white/50 px-2.5 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-900/40 dark:hover:border-slate-700"
+            className="group flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white/50 px-2.5 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-900/40 dark:hover:border-slate-700"
           >
-            <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
+            <span className="flex min-w-0 items-center gap-1 text-slate-500 dark:text-slate-400">
               <Network className="h-3 w-3 shrink-0" />
               <span className="truncate text-[10px] font-bold uppercase tracking-wider">Jaringan</span>
-            </div>
-            <div className="mt-1.5 flex items-end justify-center gap-3">
-              {/* ↓ Unduh */}
-              <div className="flex flex-col items-center gap-1">
-                <div className="flex h-9 w-2.5 items-end overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-800">
-                  <motion.div
-                    className="w-full rounded-full bg-sky-500"
-                    initial={{ height: 0 }}
-                    animate={{ height: `${netRxPct}%` }}
-                    transition={{ type: 'spring', stiffness: 110, damping: 15 }}
-                    style={{ originY: 1 }}
-                  />
-                </div>
-                <motion.span
-                  key={formatSpeed(netRxBps)}
-                  initial={{ opacity: 0.4, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-0.5 text-[8px] font-semibold tabular-nums text-sky-600 dark:text-sky-400"
-                >
-                  <DownloadCloud className="h-2.5 w-2.5 shrink-0" />
-                  <span className="truncate">{formatSpeed(netRxBps)}</span>
-                </motion.span>
-              </div>
-              {/* ↑ Unggah */}
-              <div className="flex flex-col items-center gap-1">
-                <div className="flex h-9 w-2.5 items-end overflow-hidden rounded-full bg-slate-200/80 dark:bg-slate-800">
-                  <motion.div
-                    className="w-full rounded-full bg-violet-500"
-                    initial={{ height: 0 }}
-                    animate={{ height: `${netTxPct}%` }}
-                    transition={{ type: 'spring', stiffness: 110, damping: 15 }}
-                    style={{ originY: 1 }}
-                  />
-                </div>
-                <motion.span
-                  key={formatSpeed(netTxBps)}
-                  initial={{ opacity: 0.4, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-0.5 text-[8px] font-semibold tabular-nums text-violet-600 dark:text-violet-400"
-                >
-                  <UploadCloud className="h-2.5 w-2.5 shrink-0" />
-                  <span className="truncate">{formatSpeed(netTxBps)}</span>
-                </motion.span>
-              </div>
-            </div>
+            </span>
+            <span className="flex shrink-0 items-center gap-3 text-xs font-semibold tabular-nums">
+              <motion.span
+                key={formatSpeed(netRxBps)}
+                initial={{ opacity: 0.4, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+                className="flex items-center gap-1 text-sky-600 dark:text-sky-400"
+              >
+                <DownloadCloud className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{formatSpeed(netRxBps)}</span>
+              </motion.span>
+              <motion.span
+                key={formatSpeed(netTxBps)}
+                initial={{ opacity: 0.4, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+                className="flex items-center gap-1 text-violet-600 dark:text-violet-400"
+              >
+                <UploadCloud className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{formatSpeed(netTxBps)}</span>
+              </motion.span>
+            </span>
           </div>
         )}
       </div>

@@ -84,10 +84,11 @@ super responsif, realtime & interaktif:
   native (robust).
 - **Efek ujung grafik**: ring ekspansi (radar ping, 2 ring) + titik inti
   menyala (glow drop-shadow) — SVG `<animate>` native.
-- **Jaringan = meter analog**: dua bar vertikal tumbuh **dari bawah ke atas**
-  (framer-motion spring, `originY:1`), warna **sky (↓ unduh) / violet (↑
-  unggah)** pada bar + teks; icon **`DownloadCloud`/`UploadCloud`**; tinggi bar
-  memakai skala sqrt (ref 5 MB/s) agar KB/s & MB/s terlihat proporsional.
+- **Jaringan — baris full-width sederhana & jelas** (bukan bar vertikal): label
+  kiri + **↓ unduh (sky) · ↑ unggah (violet)** — warna & icon mengikuti
+  ↓/↑ (`DownloadCloud`/`UploadCloud`), teks tabular-nums, pop animasi saat data
+  berubah. CATATAN audit: versi "meter analog" (bar vertikal h-9 + teks 8px)
+  dianggap jelek/tidak responsif → dikembalikan ke baris tunggal yang jelas.
 
 **Verifikasi**: typecheck/lint/build/get_errors PASS; bundle memuat
 `MetricCell`/`grid-cols-2`/`animate-ping`/`animate-pulse`/glow ambang; preview
