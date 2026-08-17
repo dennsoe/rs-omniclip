@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'motion/react'
+import { motion, useSpring, useAnimationControls } from 'motion/react'
 import {
   Activity,
   Cpu,
@@ -22,6 +22,62 @@ function formatSpeed(bps: number): string {
   if (bps < 1024 * 1024) return `${(bps / 1024).toFixed(1)} KB/s`
   if (bps < 1024 * 1024 * 1024) return `${(bps / 1024 / 1024).toFixed(1)} MB/s`
   return `${(bps / 1024 / 1024 / 1024).toFixed(2)} GB/s`
+}
+
+/**
+ * Pil kecepatan jaringan (unduh/unggah) — HALUS & ICON STATIS.
+ *
+ * Audit: versi lama memakai `key={formatSpeed(...)}` pada motion.span → setiap
+ * sampel baru (1,5 dtk) React UNMOUNT+REMOUNT seluruh elemen (icon + teks) dan
+ * memutar ulang animasi pop → tampak kasar/patah & icon berkedip.
+ *
+ * Solusi: icon diletakkan DI LUAR elemen yang berubah (tetap, chip berpulsasi
+ * halus tanpa remount via useAnimationControls), sedangkan ANGKA dianimasikan
+ * dengan spring (rolling number) sehingga berpindah mulus antar nilai — tidak
+ * ada lompatan/render ulang.
+ */
+function SpeedPill({
+  icon,
+  bps,
+  label,
+  className,
+  chipClass
+}: {
+  icon: React.ReactNode
+  bps: number
+  label: string
+  className: string
+  chipClass: string
+}): React.ReactElement {
+  const [display, setDisplay] = useState(() => formatSpeed(bps))
+  const spring = useSpring(bps, { stiffness: 110, damping: 24 })
+  const controls = useAnimationControls()
+  // Nilai baru → spring meluncur + chip berdenyut halus (scale/glow, tanpa remount).
+  useEffect(() => {
+    spring.set(bps)
+    controls.start({
+      scale: [1, 1.12, 1],
+      opacity: [0.6, 1, 0.8],
+      transition: { duration: 0.55, ease: 'easeOut' }
+    })
+  }, [bps, spring, controls])
+  // Setiap frame spring → perbarui teks (rolling number yang halus).
+  useEffect(() => spring.on('change', (v) => setDisplay(formatSpeed(v))), [spring])
+  return (
+    <span
+      title={`${label} ${formatSpeed(bps)}`}
+      className={`flex shrink-0 items-center gap-1.5 text-xs font-semibold tabular-nums ${className}`}
+    >
+      {/* Icon — statis (tidak remount), hanya chip yang berdenyut halus */}
+      <motion.span
+        animate={controls}
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${chipClass}`}
+      >
+        {icon}
+      </motion.span>
+      <span className="truncate">{display}</span>
+    </span>
+  )
 }
 
 /**
@@ -267,34 +323,26 @@ export default function SystemMonitor(): React.ReactElement {
           hint={`Disk: total ${diskTotalDisplay} GB · dipakai ${diskUsedDisplay} GB · bebas ${diskFreeDisplay} GB`}
         />
 
-        {/* Jaringan — baris full-width (col-span-2), tanpa label/icon Network, hanya ↓ unduh (sky) · ↑ unggah (violet) */}
+        {/* Jaringan — baris full-width (col-span-2): icon statis + angka meluncur halus (rolling spring) */}
         {networkActive && (
           <div
             title={`Unduh ${formatSpeed(netRxBps)} · Unggah ${formatSpeed(netTxBps)}`}
-            className="group col-span-2 flex items-center justify-end gap-4 rounded-lg border border-slate-100 bg-white/50 px-2.5 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-900/40 dark:hover:border-slate-700"
+            className="group col-span-2 flex items-center justify-end gap-1.5 rounded-lg border border-slate-100 bg-white/50 px-2 py-1.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-900/40 dark:hover:border-slate-700"
           >
-            <span className="flex shrink-0 items-center gap-4 text-xs font-semibold tabular-nums">
-              <motion.span
-                key={formatSpeed(netRxBps)}
-                initial={{ opacity: 0.4, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-                className="flex items-center gap-1 text-sky-600 dark:text-sky-400"
-              >
-                <DownloadCloud className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{formatSpeed(netRxBps)}</span>
-              </motion.span>
-              <motion.span
-                key={formatSpeed(netTxBps)}
-                initial={{ opacity: 0.4, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-                className="flex items-center gap-1 text-violet-600 dark:text-violet-400"
-              >
-                <UploadCloud className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{formatSpeed(netTxBps)}</span>
-              </motion.span>
-            </span>
+            <SpeedPill
+              icon={<DownloadCloud className="h-3.5 w-3.5" />}
+              bps={netRxBps}
+              label="Unduh"
+              className="text-sky-600 dark:text-sky-400"
+              chipClass="bg-sky-500/10 text-sky-600 dark:text-sky-400"
+            />
+            <SpeedPill
+              icon={<UploadCloud className="h-3.5 w-3.5" />}
+              bps={netTxBps}
+              label="Unggah"
+              className="text-violet-600 dark:text-violet-400"
+              chipClass="bg-violet-500/10 text-violet-600 dark:text-violet-400"
+            />
           </div>
         )}
       </div>

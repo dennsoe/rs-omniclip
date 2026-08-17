@@ -108,6 +108,17 @@ super responsif, realtime & interaktif:
   grid 225px (93.5% lebar sidebar); sel CPU/RAM 97px → 109px; Disk/Jaringan
   full width ikut lebih lebar. Verifikasi ukur DOM: sidebar 260 → box 243 →
   grid 225.
+- **Animasi jaringan HALUS + icon STATIS (2026-08-17, audit "kasar & patah")**:
+  versi lama memakai `key={formatSpeed(...)}` pada `motion.span` → tiap sampel
+  baru (1,5 dtk) React UNMOUNT+REMOUNT seluruh elemen (icon+teks) & replay
+  pop → tampak kasar/patah, icon berkedip. FIX: komponen `SpeedPill` — icon di
+  LUAR elemen berubah (chip `motion.span` berdenyut halus scale 1→1.12→1 +
+  opacity glow via `useAnimationControls`, tanpa remount), ANGKA digerakkan
+  spring (`useSpring` stiffness 110/damping 24) → rolling number meluncur mulus
+  antar nilai. Dua pill: Unduh (sky, `DownloadCloud`) · Unggah (violet,
+  `UploadCloud`), rata kanan, full-width col-span-2, truncate responsif.
+  Verifikasi: 2 pill title "Unduh 87.9 KB/s"/"Unggah 63.5 KB/s", row 225px,
+  0 console error, typecheck/lint/build/get_errors PASS.
 
 **Verifikasi**: typecheck/lint/build/get_errors PASS; bundle memuat
 `MetricCell`/`grid-cols-2`/`animate-ping`/`animate-pulse`/glow ambang; preview
