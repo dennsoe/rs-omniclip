@@ -267,15 +267,12 @@ export default function SystemMonitor(): React.ReactElement {
           hint={`Disk: total ${diskTotalDisplay} GB · dipakai ${diskUsedDisplay} GB · bebas ${diskFreeDisplay} GB`}
         />
 
-        {/* Jaringan — baris full-width (col-span-2, sejajar dgn Disk), label kiri + ↓ unduh (sky) · ↑ unggah (violet) */}
+        {/* Jaringan — baris full-width (col-span-2), tanpa label/icon Network, hanya ↓ unduh (sky) · ↑ unggah (violet) */}
         {networkActive && (
           <div
-            title={`Jaringan sistem: unduh ${formatSpeed(netRxBps)} · unggah ${formatSpeed(netTxBps)}`}
-            className="group col-span-2 flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white/50 px-2.5 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-900/40 dark:hover:border-slate-700"
+            title={`Unduh ${formatSpeed(netRxBps)} · Unggah ${formatSpeed(netTxBps)}`}
+            className="group col-span-2 flex items-center justify-end gap-4 rounded-lg border border-slate-100 bg-white/50 px-2.5 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-900/40 dark:hover:border-slate-700"
           >
-            <span className="flex min-w-0 items-center gap-1 text-slate-500 dark:text-slate-400">
-              <span className="truncate text-[10px] font-bold uppercase tracking-wider">Jaringan</span>
-            </span>
             <span className="flex shrink-0 items-center gap-4 text-xs font-semibold tabular-nums">
               <motion.span
                 key={formatSpeed(netRxBps)}

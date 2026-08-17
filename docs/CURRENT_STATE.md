@@ -93,6 +93,10 @@ super responsif, realtime & interaktif:
   sehingga render setengah lebar (kolom 2 kosong) → label+kecepatan berjejal &
   icon Network bentrok dengan Download/UploadCloud → **FIX**: `col-span-2`
   (sejajar Disk), hapus icon `Network` dari label (cukup icon ↓/↑).
+  **FIX lanjutan (2026-08-17)**: label teks "Jaringan" DIHAPUS total (keputusan
+  user — tanpa teks/icon label) → baris jaringan hanya berisi `↓ unduh (sky) ·
+  ↑ unggah (violet)` rata kanan; tooltip title jadi "Unduh X · Unggah Y" (tanpa
+  kata "Jaringan"); kata "Jaringan" hanya tersisa di komentar kode.
 - **Grafik Disk DIHAPUS (2026-08-17)**: nilai Disk hampir statis (tidak
   berubah real-time) → sparkline cuma noise visual. `spark` di `MetricCell`
   kini opsional (`spark?: number[]`); state `diskHistory` & `setDiskHistory`
