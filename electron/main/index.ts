@@ -2,6 +2,8 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
+import { statfs } from 'node:fs/promises'
+import { getOutputBaseDir } from '@engine/paths'
 import { ensureFfmpeg, detectEncoders, type EncoderId } from '@engine/ffmpeg'
 import {
   processBatch,
@@ -71,6 +73,15 @@ let prevSampleTime = 0
 const LOGICAL_CORES = Math.max(1, os.cpus().length)
 /** Bobot EMA (0–1): makin kecil makin halus gerak angka CPU antar sampel. */
 const CPU_EMA_ALPHA = 0.3
+/** Kecepatan unduh aktif per URL (byte/dtk) — data NYATA dari downloader. */
+const downloadSpeeds = new Map<string, number>()
+
+/** Menjumlahkan kecepatan unduh aktif semua URL (byte/dtk). */
+function aggregateDownloadSpeed(): number {
+  let total = 0
+  for (const s of downloadSpeeds.values()) total += s
+  return total
+}
 let smoothedCpu = 0
 let hasSmoothedCpu = false
 
@@ -133,6 +144,28 @@ async function computeAppRamUsedMb(): Promise<number> {
   return Math.round(totalBytes / 1024 / 1024)
 }
 
+/**
+ * Ruang disk bebas/total (MB) pada volume folder output/download (fallback ke
+ * home bila folder belum ada). Data NYATA dari sistem file (statfs).
+ */
+async function getDiskStats(): Promise<{ freeMb: number; totalMb: number }> {
+  const targets = [getOutputBaseDir(), os.homedir()]
+  for (const target of targets) {
+    try {
+      const s = await statfs(target)
+      if (s && s.bavail > 0 && s.bsize > 0 && s.blocks > 0) {
+        return {
+          freeMb: Math.round((s.bavail * s.bsize) / 1024 / 1024),
+          totalMb: Math.round((s.blocks * s.bsize) / 1024 / 1024)
+        }
+      }
+    } catch {
+      // Coba target berikutnya (folder output mungkin belum dibuat).
+    }
+  }
+  return { freeMb: 0, totalMb: 0 }
+}
+
 function startSystemStats(): void {
   if (statsTimer) return
   statsTimer = setInterval(async () => {
@@ -140,16 +173,27 @@ function startSystemStats(): void {
     statsInFlight = true
     try {
       const now = Date.now()
-      const [cpu, ramUsedMb] = await Promise.all([
+      const [cpu, ramUsedMb, disk] = await Promise.all([
         computeAppCpuPercent(now),
-        computeAppRamUsedMb()
+        computeAppRamUsedMb(),
+        getDiskStats()
       ])
+      const memTotalBytes = os.totalmem()
+      const memFreeBytes = os.freemem()
       emit('system:stats', {
         cpu,
         ramUsedMb,
-        ramTotalMb: Math.round(os.totalmem() / 1024 / 1024),
+        ramTotalMb: Math.round(memTotalBytes / 1024 / 1024),
         // Jumlah pekerja aktif (FFmpeg/yt-dlp) — membuat lonjakan CPU jadi jelas sumbernya.
-        workers: getTrackedPids().length
+        workers: getTrackedPids().length,
+        // RAM sistem (nyata dari OS) — membedakan beban mesin vs beban app.
+        ramSysFreeMb: Math.round(memFreeBytes / 1024 / 1024),
+        ramSysTotalMb: Math.round(memTotalBytes / 1024 / 1024),
+        // Ruang disk bebas/total pada volume output (nyata dari statfs).
+        diskFreeMb: disk.freeMb,
+        diskTotalMb: disk.totalMb,
+        // Kecepatan unduh aktif agregat (nyata dari downloader).
+        downloadSpeedBps: aggregateDownloadSpeed()
       })
     } finally {
       statsInFlight = false
@@ -334,6 +378,13 @@ function handleDownload(payload: { urls?: string[]; options?: DownloadOptions })
     urls,
     options,
     onProgress: (p: DownloadProgress) => {
+      // Lacak kecepatan unduh aktif utk System Monitor (data NYATA dari downloader).
+      const key = p.id ?? p.url
+      if (p.status === 'downloading' && typeof p.speedBytesPerSec === 'number' && p.speedBytesPerSec > 0) {
+        downloadSpeeds.set(key, p.speedBytesPerSec)
+      } else if (p.status === 'success' || p.status === 'failed') {
+        downloadSpeeds.delete(key)
+      }
       // Catat riwayat saat unduhan berhasil (dipakai tab Riwayat).
       if (p.status === 'success' && p.filePath) {
         appendHistory({

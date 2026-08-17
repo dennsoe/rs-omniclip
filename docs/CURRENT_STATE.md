@@ -47,10 +47,24 @@ antar sampel (0↔100).
 - **Sparkline CPU** (riwayat 24 sampel, SVG) — tren terbaca, bukan nilai sesaat.
 - Ikon lucide profesional (Cpu/MemoryStick/Loader2).
 
+**Perluasan data nyata (2026-08-17, lanjutan)** — semua dari OS/downloader,
+BUKAN dummy:
+- **RAM Sistem** (bebas/total GB + % terpakai) — `os.freemem()`/`os.totalmem()`.
+- **Ruang Disk** (bebas/total GB, bar % bebas) — `fs.promises.statfs()` pada
+  folder output (`getOutputBaseDir`, fallback home).
+- **Kecepatan Unduh aktif** (format B/KB/MB/s, muncul hanya saat mengunduh) —
+  agregat `speedBytesPerSec` dari downloader (map per URL, dihapus saat selesai).
+- **Sparkline RAM app** (riwayat 24 sampel) — pola sama dengan sparkline CPU.
+- Payload `system:stats` baru: `ramSysFreeMb`, `ramSysTotalMb`, `diskFreeMb`,
+  `diskTotalMb`, `downloadSpeedBps` (kontrak preload + global.d.ts + IPC doc
+  diperbarui).
+
 **Verifikasi**: simulasi 12 core — OLD: FFmpeg 6 core→100%, UI aktif→100%,
 idle→30%; NEW: 50%/10%/3%, 10 core penuh→83% (100% HANYA bila 12 core penuh);
 EMA: spike 100→naik 3→turun 0 (halus). typecheck/lint/build/get_errors PASS.
-Bundle main memuat `LOGICAL_CORES`/`CPU_EMA_ALPHA`/`smoothedCpu`/`workers`.
+Bundle main memuat `LOGICAL_CORES`/`CPU_EMA_ALPHA`/`smoothedCpu`/`workers`/
+`statfs`/`downloadSpeeds`. Verifikasi data OS nyata: RAM sistem 24 GB, disk
+86,1/460,4 GB bebas (19%).
 
 ## Perubahan Terbaru (2026-08-17 — FITUR FRAMERATE DI PEMBERSIH VIDEO: 60/30/24 FPS)
 

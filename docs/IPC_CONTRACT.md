@@ -126,7 +126,17 @@ interface Window {
     ) => () => void
 
     onSystemStats: (
-      cb: (data: { cpu: number; ramUsedMb: number; ramTotalMb: number; workers: number }) => void
+      cb: (data: {
+        cpu: number
+        ramUsedMb: number
+        ramTotalMb: number
+        workers: number
+        ramSysFreeMb: number
+        ramSysTotalMb: number
+        diskFreeMb: number
+        diskTotalMb: number
+        downloadSpeedBps: number
+      }) => void
     ) => () => void
 
     // --- Pembaruan aplikasi & resource (gratis, repo publik) ---
