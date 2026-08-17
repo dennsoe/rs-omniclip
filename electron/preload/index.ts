@@ -319,11 +319,13 @@ const api = {
       ramUsedMb: number
       ramTotalMb: number
       workers: number
-      ramSysFreeMb: number
+      ramSysUsedMb: number
       ramSysTotalMb: number
       diskFreeMb: number
       diskTotalMb: number
       downloadSpeedBps: number
+      netRxBps: number
+      netTxBps: number
     }) => void
   ): Unsubscribe => {
     const listener = (
@@ -333,11 +335,13 @@ const api = {
         ramUsedMb: number
         ramTotalMb: number
         workers: number
-        ramSysFreeMb: number
+        ramSysUsedMb: number
         ramSysTotalMb: number
         diskFreeMb: number
         diskTotalMb: number
         downloadSpeedBps: number
+        netRxBps: number
+        netTxBps: number
       }
     ): void => cb(data)
     ipcRenderer.on('system:stats', listener)

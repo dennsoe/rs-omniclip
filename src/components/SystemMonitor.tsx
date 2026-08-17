@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Activity, Cpu, MemoryStick, Server, HardDrive, Download, Loader2 } from 'lucide-react'
+import {
+  Activity,
+  Cpu,
+  MemoryStick,
+  Server,
+  HardDrive,
+  Download,
+  Network,
+  ArrowDown,
+  ArrowUp,
+  Loader2
+} from 'lucide-react'
 
 /** Jumlah sampel riwayat yang dirender pada sparkline CPU/RAM. */
 const HISTORY_LEN = 24
@@ -51,11 +62,13 @@ export default function SystemMonitor(): React.ReactElement {
   const [workers, setWorkers] = useState(0)
   const [history, setHistory] = useState<number[]>([])
   const [ramHistory, setRamHistory] = useState<number[]>([])
-  const [ramSysFreeMb, setRamSysFreeMb] = useState(0)
+  const [ramSysUsedMb, setRamSysUsedMb] = useState(0)
   const [ramSysTotalMb, setRamSysTotalMb] = useState(0)
   const [diskFreeMb, setDiskFreeMb] = useState(0)
   const [diskTotalMb, setDiskTotalMb] = useState(0)
   const [downloadSpeedBps, setDownloadSpeedBps] = useState(0)
+  const [netRxBps, setNetRxBps] = useState(0)
+  const [netTxBps, setNetTxBps] = useState(0)
 
   // Statistik sistem NYATA dari proses utama (bukan simulasi).
   useEffect(() => {
@@ -70,11 +83,13 @@ export default function SystemMonitor(): React.ReactElement {
       // Riwayat RAM app (%) untuk sparkline.
       const ramPct = data.ramTotalMb > 0 ? Math.min(100, Math.round((data.ramUsedMb / data.ramTotalMb) * 100)) : 0
       setRamHistory((prev) => [...prev.slice(-(HISTORY_LEN - 1)), ramPct])
-      setRamSysFreeMb(data.ramSysFreeMb ?? 0)
+      setRamSysUsedMb(data.ramSysUsedMb ?? 0)
       setRamSysTotalMb(data.ramSysTotalMb ?? 0)
       setDiskFreeMb(data.diskFreeMb ?? 0)
       setDiskTotalMb(data.diskTotalMb ?? 0)
       setDownloadSpeedBps(data.downloadSpeedBps ?? 0)
+      setNetRxBps(data.netRxBps ?? 0)
+      setNetTxBps(data.netTxBps ?? 0)
     })
     return off
   }, [])
@@ -84,11 +99,10 @@ export default function SystemMonitor(): React.ReactElement {
   const ramUsedDisplay = (ramUsedMb / 1024).toFixed(1)
   const ramTotalDisplay = ramTotalMb > 0 ? (ramTotalMb / 1024).toFixed(0) : '—'
 
-  // RAM sistem (seluruh mesin).
+  // RAM sistem (seluruh mesin) — "dipakai" realistis (macOS kurangi cache).
   const ramSysTotalSafe = ramSysTotalMb > 0 ? ramSysTotalMb : ramTotalMb
-  const ramSysUsedPct =
-    ramSysTotalSafe > 0 ? Math.min(100, Math.round(((ramSysTotalSafe - ramSysFreeMb) / ramSysTotalSafe) * 100)) : 0
-  const ramSysFreeDisplay = (ramSysFreeMb / 1024).toFixed(1)
+  const ramSysUsedPct = ramSysTotalSafe > 0 ? Math.min(100, Math.round((ramSysUsedMb / ramSysTotalSafe) * 100)) : 0
+  const ramSysUsedDisplay = (ramSysUsedMb / 1024).toFixed(1)
   const ramSysTotalDisplay = ramSysTotalSafe > 0 ? (ramSysTotalSafe / 1024).toFixed(0) : '—'
 
   // Ruang disk (volume output).
@@ -167,7 +181,8 @@ export default function SystemMonitor(): React.ReactElement {
             RAM Sistem
           </span>
           <span className="text-slate-700 dark:text-slate-200">
-            {ramSysFreeDisplay} <span className="text-slate-400 dark:text-slate-500">/ {ramSysTotalDisplay} GB bebas</span>
+            {ramSysUsedDisplay}
+            <span className="text-slate-400 dark:text-slate-500"> / {ramSysTotalDisplay} GB dipakai</span>
             <span className="ml-1.5 text-sky-600 dark:text-sky-400">{ramSysUsedPct}%</span>
           </span>
         </div>
@@ -199,12 +214,32 @@ export default function SystemMonitor(): React.ReactElement {
         </div>
       </div>
 
-      {/* Kecepatan unduh aktif (kondisional — hanya saat mengunduh) */}
+      {/* Jaringan sistem — kecepatan unduh/unggah nyata dari OS */}
+      {(netRxBps > 0 || netTxBps > 0) && (
+        <div className="flex items-center justify-between text-xs font-medium">
+          <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+            <Network className="w-3.5 h-3.5" />
+            Jaringan
+          </span>
+          <span className="flex items-center gap-2 text-slate-700 dark:text-slate-200 tabular-nums">
+            <span className="flex items-center gap-0.5">
+              <ArrowDown className="w-3 h-3 text-sky-500" />
+              {formatSpeed(netRxBps)}
+            </span>
+            <span className="flex items-center gap-0.5">
+              <ArrowUp className="w-3 h-3 text-violet-500" />
+              {formatSpeed(netTxBps)}
+            </span>
+          </span>
+        </div>
+      )}
+
+      {/* Kecepatan unduh app aktif (kondisional — hanya saat mengunduh) */}
       {downloadSpeedBps > 0 && (
         <div className="flex items-center justify-between text-xs font-medium">
           <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
             <Download className="w-3.5 h-3.5" />
-            Unduh
+            Unduh (App)
           </span>
           <span className="text-sky-600 dark:text-sky-400 font-semibold tabular-nums">{formatSpeed(downloadSpeedBps)}</span>
         </div>

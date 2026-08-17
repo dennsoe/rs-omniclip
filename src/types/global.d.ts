@@ -77,11 +77,13 @@ declare global {
           ramUsedMb: number
           ramTotalMb: number
           workers: number
-          ramSysFreeMb: number
+          ramSysUsedMb: number
           ramSysTotalMb: number
           diskFreeMb: number
           diskTotalMb: number
           downloadSpeedBps: number
+          netRxBps: number
+          netTxBps: number
         }) => void
       ) => () => void
       trimVideo: (payload: { id: string; path: string; start: string; end: string }) => void

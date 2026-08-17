@@ -131,11 +131,13 @@ interface Window {
         ramUsedMb: number
         ramTotalMb: number
         workers: number
-        ramSysFreeMb: number
+        ramSysUsedMb: number
         ramSysTotalMb: number
         diskFreeMb: number
         diskTotalMb: number
         downloadSpeedBps: number
+        netRxBps: number
+        netTxBps: number
       }) => void
     ) => () => void
 

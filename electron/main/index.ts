@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
+import { execFile } from 'node:child_process'
 import { statfs } from 'node:fs/promises'
 import { getOutputBaseDir } from '@engine/paths'
 import { ensureFfmpeg, detectEncoders, type EncoderId } from '@engine/ffmpeg'
@@ -166,6 +167,129 @@ async function getDiskStats(): Promise<{ freeMb: number; totalMb: number }> {
   return { freeMb: 0, totalMb: 0 }
 }
 
+/**
+ * Membaca statistik halaman memori macOS via `vm_stat` (data nyata OS).
+ * Dipakai menghitung RAM "dipakai" yang realistis: macOS meng-cache agresif
+ * sehingga `os.freemem()` nyaris selalu ~0 → memakai total − free − inactive
+ * − speculative (setara metrik tekanan memori Activity Monitor).
+ */
+function readMacVmStat(): Promise<{ freeMb: number; inactiveMb: number; speculativeMb: number }> {
+  return new Promise((resolve, reject) => {
+    execFile('vm_stat', [], { timeout: 2000 }, (err, stdout) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      const pageSizeMatch = stdout.match(/page size of (\d+) bytes/)
+      const pageSize = pageSizeMatch ? Number.parseInt(pageSizeMatch[1], 10) : 4096
+      const grab = (label: string): number => {
+        const m = stdout.match(new RegExp(`Pages ${label}:\\s+(\\d+)\\.`))
+        return m ? Number.parseInt(m[1], 10) : 0
+      }
+      const toMb = (pages: number): number => (pages * pageSize) / 1024 / 1024
+      resolve({
+        freeMb: toMb(grab('free')),
+        inactiveMb: toMb(grab('inactive')),
+        speculativeMb: toMb(grab('speculative'))
+      })
+    })
+  })
+}
+
+/** RAM sistem "dipakai" realistis (MB) + total. macOS via vm_stat, lainnya via os.freemem. */
+async function computeSysMem(): Promise<{ usedMb: number; totalMb: number }> {
+  const totalMb = Math.round(os.totalmem() / 1024 / 1024)
+  if (process.platform === 'darwin') {
+    try {
+      const { freeMb, inactiveMb, speculativeMb } = await readMacVmStat()
+      const usedMb = Math.max(0, totalMb - freeMb - inactiveMb - speculativeMb)
+      return { usedMb: Math.round(usedMb), totalMb }
+    } catch {
+      // Fallback ke os.freemem bila vm_stat gagal.
+    }
+  }
+  const usedMb = Math.round((os.totalmem() - os.freemem()) / 1024 / 1024)
+  return { usedMb, totalMb }
+}
+
+// --- Akumulator trafik jaringan (System Monitor): kecepatan unduh/unggah ---
+let prevNetBytes: { rx: number; tx: number } | null = null
+let prevNetTime = 0
+
+/** Membaca akumulator byte jaringan sistem (rx/tx) — data nyata dari OS. */
+function readNetworkBytes(): Promise<{ rx: number; tx: number } | null> {
+  if (process.platform === 'darwin') return readNetworkBytesMac()
+  if (process.platform === 'linux') return readNetworkBytesLinux()
+  if (process.platform === 'win32') return readNetworkBytesWindows()
+  return Promise.resolve(null)
+}
+
+/** macOS: `netstat -ib` — jumlah Ibytes/Obytes antarmuka en* (kumulatif). */
+function readNetworkBytesMac(): Promise<{ rx: number; tx: number } | null> {
+  return new Promise((resolve) => {
+    execFile('netstat', ['-ib'], { timeout: 2000 }, (err, stdout) => {
+      if (err) {
+        resolve(null)
+        return
+      }
+      let rx = 0
+      let tx = 0
+      for (const line of stdout.split('\n')) {
+        // en0 1500 <Link#14> c2:83:...  Ipkts Ierrs Ibytes Opkts Oerrs Obytes Coll
+        const m = line.trim().match(/^en\d+\s+\d+\s+<Link#\d+>\s+\S+\s+(\d+)\s+\d+\s+(\d+)\s+(\d+)\s+\d+\s+(\d+)/)
+        if (m) {
+          rx += Number.parseInt(m[2], 10) // Ibytes
+          tx += Number.parseInt(m[4], 10) // Obytes
+        }
+      }
+      resolve(rx + tx > 0 ? { rx, tx } : null)
+    })
+  })
+}
+
+/** Linux: `/proc/net/dev` — baris antarmuka en/eth/wlan (rx bytes, tx bytes). */
+function readNetworkBytesLinux(): Promise<{ rx: number; tx: number } | null> {
+  return new Promise((resolve) => {
+    fs.readFile('/proc/net/dev', 'utf8', (err, data) => {
+      if (err) {
+        resolve(null)
+        return
+      }
+      let rx = 0
+      let tx = 0
+      for (const line of data.split('\n')) {
+        const m = line.match(/^\s*(en|eth|wlan)\w+:\s+(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)/)
+        if (m) {
+          rx += Number.parseInt(m[2], 10)
+          tx += Number.parseInt(m[3], 10)
+        }
+      }
+      resolve(rx + tx > 0 ? { rx, tx } : null)
+    })
+  })
+}
+
+/** Windows: `netstat -e` — baris "Bytes Received/Sent". */
+function readNetworkBytesWindows(): Promise<{ rx: number; tx: number } | null> {
+  return new Promise((resolve) => {
+    execFile('netstat', ['-e'], { timeout: 2000 }, (err, stdout) => {
+      if (err) {
+        resolve(null)
+        return
+      }
+      let rx = 0
+      let tx = 0
+      for (const line of stdout.split('\n')) {
+        const rm = line.match(/Bytes\s+Received\s*=\s*(\d+)/i)
+        const tm = line.match(/Bytes\s+Sent\s*=\s*(\d+)/i)
+        if (rm) rx = Number.parseInt(rm[1], 10)
+        if (tm) tx = Number.parseInt(tm[1], 10)
+      }
+      resolve(rx + tx > 0 ? { rx, tx } : null)
+    })
+  })
+}
+
 function startSystemStats(): void {
   if (statsTimer) return
   statsTimer = setInterval(async () => {
@@ -173,27 +297,44 @@ function startSystemStats(): void {
     statsInFlight = true
     try {
       const now = Date.now()
-      const [cpu, ramUsedMb, disk] = await Promise.all([
+      const [cpu, ramUsedMb, disk, sysMem] = await Promise.all([
         computeAppCpuPercent(now),
         computeAppRamUsedMb(),
-        getDiskStats()
+        getDiskStats(),
+        computeSysMem()
       ])
-      const memTotalBytes = os.totalmem()
-      const memFreeBytes = os.freemem()
+      // Kecepatan jaringan sistem (delta akumulator byte rx/tx).
+      const net = await readNetworkBytes()
+      let netRxBps = 0
+      let netTxBps = 0
+      if (net && prevNetBytes) {
+        const netElapsedSec = (Date.now() - prevNetTime) / 1000
+        if (netElapsedSec > 0) {
+          netRxBps = Math.max(0, Math.round((net.rx - prevNetBytes.rx) / netElapsedSec))
+          netTxBps = Math.max(0, Math.round((net.tx - prevNetBytes.tx) / netElapsedSec))
+        }
+      }
+      if (net) {
+        prevNetBytes = net
+        prevNetTime = Date.now()
+      }
       emit('system:stats', {
         cpu,
         ramUsedMb,
-        ramTotalMb: Math.round(memTotalBytes / 1024 / 1024),
+        ramTotalMb: Math.round(os.totalmem() / 1024 / 1024),
         // Jumlah pekerja aktif (FFmpeg/yt-dlp) — membuat lonjakan CPU jadi jelas sumbernya.
         workers: getTrackedPids().length,
-        // RAM sistem (nyata dari OS) — membedakan beban mesin vs beban app.
-        ramSysFreeMb: Math.round(memFreeBytes / 1024 / 1024),
-        ramSysTotalMb: Math.round(memTotalBytes / 1024 / 1024),
+        // RAM sistem "dipakai" yang realistis (macOS kurangi cache via vm_stat).
+        ramSysUsedMb: sysMem.usedMb,
+        ramSysTotalMb: sysMem.totalMb,
         // Ruang disk bebas/total pada volume output (nyata dari statfs).
         diskFreeMb: disk.freeMb,
         diskTotalMb: disk.totalMb,
-        // Kecepatan unduh aktif agregat (nyata dari downloader).
-        downloadSpeedBps: aggregateDownloadSpeed()
+        // Kecepatan unduh aktif app (nyata dari downloader).
+        downloadSpeedBps: aggregateDownloadSpeed(),
+        // Kecepatan jaringan sistem (nyata dari akumulator OS).
+        netRxBps,
+        netTxBps
       })
     } finally {
       statsInFlight = false
