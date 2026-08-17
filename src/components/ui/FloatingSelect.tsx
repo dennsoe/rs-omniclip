@@ -9,6 +9,8 @@ import { iconCls } from './floating-classes'
 export interface SelectOption {
   value: string
   label: string
+  /** Ikon opsional — ditampilkan sebelum label (nilai & opsi dropdown). */
+  icon?: React.ReactNode
   /** Deskripsi opsional — ditampilkan sebagai baris kedua pada opsi dropdown. */
   description?: string
 }
@@ -113,13 +115,17 @@ export default function FloatingSelect({
           {icon && <span className={clsx('ml-3 shrink-0', iconCls(open))}>{icon}</span>}
           <span
             className={clsx(
-              'flex-1 truncate px-3.5 py-3.5 text-sm',
+              'flex min-w-0 flex-1 items-center gap-1.5 px-3.5 py-3.5 text-sm',
               selected && floated ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'
             )}
           >
-            {/* Saat label di tengah (tidak mengambang) span HARUS kosong agar
-                tidak menimpa label. Saat mengambang tampilkan nilai/placeholder. */}
-            {floated ? (selected ? selected.label : (placeholder ?? '')) : ''}
+            {/* Ikon opsi terpilih (ikon membawa warna brand-nya sendiri). */}
+            {floated && selected?.icon && <span className="shrink-0">{selected.icon}</span>}
+            <span className="truncate">
+              {/* Saat label di tengah (tidak mengambang) span HARUS kosong agar
+                  tidak menimpa label. Saat mengambang tampilkan nilai/placeholder. */}
+              {floated ? (selected ? selected.label : (placeholder ?? '')) : ''}
+            </span>
           </span>
           <ChevronDown
             className={clsx(
@@ -162,7 +168,10 @@ export default function FloatingSelect({
                   )}
                 >
                   <span className="flex min-w-0 flex-col items-start">
-                    <span className="truncate">{o.label}</span>
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      {o.icon && <span className="shrink-0">{o.icon}</span>}
+                      <span className="truncate">{o.label}</span>
+                    </span>
                     {o.description && (
                       <span
                         className={clsx(

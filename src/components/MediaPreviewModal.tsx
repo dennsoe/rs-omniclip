@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { PlayCircle, XCircle } from 'lucide-react'
 import { mediaUrlForFile } from '@lib/utils'
+import { PlatformBadge } from '@components/ui/PlatformBadge'
 import VideoPlayer from './VideoPlayer'
 
 /**
@@ -62,7 +63,14 @@ export default function MediaPreviewModal({
               {file.title || 'Pratinjau Video'}
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              {file.platform ? `${file.platform} · ` : ''}Hasil unduhan · pratinjau lokal
+              {file.platform ? (
+                <>
+                  <PlatformBadge platform={file.platform} /> ·{' '}
+                </>
+              ) : (
+                ''
+              )}
+              Hasil unduhan · pratinjau lokal
             </p>
           </div>
           <button

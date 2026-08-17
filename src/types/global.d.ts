@@ -80,6 +80,22 @@ declare global {
       // --- Pembaruan aplikasi & resource (gratis, repo publik) ---
       checkForUpdate: () => Promise<UpdateInfo>
       openUpdatePage: (url: string) => Promise<boolean>
+      /** Memvalidasi header Cookie Douyin (diproses di main — satu sumber kebenaran). */
+      validateDouyinCookie: (raw: string) => Promise<{ count: number; invalid: number; keys: string[]; hasSession: boolean }>
+      /** Info jembatan cookie ekstensi: port + kode hubung `<port>:<token>`. */
+      getCookieBridgeInfo: () => Promise<{ active: boolean; port: number | null; code: string | null }>
+      /** Versi ekstensi cookie (baca manifest dari dalam app). */
+      getExtensionInfo: () => Promise<{ version: string | null }>
+      /** Menyiapkan ekstensi cookie: ZIP ber-versi ke Downloads & tampilkan di Finder. */
+      prepareExtension: () => Promise<{ ok: boolean; zipPath?: string; version?: string | null; error?: string }>
+      /** Cookie diterima dari ekstensi MV3 (valid & lolos token). */
+      onCookieReceived: (cb: (data: {
+        site: string
+        cookieHeader: string
+        count: number
+        hasSession: boolean
+        supported: boolean
+      }) => void) => () => void
       checkResources: () => Promise<ResourceInfo[]>
       updateResources: (force?: boolean) => Promise<ResourceInfo[]>
       onResourceStatus: (cb: (message: string) => void) => () => void

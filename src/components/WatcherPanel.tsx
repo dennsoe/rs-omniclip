@@ -19,6 +19,7 @@ import { FloatingInput } from './ui/FloatingField'
 import Toggle from './ui/Toggle'
 import ConfirmModal from './ConfirmModal'
 import type { WatchedAccount, AccountInfo } from '@lib/types'
+import { PlatformBadge } from '@components/ui/PlatformBadge'
 
 /** Panel Auto-Watcher — pemantauan akun otomatis saat aplikasi terbuka. */
 export default function WatcherPanel({
@@ -355,11 +356,7 @@ export default function WatcherPanel({
                 {preview.username ? `@${preview.username}` : preview.url}
               </p>
               <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                {preview.platform && (
-                  <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
-                    {preview.platform}
-                  </span>
-                )}
+                {preview.platform && <PlatformBadge platform={preview.platform} />}
                 {preview.followers !== undefined && (
                   <span className="inline-flex items-center gap-1">
                     <Users className="w-3 h-3" />
@@ -420,9 +417,7 @@ export default function WatcherPanel({
                     <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">
                       {displayName}
                     </span>
-                    <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
-                      {acc.platform || platformOf(acc.url)}
-                    </span>
+                    <PlatformBadge platform={acc.platform || platformOf(acc.url)} />
                   </div>
                   <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">{acc.url}</p>
                   <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">

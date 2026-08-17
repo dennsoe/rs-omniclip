@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RS OmniTools — Cookie Capturer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="head">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <img src="icons/icon128.png" alt="" />
+        </div>
+        <div class="title">
+          <h1>RS OmniTools</h1>
+          <span>Cookie Capturer</span>
+        </div>
+      </div>
+      <span class="pill" id="statusDot">Terhubung</span>
+    </header>
+
+    <section class="card">
+      <div class="field">
+        <label for="site">Situs cookie</label>
+        <select id="site">
+          <option value="douyin" selected>Douyin (douyin.com)</option>
+          <option value="tiktok">TikTok (tiktok.com)</option>
+        </select>
+      </div>
+
+      <button id="capture" class="btn primary" type="button">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 4l10 10-4 4-10-10L14 4z"/><path d="M5 19l-2 2"/><path d="M14 4l-4 4"/><path d="M10 8l-4 4"/>
+        </svg>
+        Ambil &amp; Kirim Cookie
+      </button>
+
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label for="code">Kode hubung aplikasi</label>
+        <div class="code-row">
+          <input id="code" type="text" placeholder="port:token" spellcheck="false" autocomplete="off" />
+          <button id="saveCode" class="btn ghost" type="button">Simpan</button>
+        </div>
+        <p class="hint">Buka aplikasi RS OmniTools → Pengaturan Unduhan → bagian "Isi otomatis via ekstensi" → salin kode lalu tempel di sini.</p>
+      </div>
+
+      <div class="actions">
+        <button id="check" class="btn ghost" type="button">Cek koneksi</button>
+        <button id="copy" class="btn ghost" type="button">Salin cookie</button>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span>Cookie dikirim hanya ke 127.0.0.1 — tidak ke server mana pun.</span>
+      <span class="ver" id="ver"></span>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

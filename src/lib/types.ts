@@ -46,6 +46,12 @@ export interface ScrapeItem {
   thumbnail?: string
   /** Durasi (detik) bila tersedia dari playlist (flat-playlist menyediakannya untuk TikTok). */
   duration?: number
+  /** Engagement (best-effort; flat-playlist sering 'NA'). */
+  views?: number
+  likes?: number
+  comments?: number
+  /** Caption/description (berisi hashtag). */
+  description?: string
 }
 
 /** Hasil resolusi pratinjau satu video (untuk thumbnail lazy & modal preview). */
@@ -97,6 +103,10 @@ export interface DownloadProgress {
   thumbnail?: string
   description?: string
   filePath?: string
+  /** Durasi video (detik) — terisi saat berhasil. */
+  duration?: number
+  /** Nama akun/pembuat video (uploader/channel) — terisi saat berhasil. */
+  uploader?: string
 }
 
 /** Info versi aplikasi (lokal vs rilis terbaru dari GitHub). */

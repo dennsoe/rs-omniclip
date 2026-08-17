@@ -498,6 +498,23 @@ export default function App(): React.ReactElement {
     }, 4000)
   }, [])
 
+  // COOKIE DARI EKSTENSI MV3 → isi otomatis setelan Douyin + toast.
+  useEffect(() => {
+    if (!window.api?.onCookieReceived) return
+    return window.api.onCookieReceived((data) => {
+      if (data.site !== 'douyin' || !data.supported) {
+        addToast(`Cookie dari ${data.site || 'situs'} diterima (${data.count}) tapi belum didukung aplikasi ini.`, 'info')
+        return
+      }
+      if (!data.hasSession) {
+        addToast(`Cookie Douyin diterima (${data.count}), tapi cookie sesi utama belum lengkap.`, 'error')
+        return
+      }
+      setDownloadDouyinCookie(data.cookieHeader)
+      addToast(`Cookie Douyin terisi otomatis dari ekstensi (${data.count} cookie).`, 'success')
+    })
+  }, [addToast, setDownloadDouyinCookie])
+
   // INISIALISASI MESIN (via jembatan IPC, bukan fetch HTTP)
   useEffect(() => {
     if (!window.api?.checkEngine) return
@@ -948,6 +965,7 @@ export default function App(): React.ReactElement {
         <DownloadSettingsModal
           open={isDownloadSettingsOpen}
           onClose={() => setIsDownloadSettingsOpen(false)}
+          onToast={addToast}
           settings={{
             maxHeight: downloadMaxHeight,
             cookiesBrowser: downloadCookiesBrowser,

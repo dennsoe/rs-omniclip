@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Settings, XCircle, RotateCcw, Globe, MonitorDown, MonitorUp, Info, KeyRound } from 'lucide-react'
+import { Settings, XCircle, RotateCcw, Globe, MonitorDown, MonitorUp, Info, CheckCircle2, AlertTriangle, Trash2, Puzzle, Copy, Check, RefreshCw, Download } from 'lucide-react'
 import FloatingSelect from './ui/FloatingSelect'
+import { browserIcon, browserColorClass } from './ui/platform-brand'
+import { TikTokIcon } from './ui/brand-icons'
 import { FloatingTextarea } from './ui/FloatingField'
 import Toggle from './ui/Toggle'
 import ProxyManager from './ProxyManager'
@@ -26,11 +28,31 @@ const QUALITY_OPTIONS = [
 
 const BROWSER_OPTIONS = [
   { value: '', label: 'Tanpa Cookies' },
-  { value: 'chrome', label: 'Chrome' },
-  { value: 'edge', label: 'Edge' },
-  { value: 'safari', label: 'Safari' },
-  { value: 'firefox', label: 'Firefox' },
-  { value: 'brave', label: 'Brave' }
+  {
+    value: 'chrome',
+    label: 'Chrome',
+    icon: <span className={browserColorClass('Chrome')}>{browserIcon('Chrome')}</span>
+  },
+  {
+    value: 'edge',
+    label: 'Edge',
+    icon: <span className={browserColorClass('Edge')}>{browserIcon('Edge')}</span>
+  },
+  {
+    value: 'safari',
+    label: 'Safari',
+    icon: <span className={browserColorClass('Safari')}>{browserIcon('Safari')}</span>
+  },
+  {
+    value: 'firefox',
+    label: 'Firefox',
+    icon: <span className={browserColorClass('Firefox')}>{browserIcon('Firefox')}</span>
+  },
+  {
+    value: 'brave',
+    label: 'Brave',
+    icon: <span className={browserColorClass('Brave')}>{browserIcon('Brave')}</span>
+  }
 ]
 
 const SETTINGS_DEFAULT: DownloadSettings = {
@@ -50,12 +72,14 @@ export default function DownloadSettingsModal({
   open,
   onClose,
   settings,
-  onChange
+  onChange,
+  onToast
 }: {
   open: boolean
   onClose: () => void
   settings: DownloadSettings
   onChange: (patch: Partial<DownloadSettings>) => void
+  onToast?: (message: string, type?: 'info' | 'success' | 'error') => void
 }): React.ReactElement | null {
   useEffect(() => {
     if (!open) return
@@ -65,6 +89,98 @@ export default function DownloadSettingsModal({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
+
+  // --- Validasi Cookie Douyin (live, debounce; diproses di MAIN — satu sumber
+  // kebenaran dengan penulis file Netscape agar status UI selalu akurat). ---
+  const [douyinCheck, setDouyinCheck] = useState<{ count: number; invalid: number; keys: string[]; hasSession: boolean } | null>(null)
+  const [douyinCheckErr, setDouyinCheckErr] = useState(false)
+
+  useEffect(() => {
+    if (!window.api?.validateDouyinCookie) return
+    const t = window.setTimeout(() => {
+      const raw = settings.douyinCookie
+      if (!raw || !raw.trim()) {
+        setDouyinCheck(null)
+        setDouyinCheckErr(false)
+        return
+      }
+      window.api
+        ?.validateDouyinCookie(raw)
+        .then((r) => {
+          setDouyinCheck(r)
+          setDouyinCheckErr(false)
+        })
+        .catch(() => setDouyinCheckErr(true))
+    }, 400)
+    return () => window.clearTimeout(t)
+  }, [settings.douyinCookie])
+
+  // --- Jembatan cookie ekstensi MV3: kode hubung `<port>:<token>` + status ---
+  const [bridge, setBridge] = useState<{ active: boolean; code: string | null } | null>(null)
+  const [bridgeCopied, setBridgeCopied] = useState(false)
+  const [extensionVersion, setExtensionVersion] = useState<string | null>(null)
+
+  const refreshBridge = useCallback((): void => {
+    window.api
+      ?.getCookieBridgeInfo?.()
+      .then((info) => setBridge(info))
+      .catch(() => setBridge(null))
+    window.api
+      ?.getExtensionInfo?.()
+      .then((info) => setExtensionVersion(info.version ?? null))
+      .catch(() => setExtensionVersion(null))
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    refreshBridge()
+    // Port mungkin baru terset setelah server listen — ambil ulang sebentar lagi.
+    const t = window.setTimeout(refreshBridge, 700)
+    return () => window.clearTimeout(t)
+  }, [open, refreshBridge])
+
+  const copyBridgeCode = useCallback(async (): Promise<void> => {
+    if (!bridge?.code) return
+    try {
+      await navigator.clipboard.writeText(bridge.code)
+      setBridgeCopied(true)
+      window.setTimeout(() => setBridgeCopied(false), 1600)
+    } catch {
+      // Clipboard diblokir → fallback via textarea tersembunyi.
+      const ta = document.createElement('textarea')
+      ta.value = bridge.code
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      setBridgeCopied(true)
+      window.setTimeout(() => setBridgeCopied(false), 1600)
+    }
+  }, [bridge])
+
+  // Siapkan ekstensi: salin ZIP ber-versi ke Downloads & tampilkan di Finder.
+  const [preparingExt, setPreparingExt] = useState(false)
+  const handlePrepareExtension = useCallback(async (): Promise<void> => {
+    if (!window.api?.prepareExtension || preparingExt) return
+    setPreparingExt(true)
+    try {
+      const r = await window.api.prepareExtension()
+      if (r.ok && r.zipPath) {
+        onToast?.(
+          `ZIP ekstensi v${r.version ?? '?'} disalin ke Downloads & dipilih di Finder. Ekstrak ZIP lalu Load unpacked pilih folder hasil ekstrak.`,
+          'success'
+        )
+      } else {
+        onToast?.(r.error || 'Gagal menyiapkan ekstensi.', 'error')
+      }
+    } catch {
+      onToast?.('Gagal menyiapkan ekstensi.', 'error')
+    } finally {
+      setPreparingExt(false)
+    }
+  }, [preparingExt, onToast])
 
   // --- Pemrosesan Hardware (encoder GPU) ---
   const [hwAvailable, setHwAvailable] = useState<Array<'videotoolbox' | 'nvenc' | 'amf'>>([])
@@ -179,14 +295,164 @@ export default function DownloadSettingsModal({
             />
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1.5">
             <FloatingTextarea
               label="Cookie Douyin (opsional)"
-              icon={<KeyRound className="h-4 w-4" />}
+              icon={<TikTokIcon className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />}
               value={settings.douyinCookie}
               onChange={(e) => set({ douyinCookie: e.target.value })}
-              helper="Khusus Douyin (anti-bot ketat, wajib cookie sesi). Cara ambil: buka douyin.com di Chrome → login → F12 → Application → Cookies → https://www.douyin.com → salin seluruh header Cookie. Disimpan lokal & dipakai yt-dlp."
+              helper="Cookie sesi dari douyin.com — anti-bot Douyin mewajibkannya untuk unduhan anonim. Disimpan lokal & dipakai yt-dlp."
             />
+
+            {/* Status validasi live (diproses di main process) */}
+            <div className="min-h-[18px] px-1 text-[11px] leading-snug">
+              {settings.douyinCookie.trim() === '' ? (
+                <span className="text-slate-400 dark:text-slate-500">Kosong — unduhan Douyin mungkin butuh cookie sesi.</span>
+              ) : douyinCheckErr ? (
+                <span className="text-amber-600 dark:text-amber-400">
+                  <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />Gagal memeriksa cookie.
+                </span>
+              ) : !douyinCheck ? (
+                <span className="text-slate-400 dark:text-slate-500">Memeriksa cookie…</span>
+              ) : douyinCheck.count === 0 ? (
+                <span className="text-rose-600 dark:text-rose-400">
+                  <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />Format tidak dikenali — pastikan menempel header utuh (contoh: <code className="font-mono">ttwid=…; odin_tt=…</code>).
+                </span>
+              ) : !douyinCheck.hasSession ? (
+                <span className="text-amber-600 dark:text-amber-400">
+                  <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />{douyinCheck.count} cookie terdeteksi, tapi cookie sesi utama (ttwid/msToken/odin_tt…) belum ada — Douyin bisa tetap memblokir.
+                </span>
+              ) : (
+                <span className="text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />Cookie sesi terdeteksi ({douyinCheck.count} cookie) — siap dipakai yt-dlp.
+                </span>
+              )}
+            </div>
+
+            {/* Aksi: kosongkan + buka douyin.com (dibuka via shell.openExternal) */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {settings.douyinCookie.trim() !== '' && (
+                <button
+                  type="button"
+                  onClick={() => set({ douyinCookie: '' })}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Kosongkan
+                </button>
+              )}
+              <a
+                href="https://www.douyin.com"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20"
+              >
+                <TikTokIcon className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" /> Buka douyin.com
+              </a>
+            </div>
+
+            {/* Panduan lengkap: pasang ekstensi + ambil cookie (bisa dilipat) */}
+            <details className="rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
+              <summary className="cursor-pointer select-none font-semibold text-slate-600 dark:text-slate-300">
+                Panduan lengkap: pasang ekstensi &amp; ambil cookie
+              </summary>
+              <ol className="mt-1.5 list-decimal space-y-1.5 pl-4">
+                <li>
+                  <strong>Dapatkan ekstensi</strong> — klik tombol{" "}
+                  <strong>"Siapkan Ekstensi"</strong> di bawah. Aplikasi menyalin{" "}
+                  <strong>ZIP ber-versi</strong> ke{" "}
+                  <code className="font-mono">~/Downloads/RS-OmniTools-Extension/</code>{" "}
+                  lalu memilih file-nya di Finder.
+                </li>
+                <li>
+                  <strong>Ekstrak ZIP</strong> tersebut (klik dua kali di Finder /
+                  unzip). Di Chrome/Edge buka <code className="font-mono">chrome://extensions</code>{" "}
+                  (Edge: <code className="font-mono">edge://extensions</code>) → aktifkan{" "}
+                  <strong>Developer mode</strong> → <strong>Load unpacked</strong> → pilih folder{" "}
+                  <code className="font-mono">rs-omni-cookie-capturer</code> hasil ekstrak.
+                </li>
+                <li>
+                  <strong>Sudah pernah pasang versi lama?</strong> Hapus dulu ekstensi lama di{" "}
+                  <code className="font-mono">chrome://extensions</code>, lalu Load unpacked folder baru.
+                </li>
+                <li>
+                  <strong>Hubungkan kode</strong> — klik ikon ekstensi di toolbar Chrome → tempel{" "}
+                  <strong>kode hubung</strong> (di atas) di kolom "Kode hubung aplikasi" →{" "}
+                  <strong>Simpan</strong>.
+                </li>
+                <li>
+                  <strong>Ambil otomatis</strong> — pastikan aplikasi ini terbuka, buka{" "}
+                  <strong>douyin.com</strong> di Chrome lalu <strong>login</strong> → klik ikon
+                  ekstensi → <strong>Ambil &amp; Kirim Cookie</strong>. Cookie terisi otomatis di
+                  sini (status hijau).
+                </li>
+                <li>
+                  <strong>Cara manual (tanpa ekstensi)</strong> — buka douyin.com → login →{" "}
+                  <strong>F12</strong> → tab <strong>Network</strong> → muat ulang (F5 / Cmd+R) →
+                  klik request <strong>www.douyin.com</strong> → <strong>Request Headers</strong> →{" "}
+                  baris <strong>Cookie:</strong> → klik kanan → <strong>Copy value</strong> → tempel
+                  di kolom Cookie Douyin di atas.
+                </li>
+              </ol>
+            </details>
+
+            {/* Jembatan ekstensi MV3: isi cookie otomatis dari browser */}
+            <div className="rounded-xl border border-dashed border-blue-300/70 bg-blue-50/40 px-3 py-2.5 dark:border-blue-500/40 dark:bg-blue-500/5">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-blue-100/70 text-blue-600 rounded-lg shrink-0 dark:bg-blue-500/15 dark:text-blue-300">
+                  <Puzzle className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 leading-tight">
+                    Isi otomatis via ekstensi browser
+                    {extensionVersion && (
+                      <span className="ml-1.5 rounded-md border border-blue-200 bg-blue-50 px-1 py-px text-[9px] font-semibold text-blue-500 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                        v{extensionVersion}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">
+                    Pasang ekstensi "RS OmniTools — Cookie Capturer", tempel kode di bawah, lalu buka douyin.com. Cookie terkirim otomatis.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={refreshBridge}
+                  aria-label="Muat ulang kode hubung"
+                  title="Muat ulang kode hubung"
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0 transition-colors"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex-1 min-w-0 select-all truncate rounded-lg border border-blue-200 bg-white px-2 py-1.5 font-mono text-[11px] text-blue-700 dark:border-blue-500/30 dark:bg-slate-900/60 dark:text-blue-300">
+                  {bridge?.code ?? 'Menghubungkan…'}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void copyBridgeCode()}
+                  disabled={!bridge?.code}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20"
+                >
+                  {bridgeCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {bridgeCopied ? 'Tersalin' : 'Salin'}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handlePrepareExtension()}
+                disabled={preparingExt}
+                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-500/30 dark:bg-slate-900/60 dark:text-blue-400 dark:hover:bg-blue-500/20"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {preparingExt ? 'Menyiapkan…' : 'Siapkan Ekstensi (salin ke Downloads)'}
+              </button>
+              <p className="mt-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+                {bridge?.active
+                  ? 'Jembatan lokal aktif di 127.0.0.1 — hanya aplikasi ini yang menerima cookie.'
+                  : 'Jembatan lokal belum aktif — mulai ulang aplikasi bila kode tidak muncul.'}
+              </p>
+            </div>
           </div>
 
           <ProxyManager />

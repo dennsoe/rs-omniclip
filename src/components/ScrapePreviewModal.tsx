@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { PlayCircle, XCircle, Loader2, CircleAlert, Clock } from 'lucide-react'
 import type { ScrapeItem, ResolvedPreview } from '@lib/types'
 import { formatDuration, guessPlatform } from '@lib/utils'
+import { PlatformBadge } from '@components/ui/PlatformBadge'
 import VideoPlayer from './VideoPlayer'
 
 /**
@@ -99,7 +100,7 @@ export default function ScrapePreviewModal({
               {preview?.title ?? item.title}
             </h3>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-              {platform} · Pratinjau video
+              <PlatformBadge platform={platform} /> · Pratinjau video
               {duration != null && duration > 0 && (
                 <span className="inline-flex items-center gap-1 text-slate-400 dark:text-slate-500">
                   · <Clock className="w-3 h-3" /> {formatDuration(duration)}

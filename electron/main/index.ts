@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import path from 'node:path'
+import fs from 'node:fs'
 import os from 'node:os'
 import { ensureFfmpeg, detectEncoders, type EncoderId } from '@engine/ffmpeg'
 import {
@@ -24,6 +25,12 @@ import {
   type ResourceInfo
 } from '@engine/updater'
 import { getTrackedPids, sampleProcess } from '@engine/procmon'
+import { parseDouyinCookie, type DouyinCookieParse } from '@engine/douyin'
+import {
+  startCookieBridge,
+  getCookieBridgeInfo,
+  type ReceivedCookie
+} from '@engine/cookieBridge'
 import { enqueueBatch } from '@engine/queue'
 import { testProxy, resetRotation } from '@engine/proxy'
 import { registerMediaScheme, registerMediaProtocol } from './media'
@@ -587,6 +594,72 @@ function registerIpc(): void {
     return true
   })
 
+  // Validasi header Cookie Douyin (satu sumber kebenaran dengan penulis file
+  // Netscape) — dipakai UI untuk memberi umpan balik akurat saat user menempel.
+  ipcMain.handle('douyin:validate', (_e, raw: string): DouyinCookieParse => parseDouyinCookie(raw))
+
+  // Info jembatan cookie ekstensi (port + kode hubung) untuk ditampilkan di UI.
+  ipcMain.handle('cookieBridge:info', (): ReturnType<typeof getCookieBridgeInfo> => getCookieBridgeInfo())
+
+  // Versi ekstensi cookie (baca manifest dari dalam app — sumber kebenaran).
+  ipcMain.handle('extension:info', (): { version: string | null } => {
+    try {
+      const base = app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'extensions')
+      const manifestPath = path.join(base, 'rs-omni-cookie-capturer', 'manifest.json')
+      if (!fs.existsSync(manifestPath)) return { version: null }
+      const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { version?: unknown }
+      return { version: typeof m.version === 'string' ? m.version : null }
+    } catch {
+      return { version: null }
+    }
+  })
+
+  // Siapkan ekstensi cookie: salin ZIP ber-versi ke Downloads lalu tampilkan
+  // file-nya di Finder — TANPA membuat/mengekstrak folder (user yang mengekstrak
+  // bila perlu Load unpacked di Chrome).
+  ipcMain.handle(
+    'extension:prepare',
+    async (): Promise<{
+      ok: boolean
+      zipPath?: string
+      version?: string | null
+      error?: string
+    }> => {
+      try {
+        const base = app.isPackaged
+          ? process.resourcesPath
+          : path.join(app.getAppPath(), 'extensions')
+        const zipSrc = path.join(base, 'rs-omni-cookie-capturer.zip')
+        if (!fs.existsSync(zipSrc)) {
+          return { ok: false, error: 'ZIP ekstensi tidak ditemukan di aplikasi.' }
+        }
+
+        // Versi ekstensi (dari manifest folder sumber yang ikut dibundel/repo).
+        let version: string | null = null
+        const manifestPath = path.join(base, 'rs-omni-cookie-capturer', 'manifest.json')
+        if (fs.existsSync(manifestPath)) {
+          try {
+            const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { version?: unknown }
+            if (typeof m.version === 'string') version = m.version
+          } catch {
+            // Abaikan — versi opsional.
+          }
+        }
+        const vTag = version ? `-v${version}` : ''
+
+        const outRoot = path.join(app.getPath('downloads'), 'RS-OmniTools-Extension')
+        const zipPath = path.join(outRoot, `RS-OmniTools-Cookie-Capturer${vTag}.zip`)
+        fs.mkdirSync(outRoot, { recursive: true })
+        fs.copyFileSync(zipSrc, zipPath)
+        // Tampilkan file ZIP-nya di Finder (tanpa membuat folder).
+        shell.showItemInFolder(zipPath)
+        return { ok: true, zipPath, version }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : 'Gagal menyiapkan ekstensi.' }
+      }
+    }
+  )
+
   ipcMain.handle('resource:check', (): Promise<ResourceInfo[]> => getResourceStatus())
 
   ipcMain.handle('resource:update', async (_event, force = false) => {
@@ -635,6 +708,10 @@ if (!gotLock) {
     createWindow()
     void initEngine()
     startSystemStats()
+
+    // Jembatan cookie ekstensi: terima cookie dari ekstensi MV3 → renderer
+    // (diisi otomatis ke setelan + toast). Loopback-only, token wajib.
+    startCookieBridge((data: ReceivedCookie) => emit('cookie:received', data))
 
     // Auto-Watcher: notifikasi → renderer (toast) + mulai interval bila aktif.
     setWatcherNotify((e) => emit('watcher:notify', e))

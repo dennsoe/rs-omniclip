@@ -7,10 +7,12 @@ import {
   FolderOpen,
   Link as LinkIcon,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Clock
 } from 'lucide-react'
 import type { DownloadProgress } from '@lib/types'
-import { formatBytes, formatSpeed, formatEta } from '@lib/utils'
+import { formatBytes, formatSpeed, formatEta, guessPlatform, formatDuration } from '@lib/utils'
+import { PlatformBadge } from './ui/PlatformBadge'
 
 /** Variants: masuk spring halus, keluar tween cepat (agar AnimatePresence tidak menunda lama). */
 const queueVariants: Variants = {
@@ -102,17 +104,29 @@ export default function DownloadQueue({
                 <td className="min-w-0 px-4 py-2.5 align-middle">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="group/thumb relative hidden min-[420px]:block h-10 w-10 sm:h-12 sm:w-12 shrink-0">
-                      {dl.status === 'success' && dl.thumbnail ? (
-                        <>
-                          <img
-                            src={dl.thumbnail}
-                            alt=""
-                            className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg object-cover ring-1 ring-slate-100 dark:ring-slate-700"
-                          />
+                      {dl.status === 'success' && dl.filePath ? (
+                        <button
+                          type="button"
+                          onClick={() => onPreview(dl)}
+                          title="Putar video"
+                          aria-label="Putar video"
+                          className="relative block h-10 w-10 sm:h-12 sm:w-12 shrink-0 cursor-pointer overflow-hidden rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                          {dl.thumbnail ? (
+                            <img
+                              src={dl.thumbnail}
+                              alt=""
+                              className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg object-cover ring-1 ring-slate-100 dark:ring-slate-700"
+                            />
+                          ) : (
+                            <span className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-lg bg-blue-50 text-blue-600 ring-1 ring-slate-100 dark:bg-slate-900/60 dark:text-blue-400 dark:ring-slate-700">
+                              <LinkIcon className="h-4 w-4" />
+                            </span>
+                          )}
                           <span className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-slate-900/0 transition-colors group-hover/thumb:bg-slate-900/40">
                             <PlayCircle className="h-4 w-4 text-white opacity-0 transition-opacity group-hover/thumb:opacity-100" />
                           </span>
-                        </>
+                        </button>
                       ) : (
                         <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-lg bg-blue-50 text-blue-600 ring-1 ring-slate-100 dark:bg-slate-900/60 dark:text-blue-400 dark:ring-slate-700">
                           <LinkIcon className="h-4 w-4" />
@@ -134,6 +148,17 @@ export default function DownloadQueue({
                           {dl.title || dl.url}
                         </p>
                       )}
+                      {/* Info lengkap: badge platform, durasi, akun pembuat */}
+                      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+                        <PlatformBadge platform={guessPlatform(dl.url)} />
+                        {dl.duration != null && dl.duration > 0 && (
+                          <span className="inline-flex items-center gap-0.5 tabular-nums">
+                            <Clock className="h-3 w-3" />
+                            {formatDuration(dl.duration)}
+                          </span>
+                        )}
+                        {dl.uploader && <span className="truncate">{dl.uploader}</span>}
+                      </p>
                       {dl.title && dl.url !== dl.title && (
                         <p className="truncate text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                           {dl.url}

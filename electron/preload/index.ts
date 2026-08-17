@@ -29,6 +29,8 @@ interface DownloadProgressData {
   thumbnail?: string
   description?: string
   filePath?: string
+  duration?: number
+  uploader?: string
 }
 
 interface TrimCompleteData {
@@ -330,6 +332,62 @@ const api = {
   /** Membuka halaman rilis GitHub di browser (strategi unduh manual macOS). */
   openUpdatePage: (url: string): Promise<boolean> => {
     return ipcRenderer.invoke('update:open', url)
+  },
+
+  /** Memvalidasi header Cookie Douyin (diproses di main — satu sumber kebenaran). */
+  validateDouyinCookie: (raw: string): Promise<{
+    count: number
+    invalid: number
+    keys: string[]
+    hasSession: boolean
+  }> => {
+    return ipcRenderer.invoke('douyin:validate', raw)
+  },
+
+  /** Info jembatan cookie ekstensi: port + kode hubung `<port>:<token>`. */
+  getCookieBridgeInfo: (): Promise<{
+    active: boolean
+    port: number | null
+    code: string | null
+  }> => {
+    return ipcRenderer.invoke('cookieBridge:info')
+  },
+
+  /** Versi ekstensi cookie (baca manifest dari dalam app). */
+  getExtensionInfo: (): Promise<{ version: string | null }> => {
+    return ipcRenderer.invoke('extension:info')
+  },
+
+  /** Menyiapkan ekstensi cookie: salin ZIP ber-versi ke Downloads & tampilkan
+   *  file-nya di Finder (tanpa membuat folder). */
+  prepareExtension: (): Promise<{
+    ok: boolean
+    zipPath?: string
+    version?: string | null
+    error?: string
+  }> => {
+    return ipcRenderer.invoke('extension:prepare')
+  },
+
+  /** Cookie diterima dari ekstensi MV3 (valid & lolos token). */
+  onCookieReceived: (cb: (data: {
+    site: string
+    cookieHeader: string
+    count: number
+    hasSession: boolean
+    supported: boolean
+  }) => void): Unsubscribe => {
+    const listener = (_event: Electron.IpcRendererEvent, data: {
+      site: string
+      cookieHeader: string
+      count: number
+      hasSession: boolean
+      supported: boolean
+    }): void => cb(data)
+    ipcRenderer.on('cookie:received', listener)
+    return () => {
+      ipcRenderer.removeListener('cookie:received', listener)
+    }
   },
 
   /** Memeriksa status resource ffmpeg/yt-dlp terhadap manifest repo. */

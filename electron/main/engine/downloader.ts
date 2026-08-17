@@ -28,6 +28,10 @@ export interface DownloadProgress {
   thumbnail?: string
   description?: string
   filePath?: string
+  /** Durasi video (detik) — terisi saat berhasil. */
+  duration?: number
+  /** Nama akun/pembuat video (uploader/channel) — terisi saat berhasil. */
+  uploader?: string
 }
 
 /** Opsi unduhan dari UI (kualitas, cookies browser, cookie Douyin, paralel). */
@@ -386,6 +390,8 @@ async function tryTikTokDownload(
       thumbnail: result.thumbnail,
       filePath: result.filePath,
       sizeBytes: result.sizeBytes,
+      duration: result.duration,
+      uploader: result.uploader,
       description: 'TikTok · via TikWM'
     })
     return true
@@ -432,7 +438,14 @@ async function runYtdlpDownload(
     let stdoutBuf = ''
     let lastEmitAt = 0
     let coalesced: DownloadProgress | null = null
-    const meta: { title?: string; thumbnail?: string; description?: string; filePath?: string } = {}
+    const meta: {
+      title?: string
+      thumbnail?: string
+      description?: string
+      filePath?: string
+      duration?: number
+      uploader?: string
+    } = {}
 
     const emitProgress = (p: Partial<DownloadProgress>): void => {
       const now = Date.now()
@@ -477,6 +490,15 @@ async function runYtdlpDownload(
           meta.filePath = typeof obj.filepath === 'string' ? obj.filepath : undefined
           meta.description =
             typeof obj.description === 'string' ? obj.description.slice(0, 1000) : undefined
+          meta.duration =
+            typeof obj.duration === 'number' && obj.duration > 0 ? obj.duration : undefined
+          const account =
+            typeof obj.uploader === 'string' && obj.uploader
+              ? obj.uploader
+              : typeof obj.channel === 'string'
+                ? obj.channel
+                : ''
+          meta.uploader = account ? account.slice(0, 200) : undefined
         } catch {
           // Baris metadata tidak valid — abaikan, progress tetap berjalan.
         }
@@ -850,7 +872,7 @@ function buildDownloadArgs(
   // (setiap field di-encode dengan %(field)j agar aman dari newline/tab).
   args.push(
     '--print',
-    'after_move:__RSMETA__{"title":%(title)j,"thumbnail":%(thumbnail)j,"filepath":%(filepath)j,"description":%(description)j}'
+    'after_move:__RSMETA__{"title":%(title)j,"thumbnail":%(thumbnail)j,"filepath":%(filepath)j,"description":%(description)j,"duration":%(duration)j,"uploader":%(uploader)j,"channel":%(channel)j}'
   )
   if (options.maxHeight && options.maxHeight > 0) {
     args.push('-f', `bv*[height<=${options.maxHeight}]+ba/b[height<=${options.maxHeight}]`)

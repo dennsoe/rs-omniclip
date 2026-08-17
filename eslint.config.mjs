@@ -5,7 +5,16 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import globals from 'globals'
 
 export default tseslint.config(
-  { ignores: ['**/node_modules/**', '**/out/**', '**/dist/**', '_archive_nextjs/**'] },
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/out/**',
+      '**/dist/**',
+      '_archive_nextjs/**',
+      // Ekstensi browser MV3 (plain JS, environment Chrome terpisah dari app).
+      'extensions/**'
+    ]
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
