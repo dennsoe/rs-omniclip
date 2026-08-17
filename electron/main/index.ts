@@ -2,7 +2,6 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import os from 'node:os'
-import extract from 'extract-zip'
 import { ensureFfmpeg, detectEncoders, type EncoderId } from '@engine/ffmpeg'
 import {
   processBatch,
@@ -615,14 +614,14 @@ function registerIpc(): void {
     }
   })
 
-  // Siapkan ekstensi cookie: salin ZIP ber-versi ke Downloads, ekstrak ke
-  // folder, lalu buka foldernya — user tinggal "Load unpacked" pilih folder itu.
+  // Siapkan ekstensi cookie: salin ZIP ber-versi ke Downloads lalu tampilkan
+  // file-nya di Finder — TANPA membuat/mengekstrak folder (user yang mengekstrak
+  // bila perlu Load unpacked di Chrome).
   ipcMain.handle(
     'extension:prepare',
     async (): Promise<{
       ok: boolean
-      zipPath?: string | null
-      folderPath?: string
+      zipPath?: string
       version?: string | null
       error?: string
     }> => {
@@ -630,12 +629,14 @@ function registerIpc(): void {
         const base = app.isPackaged
           ? process.resourcesPath
           : path.join(app.getAppPath(), 'extensions')
-        const folderSrc = path.join(base, 'rs-omni-cookie-capturer')
         const zipSrc = path.join(base, 'rs-omni-cookie-capturer.zip')
+        if (!fs.existsSync(zipSrc)) {
+          return { ok: false, error: 'ZIP ekstensi tidak ditemukan di aplikasi.' }
+        }
 
-        // Versi ekstensi (dari manifest folder sumber).
+        // Versi ekstensi (dari manifest folder sumber yang ikut dibundel/repo).
         let version: string | null = null
-        const manifestPath = path.join(folderSrc, 'manifest.json')
+        const manifestPath = path.join(base, 'rs-omni-cookie-capturer', 'manifest.json')
         if (fs.existsSync(manifestPath)) {
           try {
             const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { version?: unknown }
@@ -648,24 +649,11 @@ function registerIpc(): void {
 
         const outRoot = path.join(app.getPath('downloads'), 'RS-OmniTools-Extension')
         const zipPath = path.join(outRoot, `RS-OmniTools-Cookie-Capturer${vTag}.zip`)
-        const folderPath = path.join(outRoot, 'rs-omni-cookie-capturer')
-
-        // ZIP tersedia → salin ke Downloads (deliverable) lalu ekstrak.
-        if (fs.existsSync(zipSrc)) {
-          fs.mkdirSync(outRoot, { recursive: true })
-          fs.copyFileSync(zipSrc, zipPath)
-          fs.rmSync(folderPath, { recursive: true, force: true })
-          fs.mkdirSync(folderPath, { recursive: true })
-          await extract(zipPath, { dir: folderPath })
-          await shell.openPath(folderPath)
-          return { ok: true, zipPath, folderPath, version }
-        }
-
-        // Fallback dev (tanpa ZIP): salin folder sumber langsung.
-        fs.rmSync(folderPath, { recursive: true, force: true })
-        fs.cpSync(folderSrc, folderPath, { recursive: true })
-        await shell.openPath(folderPath)
-        return { ok: true, zipPath: null, folderPath, version }
+        fs.mkdirSync(outRoot, { recursive: true })
+        fs.copyFileSync(zipSrc, zipPath)
+        // Tampilkan file ZIP-nya di Finder (tanpa membuat folder).
+        shell.showItemInFolder(zipPath)
+        return { ok: true, zipPath, version }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : 'Gagal menyiapkan ekstensi.' }
       }

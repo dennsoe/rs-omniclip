@@ -122,13 +122,13 @@ lokal. Dikerjakan sangat teliti.**
     via `electron-builder --dir`: folder 5 file + ZIP valid masuk ke bundle).
   - IPC baru **`extension:info`** → `{ version }` (baca manifest dari dalam app)
     → modal menampilkan badge **"vX.Y.Z"** di kartu ekstensi.
-  - **`extension:prepare`** dirombak (main `index.ts` + preload `prepareExtension`
+  - **`extension:prepare`** (main `index.ts` + preload `prepareExtension`
     + `global.d.ts`): salin ZIP dari dalam app (resources saat packaged /
-    `extensions/…` saat dev; fallback dev salin folder bila ZIP tak ada) →
-    `~/Downloads/RS-OmniTools-Extension/RS-OmniTools-Cookie-Capturer-v{version}.zip`,
-    ekstrak dengan `extract-zip` (dependensi sudah ada) → folder
-    `rs-omni-cookie-capturer/` (selalu disegarkan), lalu `shell.openPath` membuka
-    foldernya. Return `{ok, zipPath, folderPath, version}`.
+    `extensions/…` saat dev) → `~/Downloads/RS-OmniTools-Extension/
+    RS-OmniTools-Cookie-Capturer-v{version}.zip` lalu `shell.showItemInFolder`
+    menampilkan file-nya di Finder. **HANYA ZIP — TIDAK membuat/mengekstrak
+    folder** (user ekstrak manual untuk Load unpacked; `extract-zip` dihapus
+    dari import). Return `{ok, zipPath, version}`.
   - Tombol **"Siapkan Ekstensi (salin ke Downloads)"** di kartu ekstensi modal
     (ikon `Download`; state `preparingExt`; toast sukses/gagal via prop `onToast`).
   - **Panduan lengkap** di modal menggantikan panduan singkat: pasang ekstensi
@@ -138,18 +138,24 @@ lokal. Dikerjakan sangat teliti.**
   - **Versi di popup ekstensi**: footer menampilkan
     `RS OmniTools Cookie Capturer · vX.Y.Z` via `chrome.runtime.getManifest()`.
   - Alur jelas end-to-end: **pasang app → Pengaturan Unduhan → Siapkan
-    Ekstensi → ZIP ber-versi + folder hasil ekstrak terbuka di Downloads →
-    Load unpacked pilih folder → tempel kode hubung → selesai.** README
-    ekstensi diperbarui (jalur termudah + cara maintenance versi/ZIP).
+    Ekstensi → ZIP ber-versi muncul di Downloads (dipilih di Finder) →
+    ekstrak ZIP → Load unpacked pilih folder hasil ekstrak → tempel kode
+    hubung → selesai.** README ekstensi diperbarui (jalur termudah + cara
+    maintenance versi/ZIP).
 - **Ekstensi MV3 (`extensions/rs-omni-cookie-capturer/`, baru)**:
   - `manifest.json` — permissions `cookies/clipboardWrite/storage`, host
-    `*.douyin.com`, `*.iesdouyin.com`, `*.tiktok.com`, `http://127.0.0.1/*`.
+    `*.douyin.com`, `*.iesdouyin.com`, `*.tiktok.com`, `http://127.0.0.1/*`;
+    **`icons` + `action.default_icon` = ikon aplikasi RS OmniTools**.
+  - `icons/icon{16,32,48,128}.png` — **ikon ekstensi = ikon app (rsomni.png),
+    satu branding** (di-resize via `sips`); logo popup juga memakai
+    `icons/icon128.png` (bukan lagi SVG puzzle).
   - `popup.html/js/css` — pilih situs, **Ambil & Kirim Cookie** (baca semua
     cookie, build header persis urutan browser: dedupe nama by path
     terpanjang/terlama + sort path menurun), validasi kunci sesi per situs,
     kirim via `fetch` ke `127.0.0.1` + token, Cek koneksi, Salin cookie, simpan
     kode hubung di `chrome.storage.local`. Plain JS — tanpa build.
-  - `README.md` — panduan load unpacked + cara pakai + keamanan.
+  - `README.md` — panduan load unpacked + cara pakai + keamanan + struktur
+    (termasuk `icons/`).
 - **Lint**: `extensions/**` ditambahkan ke `ignores` `eslint.config.mjs`
   (skrip MV3 environment Chrome terpisah dari app).
 - **Verifikasi E2E (Electron restart + CDP + curl)**:
@@ -163,9 +169,9 @@ lokal. Dikerjakan sangat teliti.**
   - `getExtensionInfo()` → `{version:"1.0.0"}`.
   - `prepareExtension()` via CDP → `{ok:true, zipPath:
     ~/Downloads/RS-OmniTools-Extension/RS-OmniTools-Cookie-Capturer-v1.0.0.zip,
-    folderPath: …/rs-omni-cookie-capturer, version:"1.0.0"}`; ZIP valid
-    (`unzip -t` → no errors), folder hasil ekstrak identik sumber repo
-    (`diff -r` → IDENTICAL), Finder terbuka.
+    version:"1.0.0"}` (TANPA `folderPath`); ZIP valid (`unzip -t` → no errors);
+    **tidak ada folder `rs-omni-cookie-capturer` dibuat** — hanya ZIP
+    (folder lama dibersihkan).
   - `electron-builder --dir --mac`: extraResources terbukti masuk ke
     `Contents/Resources/rs-omni-cookie-capturer/` (5 file) + `.zip` (valid).
   - Screenshot modal: badge **v1.0.0** di kartu ekstensi + tombol Siapkan
@@ -173,6 +179,93 @@ lokal. Dikerjakan sangat teliti.**
     kode hubung, hapus-versi-lama, cara manual, chrome://extensions — semua
     true). `get_errors` bersih, typecheck (node+web)/lint/build PASS. Belum
     di-commit (branch `feat/douyin-cookie-ux`).
+
+## Perubahan Terbaru (2026-08-17 — IKON & WARNA BRAND PLATFORM DI HALAMAN PENGUNDUH)
+
+**Permintaan user: di semua halaman Pengunduh, setiap label platform diberi
+ikon + warna brand di depannya (mis. `[ikon TikTok] TikTok` pink). Konfirmasi
+user: hanya label/badge (bukan kalimat error), Cookies Browser ikut diberi
+ikon, TikTok/Douyin pakai SVG kustom. Audit forensik dulu, lalu eksekusi.**
+
+- **File baru**:
+  - `src/components/ui/brand-icons.tsx` — ikon SVG brand **akurat** (simple-icons,
+    CC0): TikTok, Edge, Safari, Firefox, Brave. Path **diekstrak dari sumber
+    resmi** (bukan mengarang) via script sekali pakai.
+  - `src/components/ui/platform-brand.ts` — util (dipisah ke `.ts` agar aman
+    fast-refresh): `platformColorClass`, `platformIcon`, `browserColorClass`,
+    `browserIcon`. Warna: TikTok **hitam `#000000`** (brand resmi), Douyin cyan,
+    YouTube `#FF0000`, Instagram `#E4405F`, Facebook `#1877F2`, X hitam; browser
+    Chrome `#4285F4`, Edge `#0078D7`, Safari `#0AA5EB`, Firefox `#FF7139`,
+    Brave `#FB542B`.
+  - `src/components/ui/PlatformBadge.tsx` — komponen **badge/pill** `[ikon] platform`
+    (rounded-full) dengan **latar lembut berwarna brand** + teks/ikon warna brand,
+    aman light & dark; prop `iconClassName` untuk ukuran per konteks.
+  - `platform-brand.ts` `platformBadgeClass(platform)` — kelas pill per platform
+    (latar tint + warna brand).
+- **Keputusan jujur + koreksi user**: Douyin TIDAK tersedia di set open-source
+  (simple-icons 3307 ikon, Iconify 0 hasil, Font Awesome) — **TAPI logo Douyin
+  identik dengan TikTok** (aplikasi saudara ByteDance, catatan putih + aksen
+  cyan/merah di atas hitam). User menegaskan → **Douyin memakai glyph
+  TikTokIcon yang sama**, dibedakan warna **cyan**. TikTok semula salah merah
+  `#FE2C55` → **dikoreksi ke hitam** (hex resmi simple-icons `000000`).
+- **FloatingSelect**: `SelectOption` + `icon?` (ikon per opsi) — dirender di
+  nilai terpilih & tiap opsi dropdown (ikon membawa warna brand sendiri).
+- **Diterapkan di 7 tempat**: ScrapeResultView (grid + list),
+  ScrapePreviewModal, HistoryView (2 kolom), WatcherPanel (preview akun +
+  daftar akun; pill violet diganti badge brand), MediaPreviewModal,
+  DownloadSettingsModal (ikon Douyin cyan di label Cookie Douyin + tombol
+  "Buka douyin.com" + ikon browser di opsi "Cookies Browser").
+- **Permintaan lanjutan user**: "icon platform berada di dalam badge, warna badge
+  sesuai" → PlatformBadge diubah dari label berwarna menjadi **pill berwarna brand**
+  (latar lembut: Douyin cyan tint, TikTok abu/hitam tint, YouTube merah tint, dst).
+  Konsisten di 7 tempat. Browser (Cookies Browser) tetap ikon+label di dropdown
+  (bukan badge).
+- **Verifikasi**: get_errors bersih, typecheck (node+web)/lint/build PASS.
+  CDP: dropdown Cookies Browser menampilkan ikon brand berwarna (Chrome/Edge/
+  Safari/Firefox/Brave); ikon Douyin cyan di kolom cookie & tombol; Riwayat
+  merender 105 badge platform (TikTok pink, YouTube merah, Facebook biru).
+  Belum di-commit.
+
+## Perubahan Terbaru (2026-08-17 — INFO LENGKAP DI ANTREAN UNDUHAN: PLATFORM + DURASI + AKUN)
+
+**Permintaan user: saat download tampilkan info lengkap — platform, durasi, info
+akun, dll (sebelumnya hanya judul/URL/status). Audit & implementasi penuh.**
+
+- **Engine (`downloader.ts`)**:
+  - `DownloadProgress` + `duration?: number` & `uploader?: string`.
+  - `--print after_move` JSON diperluas: `"duration":%(duration)j,
+    "uploader":%(uploader)j,"channel":%(channel)j` → parser meta menangkap
+    durasi + akun (uploader || channel, fallback aman).
+- **TikWM (`tiktok.ts`)**: `TikTokInfo.author` + `TikTokDownloadResult.duration/
+  uploader` (dari field `author` di data TikWM) → unduhan TikTok juga punya
+  durasi & nama akun.
+- **Kontrak**: preload `DownloadProgressData` + `src/lib/types.ts` ditambah
+  `duration?` & `uploader?` (mengalir otomatis via spread di App).
+- **Renderer (`DownloadQueue.tsx`)**: baris item kini menampilkan **badge
+  platform** (`PlatformBadge` via `guessPlatform` URL) + **durasi**
+  (`formatDuration`) + **nama akun** (uploader).
+- **Verifikasi E2E (CDP + unduhan YouTube nyata "Me at the zoo")**: baris
+  antrean menampilkan `YouTube · 0:19 · jawed` + judul/URL/deskripsi + status
+  Selesai. `get_errors` bersih, typecheck (node+web)/lint/build PASS. Belum
+  di-commit.
+
+## Perubahan Terbaru (2026-08-17 — THUMBNAIL KLIK → PREVIEW + ENGAGEMENT DI HASIL SCRAPE)
+
+**Permintaan user: klik thumbnail juga harus membuka modal preview video (bukan
+hanya judul); terapkan perbaikan yang sama ke bagian scrape Akun/Halaman.**
+
+- **DownloadQueue**: thumbnail item kini **tombol** (`button title="Putar video"`,
+  `onClick=onPreview`) — sama seperti judul; overlay play di hover tetap ada.
+  Sebelumnya hanya judul yang bisa diklik.
+- **ScrapeResultView (Akun/Halaman)**: baris hasil kini menampilkan **info
+  engagement** — views (`Eye`), likes (`ThumbsUp`), comments (`MessageCircle`) —
+  di tampilan grid & list. `ScrapeItem` (types.ts) ditambah `views/likes/
+  comments/description` (data sudah dikirim engine). Klik kartu/thumbnail →
+  preview sudah berfungsi (seluruh kartu adalah tombol).
+- **Verifikasi E2E (CDP + unduhan YouTube nyata)**: setelah selesai, klik
+  thumbnail → modal preview terbuka dengan `<video>` (hasVideo true); screenshot
+  terkonfirmasi. `get_errors` bersih, typecheck (node+web)/lint/build PASS.
+  Belum di-commit.
 
 ## Perubahan Terbaru (2026-08-16 — FIX SCRAPE/AMBIL DAFTAR TIKTOK: UA CHROME/126 + RETRY + PESAN JUJUR)
 

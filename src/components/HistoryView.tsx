@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { History as HistoryIcon, Play, Trash2 } from 'lucide-react'
 import type { HistoryEntry } from '@lib/types'
 import { guessPlatform } from '@lib/utils'
+import { PlatformBadge } from '@components/ui/PlatformBadge'
 
 /**
  * Tab "Riwayat" — daftar unduhan yang berhasil (persist di main process).
@@ -96,8 +97,8 @@ export default function HistoryView({
                         <p className="truncate text-sm font-medium text-slate-800 transition-colors group-hover:text-blue-600 dark:text-slate-100 dark:group-hover:text-blue-400">
                           {h.title || h.url}
                         </p>
-                        <p className="mt-0.5 truncate text-[11px] text-slate-400 dark:text-slate-500 sm:hidden">
-                          {h.platform || guessPlatform(h.url)} ·{' '}
+                        <p className="mt-0.5 truncate text-[11px] sm:hidden">
+                          <PlatformBadge platform={h.platform || guessPlatform(h.url)} /> ·{' '}
                           {new Date(h.ts).toLocaleString('id-ID', {
                             day: '2-digit',
                             month: 'short',
@@ -109,8 +110,8 @@ export default function HistoryView({
                     </div>
                   </td>
                   <td className="min-w-0 w-44 px-4 py-2.5 align-middle sm:table-cell hidden">
-                    <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
-                      {h.platform || guessPlatform(h.url)} ·{' '}
+                    <span className="block truncate text-xs">
+                      <PlatformBadge platform={h.platform || guessPlatform(h.url)} /> ·{' '}
                       {new Date(h.ts).toLocaleString('id-ID', {
                         day: '2-digit',
                         month: 'short',

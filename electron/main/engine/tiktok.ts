@@ -66,6 +66,8 @@ export interface TikTokInfo {
   duration: number
   sizeBytes: number
   playUrl: string
+  /** Nama akun/pembuat video (dari field `author` di data TikWM). */
+  author?: string
 }
 
 /** Hasil akhir unduhan TikTok (dipakai `downloader.ts` untuk event success). */
@@ -76,6 +78,10 @@ export interface TikTokDownloadResult {
   title?: string
   thumbnail?: string
   sizeBytes?: number
+  /** Durasi video (detik) — dari TikWM. */
+  duration?: number
+  /** Nama akun/pembuat video — dari TikWM. */
+  uploader?: string
   /** Id video TikTok (untuk nama file final). */
   videoId?: string
   error?: string
@@ -156,7 +162,8 @@ async function resolveWithProvider(
     thumbnail: typeof d.cover === 'string' ? d.cover : '',
     duration: typeof d.duration === 'number' ? d.duration : 0,
     sizeBytes: typeof d.size === 'number' ? d.size : 0,
-    playUrl: play
+    playUrl: play,
+    author: typeof d.author === 'string' ? d.author : ''
   }
 }
 
@@ -346,6 +353,8 @@ export async function downloadTikTokVideo(
         title: info.title || undefined,
         thumbnail: info.thumbnail || undefined,
         sizeBytes: dl.sizeBytes || info.sizeBytes || undefined,
+        duration: info.duration || undefined,
+        uploader: info.author || undefined,
         videoId: info.id || undefined
       }
     }

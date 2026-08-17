@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { Settings, XCircle, RotateCcw, Globe, MonitorDown, MonitorUp, Info, KeyRound, CheckCircle2, AlertTriangle, ExternalLink, Trash2, Puzzle, Copy, Check, RefreshCw, Download } from 'lucide-react'
+import { Settings, XCircle, RotateCcw, Globe, MonitorDown, MonitorUp, Info, CheckCircle2, AlertTriangle, Trash2, Puzzle, Copy, Check, RefreshCw, Download } from 'lucide-react'
 import FloatingSelect from './ui/FloatingSelect'
+import { browserIcon, browserColorClass } from './ui/platform-brand'
+import { TikTokIcon } from './ui/brand-icons'
 import { FloatingTextarea } from './ui/FloatingField'
 import Toggle from './ui/Toggle'
 import ProxyManager from './ProxyManager'
@@ -26,11 +28,31 @@ const QUALITY_OPTIONS = [
 
 const BROWSER_OPTIONS = [
   { value: '', label: 'Tanpa Cookies' },
-  { value: 'chrome', label: 'Chrome' },
-  { value: 'edge', label: 'Edge' },
-  { value: 'safari', label: 'Safari' },
-  { value: 'firefox', label: 'Firefox' },
-  { value: 'brave', label: 'Brave' }
+  {
+    value: 'chrome',
+    label: 'Chrome',
+    icon: <span className={browserColorClass('Chrome')}>{browserIcon('Chrome')}</span>
+  },
+  {
+    value: 'edge',
+    label: 'Edge',
+    icon: <span className={browserColorClass('Edge')}>{browserIcon('Edge')}</span>
+  },
+  {
+    value: 'safari',
+    label: 'Safari',
+    icon: <span className={browserColorClass('Safari')}>{browserIcon('Safari')}</span>
+  },
+  {
+    value: 'firefox',
+    label: 'Firefox',
+    icon: <span className={browserColorClass('Firefox')}>{browserIcon('Firefox')}</span>
+  },
+  {
+    value: 'brave',
+    label: 'Brave',
+    icon: <span className={browserColorClass('Brave')}>{browserIcon('Brave')}</span>
+  }
 ]
 
 const SETTINGS_DEFAULT: DownloadSettings = {
@@ -138,16 +160,16 @@ export default function DownloadSettingsModal({
     }
   }, [bridge])
 
-  // Siapkan ekstensi: salin ZIP ber-versi ke Downloads + ekstrak + buka folder.
+  // Siapkan ekstensi: salin ZIP ber-versi ke Downloads & tampilkan di Finder.
   const [preparingExt, setPreparingExt] = useState(false)
   const handlePrepareExtension = useCallback(async (): Promise<void> => {
     if (!window.api?.prepareExtension || preparingExt) return
     setPreparingExt(true)
     try {
       const r = await window.api.prepareExtension()
-      if (r.ok && r.folderPath) {
+      if (r.ok && r.zipPath) {
         onToast?.(
-          `Ekstensi v${r.version ?? '?'} disiapkan: ZIP + folder dibuka di Downloads. Pilih folder "rs-omni-cookie-capturer" saat Load unpacked.`,
+          `ZIP ekstensi v${r.version ?? '?'} disalin ke Downloads & dipilih di Finder. Ekstrak ZIP lalu Load unpacked pilih folder hasil ekstrak.`,
           'success'
         )
       } else {
@@ -276,7 +298,7 @@ export default function DownloadSettingsModal({
           <div className="flex flex-col gap-1.5">
             <FloatingTextarea
               label="Cookie Douyin (opsional)"
-              icon={<KeyRound className="h-4 w-4" />}
+              icon={<TikTokIcon className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />}
               value={settings.douyinCookie}
               onChange={(e) => set({ douyinCookie: e.target.value })}
               helper="Cookie sesi dari douyin.com — anti-bot Douyin mewajibkannya untuk unduhan anonim. Disimpan lokal & dipakai yt-dlp."
@@ -324,7 +346,7 @@ export default function DownloadSettingsModal({
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20"
               >
-                <ExternalLink className="h-3.5 w-3.5" /> Buka douyin.com
+                <TikTokIcon className="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" /> Buka douyin.com
               </a>
             </div>
 
@@ -335,15 +357,15 @@ export default function DownloadSettingsModal({
               </summary>
               <ol className="mt-1.5 list-decimal space-y-1.5 pl-4">
                 <li>
-                  <strong>Pasang ekstensi</strong> — klik tombol{" "}
+                  <strong>Dapatkan ekstensi</strong> — klik tombol{" "}
                   <strong>"Siapkan Ekstensi"</strong> di bawah. Aplikasi menyalin{" "}
                   <strong>ZIP ber-versi</strong> ke{" "}
-                  <code className="font-mono">~/Downloads/RS-OmniTools-Extension/</code>,{" "}
-                  mengekstraknya ke folder <code className="font-mono">rs-omni-cookie-capturer</code>,{" "}
-                  lalu membuka folder itu.
+                  <code className="font-mono">~/Downloads/RS-OmniTools-Extension/</code>{" "}
+                  lalu memilih file-nya di Finder.
                 </li>
                 <li>
-                  Di Chrome/Edge buka <code className="font-mono">chrome://extensions</code>{" "}
+                  <strong>Ekstrak ZIP</strong> tersebut (klik dua kali di Finder /
+                  unzip). Di Chrome/Edge buka <code className="font-mono">chrome://extensions</code>{" "}
                   (Edge: <code className="font-mono">edge://extensions</code>) → aktifkan{" "}
                   <strong>Developer mode</strong> → <strong>Load unpacked</strong> → pilih folder{" "}
                   <code className="font-mono">rs-omni-cookie-capturer</code> hasil ekstrak.

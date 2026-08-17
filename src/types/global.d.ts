@@ -86,8 +86,8 @@ declare global {
       getCookieBridgeInfo: () => Promise<{ active: boolean; port: number | null; code: string | null }>
       /** Versi ekstensi cookie (baca manifest dari dalam app). */
       getExtensionInfo: () => Promise<{ version: string | null }>
-      /** Menyiapkan ekstensi cookie: ZIP ber-versi ke Downloads + ekstrak + buka folder. */
-      prepareExtension: () => Promise<{ ok: boolean; zipPath?: string | null; folderPath?: string; version?: string | null; error?: string }>
+      /** Menyiapkan ekstensi cookie: ZIP ber-versi ke Downloads & tampilkan di Finder. */
+      prepareExtension: () => Promise<{ ok: boolean; zipPath?: string; version?: string | null; error?: string }>
       /** Cookie diterima dari ekstensi MV3 (valid & lolos token). */
       onCookieReceived: (cb: (data: {
         site: string

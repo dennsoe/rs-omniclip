@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
-import { Check, Play, Clock, Image as ImageIcon, SearchX } from 'lucide-react'
+import { Check, Play, Clock, Eye, ThumbsUp, MessageCircle, Image as ImageIcon, SearchX } from 'lucide-react'
 import type { ScrapeItem } from '@lib/types'
 import { formatDuration, guessPlatform } from '@lib/utils'
 import { cn } from '@lib/utils'
+import { PlatformBadge } from '@components/ui/PlatformBadge'
 
 interface ScrapeResultViewProps {
   items: ScrapeItem[]
@@ -16,6 +17,14 @@ interface ScrapeResultViewProps {
   onPreview: (item: ScrapeItem) => void
   /** Dipanggil saat kartu terlihat & thumbnailnya belum ada → resolve lazy. */
   onThumbVisible?: (url: string) => void
+}
+
+/** Format angka engagement ringkas (1.2 Jt / 3.4 rb). */
+function formatCount(n?: number): string {
+  if (n === undefined || !Number.isFinite(n)) return ''
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')} Jt`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')} rb`
+  return String(n)
 }
 
 /** Thumbnail + badge durasi + overlay play (dipakai kartu grid & baris list).
@@ -165,9 +174,31 @@ export default function ScrapeResultView({
               <p className="line-clamp-2 text-xs font-medium leading-snug text-slate-700 dark:text-slate-200">
                 {item.title}
               </p>
-              <p className="mt-auto text-[10px] text-slate-400 dark:text-slate-500">
-                {guessPlatform(item.url)}
+              <p className="mt-auto text-[10px]">
+                <PlatformBadge platform={guessPlatform(item.url)} iconClassName="h-3 w-3 shrink-0" />
               </p>
+              {(item.views != null || item.likes != null || item.comments != null) && (
+                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+                  {item.views != null && item.views > 0 && (
+                    <span className="inline-flex items-center gap-0.5">
+                      <Eye className="h-3 w-3" />
+                      {formatCount(item.views)}
+                    </span>
+                  )}
+                  {item.likes != null && item.likes > 0 && (
+                    <span className="inline-flex items-center gap-0.5">
+                      <ThumbsUp className="h-3 w-3" />
+                      {formatCount(item.likes)}
+                    </span>
+                  )}
+                  {item.comments != null && item.comments > 0 && (
+                    <span className="inline-flex items-center gap-0.5">
+                      <MessageCircle className="h-3 w-3" />
+                      {formatCount(item.comments)}
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
           </motion.button>
         ))}
@@ -193,8 +224,8 @@ export default function ScrapeResultView({
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-slate-700 transition-colors group-hover:text-blue-600 dark:text-slate-200 dark:group-hover:text-blue-400">{item.title}</p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
-              {guessPlatform(item.url)}
+            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+              <PlatformBadge platform={guessPlatform(item.url)} />
               {item.duration != null && item.duration > 0 && (
                 <>
                   <span aria-hidden="true">·</span>
@@ -203,6 +234,24 @@ export default function ScrapeResultView({
                     {formatDuration(item.duration)}
                   </span>
                 </>
+              )}
+              {item.views != null && item.views > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <Eye className="h-3 w-3" />
+                  {formatCount(item.views)}
+                </span>
+              )}
+              {item.likes != null && item.likes > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <ThumbsUp className="h-3 w-3" />
+                  {formatCount(item.likes)}
+                </span>
+              )}
+              {item.comments != null && item.comments > 0 && (
+                <span className="inline-flex items-center gap-0.5">
+                  <MessageCircle className="h-3 w-3" />
+                  {formatCount(item.comments)}
+                </span>
               )}
             </p>
           </div>

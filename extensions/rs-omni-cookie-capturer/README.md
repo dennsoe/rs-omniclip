@@ -6,6 +6,8 @@ lokal (`127.0.0.1`) — jadi Anda tidak perlu menyalin cookie secara manual.
 
 - Versi ekstensi: **baca `version` di `manifest.json`** (satu-satunya sumber
   kebenaran; ZIP distribusi dinamai `RS-OmniTools-Cookie-Capturer-vX.Y.Z.zip`).
+- **Ikon ekstensi = ikon aplikasi RS OmniTools** (dari `rsomni.png`, di-resize
+  16/32/48/128) — satu branding dengan aplikasi desktop.
 - Cookie **tidak** pernah dikirim ke server mana pun. Hanya ke aplikasi desktop
   yang sedang terbuka di komputer Anda.
 - Wajib ada **kode hubung** (`port:token`) yang ditampilkan aplikasi — ditempel
@@ -19,10 +21,11 @@ lokal (`127.0.0.1`) — jadi Anda tidak perlu menyalin cookie secara manual.
 1. Buka aplikasi **RS OmniTools** → **Pengaturan Unduhan** → bagian
    **"Isi otomatis via ekstensi browser"**.
 2. Klik **"Siapkan Ekstensi (salin ke Downloads)"** — aplikasi menyalin
-   **ZIP ber-versi** ke `~/Downloads/RS-OmniTools-Extension/`, mengekstraknya
-   ke folder `rs-omni-cookie-capturer`, lalu membuka folder itu.
-3. Buka Chrome → `chrome://extensions` → aktifkan **Developer mode** →
-   **Load unpacked** → pilih folder `rs-omni-cookie-capturer` hasil ekstrak.
+   **ZIP ber-versi** ke `~/Downloads/RS-OmniTools-Extension/` lalu memilih
+   file-nya di Finder (tidak membuat folder apa pun).
+3. **Ekstrak ZIP** (klik dua kali di Finder / unzip). Buka Chrome →
+   `chrome://extensions` → aktifkan **Developer mode** → **Load unpacked** →
+   pilih folder `rs-omni-cookie-capturer` hasil ekstrak.
 4. **Sudah pernah pasang versi lama?** Hapus dulu ekstensi lama, lalu Load
    unpacked folder baru (agar tidak memakai versi lama).
 
@@ -90,6 +93,11 @@ rs-omni-cookie-capturer/
 ├── manifest.json   # MV3 — izin cookies + host douyin/tiktok/127.0.0.1 + versi
 ├── popup.html      # Antarmuka popup
 ├── popup.js        # Logika ambil cookie + kirim ke jembatan lokal
-└── styles.css      # Gaya popup
+├── styles.css      # Gaya popup
+└── icons/          # Ikon ekstensi = ikon aplikasi RS OmniTools (satu branding)
+    ├── icon16.png
+    ├── icon32.png
+    ├── icon48.png
+    └── icon128.png
 ```
 

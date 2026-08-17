@@ -29,6 +29,8 @@ interface DownloadProgressData {
   thumbnail?: string
   description?: string
   filePath?: string
+  duration?: number
+  uploader?: string
 }
 
 interface TrimCompleteData {
@@ -356,12 +358,11 @@ const api = {
     return ipcRenderer.invoke('extension:info')
   },
 
-  /** Menyiapkan ekstensi cookie: salin ZIP ber-versi ke Downloads + ekstrak
-   *  ke folder + membuka foldernya (untuk Load unpacked). */
+  /** Menyiapkan ekstensi cookie: salin ZIP ber-versi ke Downloads & tampilkan
+   *  file-nya di Finder (tanpa membuat folder). */
   prepareExtension: (): Promise<{
     ok: boolean
-    zipPath?: string | null
-    folderPath?: string
+    zipPath?: string
     version?: string | null
     error?: string
   }> => {
