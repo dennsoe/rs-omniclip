@@ -3,6 +3,71 @@
 Dokumen ini mencerminkan **kondisi proyek saat ini** dan WAJIB diperbarui setiap
 ada perubahan. Tanggal terakhir diperbarui: **2026-08-17**.
 
+## Status Rilis v2.1.1 (SELESAI — RELEASE v2.1.1 DIPUBLIKASI via CI)
+
+- **Branch**: `release/v2.1.1` (dari `main`). **Versi**: `2.1.1`.
+- **PR #38** (`feat/douyin-cookie-ux`) ke `main` **MERGED** (merge commit
+  `3859447`, 2026-08-17). **PR #39** (release) ke `main` **MERGED** (merge
+  commit `1f9a204`, 2026-08-17).
+- **Tag**: `v2.1.1` dibuat di commit merge `1f9a204` + dipush.
+- **GitHub Release v2.1.1 DIBUAT OTOMATIS oleh CI** (billing GitHub Actions
+  sudah aktif kembali — berbeda dgn v2.0.0/v2.1.0 yang terkunci) — workflow
+  **"Release Multi-OS v2.1.1"** (push tag `v*`) build macOS + Windows, publish
+  via electron-builder, lalu release **di-publish** (draft=false) dengan judul
+  & catatan rilis lengkap. **Latest**.
+  - Artefak: `RS-OmniTools-2.1.1-arm64.dmg`, `RS-OmniTools-2.1.1-arm64.zip`,
+    `RS-OmniTools-2.1.1-x64-setup.exe`, `RS-OmniTools-2.1.1-x64-portable.exe`
+    (+ blockmap, latest.yml, latest-mac.yml).
+  - URL: https://github.com/dennsoe/rs-omnitools/releases/tag/v2.1.1
+- **Release notes**: `release-notes/RELEASE_NOTES_v2.1.1.md` (bagian "Body
+  release" dipakai sebagai notes GitHub).
+- Isi v2.1.1: ekstensi browser Cookie Capturer (ambil cookie Douyin/TikTok
+  otomatis, satu branding) + badge platform berwarna brand di seluruh halaman
+  Pengunduh + info unduhan lengkap (platform/durasi/akun) + preview dari
+  thumbnail + info engagement di hasil scrape.
+
+## Perubahan Terbaru (2026-08-17 — PIPELINE PENJERNIHAN MAKSIMAL DIPERBAIKI + FIX VIDEOTOOLBOX)
+
+**Laporan user**: pilih "Kualitas Terbaik" di Pembersih Video tapi hasil tetap
+buram/bernoise, hanya ukuran file yang membesar. **Audit forensik + empiris**
+(klip TikTok 720p nyata, ukur energi detail & noise via ffmpeg) menemukan 4 akar:
+(1) dropdown kualitas HANYA memetakan CRF/preset x264 — filter enhance SAMA untuk
+semua tingkat; (2) pipeline "Penjernihan" lemah (atadenoise 0.04 + cas 0.7 →
+nyaris tanpa perubahan +0.8%); (3) upscale 720→1080 malah menurunkan ketajaman
+(−2.3%); (4) noise sumber tertahan (atadenoise terlalu lemah, cas menegaskan
+noise). Plus **bug laten**: jalur videotoolbox memakai `-q:v 60` FIXED (dropdown
+kualitas diabaikan total).
+
+**FIX Opsi A — pipeline "Penjernihan Maksimal" baru** (`processor.ts`,
+`enhanceFilter`): `atadenoise` → **`hqdn3d=2.5:2.5:12:9` (denoise spatial+temporal
+diperkuat) → `deband` (hilangkan bintik/banding) → scale lanczos/pad-blur →
+`cas=0.95` (penajam edge-aware, minim amplifikasi noise) →
+`unsharp=7:7:0.7:5:5:0.3` (radius sedang: tepi halus + local contrast) →
+`eq=saturation=1.15:contrast=1.04`**.
+- Hasil uji (klip 720p, archive): detail bersih **51.139 vs 47.829 sumber
+  (+6.9%)**, noise **0.036 vs 0.056 (−36%)**; pipeline lama hanya +0.8% dan noise
+  0.051. FullHD upscale: **48.077 vs 46.832 lama (+2.7%)** dan kini di ATAS sumber
+  (+0.5%) — upscale BENAR menajamkan, bukan melembutkan. Encode 720→1080 ~3,3
+  dtk/2 dtk video (slow preset; ~0,7x realtime utk archive 720).
+- **CATATAN empiris**: `cas=1.0` pd build ini justru MENURUNKAN detail (uji 2×,
+  detail 45.3 vs 51.1) → batas aman **0.95**; unsharp radius 9x9/0.8 (p3) memberi
+  detail sedikit lebih tinggi (+7.7%) tapi noise naik & risiko halo — pilih 7x7/0.7
+  sebagai keseimbangan terbaik.
+
+**FIX Opsi D — videotoolbox q:v benar** (`processor.ts`, `encoderCrfArgs` +
+helper `videoToolboxQuality`): `h264_videotoolbox` TIDAK mendukung `-crf` (opsi
+diterima tapi diabaikan); kualitas via `-q:v` yang pd build FFmpeg ini nilainya
+**LEBIH TINGGI = kualitas LEBIH BAIK** (terverifikasi PSNR: q:v 75→47.4, 68→45.4,
+55→41.4). Mapping: best(18)→**75**, balanced/auto(20)→**68**, compact(26)→**55**.
+- E2E app: encoder `h264_videotoolbox` output q:v 75 = 27,6 Mbps (vs q:v 60 lama
+  9,8 Mbps) — dropdown kualitas kini benar-benar berpengaruh di jalur HW.
+
+**Verifikasi**: get_errors bersih, typecheck (web+node)/lint/build PASS. E2E app
+nyata (build produksi + userData terpisah, CDP): enhance+best → output
+`clean=51.139 noise=0.036` (IDENTIK uji ffmpeg p2), jalur videotoolbox
+terverifikasi. Semua 5 preset (archive/hd/fullhd/uhd/vertical) sintaks filter
+valid. Dev server aktif kembali (5173 + CDP 9222).
+
 ## Status Rilis v2.1.0 (SELESAI — RELEASE v2.1.0 DIPUBLIKASI)
 
 - **Branch**: `release/v2.1.0` (dari `main`). **Versi**: `2.1.0`.
