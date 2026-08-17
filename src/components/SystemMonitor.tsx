@@ -208,7 +208,7 @@ export default function SystemMonitor(): React.ReactElement {
   const diskDanger = diskUsedPct > 90
 
   return (
-    <div className="mx-4 mb-4 flex flex-col gap-2.5 overflow-hidden rounded-xl border border-slate-100 bg-slate-50/50 p-3 transition-colors dark:border-slate-800/50 dark:bg-slate-900/50">
+    <div className="mx-2 mb-4 flex flex-col gap-2 overflow-hidden rounded-xl border border-slate-100 bg-slate-50/50 p-2 transition-colors dark:border-slate-800/50 dark:bg-slate-900/50">
       {/* Header — ringkas + indikator LIVE */}
       <div className="flex items-center gap-2">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-slate-800 dark:text-blue-400">

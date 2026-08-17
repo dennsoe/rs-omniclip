@@ -101,6 +101,13 @@ super responsif, realtime & interaktif:
   berubah real-time) → sparkline cuma noise visual. `spark` di `MetricCell`
   kini opsional (`spark?: number[]`); state `diskHistory` & `setDiskHistory`
   dibuang. Grafik tetap ada untuk CPU & RAM (dinamis).
+- **Lebar kontainer dimaksimalkan (2026-08-17, audit "space kiri kanan
+  kosong")**: dulu container `mx-4` (16px margin tiap sisi) + `p-3` (12px
+  padding) → grid cuma 201px di sidebar 260px (~29px ruang kosong tiap sisi,
+  semua bagian tampak kecil). FIX: `mx-2` (8px) + `p-2` (8px) → box 243px &
+  grid 225px (93.5% lebar sidebar); sel CPU/RAM 97px → 109px; Disk/Jaringan
+  full width ikut lebih lebar. Verifikasi ukur DOM: sidebar 260 → box 243 →
+  grid 225.
 
 **Verifikasi**: typecheck/lint/build/get_errors PASS; bundle memuat
 `MetricCell`/`grid-cols-2`/`animate-ping`/`animate-pulse`/glow ambang; preview
