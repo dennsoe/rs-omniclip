@@ -1,6 +1,6 @@
 {
   "name": "rs-omnitools",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "RS OmniTools - Super App desktop: pemrosesan massal video pendek (pembersih metadata, peningkat, pengunduh, pemotong, watermark, kompresor WhatsApp) + analisis performa kampanye Meta Ads vs Shopee Affiliate.",
   "main": "./out/main/index.js",
   "author": "RS STUDIO",
