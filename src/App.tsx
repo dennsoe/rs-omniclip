@@ -33,6 +33,7 @@ import {
   Focus,
   Gem,
   AudioLines,
+  Gauge,
   BarChart3
 } from 'lucide-react'
 import {
@@ -56,6 +57,7 @@ import type {
   ProcessingMode,
   QualityLevel,
   AudioMode,
+  FpsOption,
   FileStatus,
   ScrapeItem,
   UpdateInfo,
@@ -196,6 +198,11 @@ export default function App(): React.ReactElement {
   const [cleanerAudio, setCleanerAudio] = usePersistentState<AudioMode>(
     PREF_KEYS.cleanerAudio,
     PREF_DEFAULTS.cleanerAudio
+  )
+  // Framerate keluaran pembersih (Pertahankan Asli / 24 / 30 / 60 FPS).
+  const [cleanerFps, setCleanerFps] = usePersistentState<FpsOption>(
+    PREF_KEYS.cleanerFps,
+    PREF_DEFAULTS.cleanerFps
   )
   const [isProcessing, setIsProcessing] = useState(false)
   const [etaSeconds, setEtaSeconds] = useState<number | null>(null)
@@ -821,6 +828,7 @@ export default function App(): React.ReactElement {
       setCleanMetadata(PREF_DEFAULTS.cleanMetadata)
       setCleanerQuality(PREF_DEFAULTS.cleanerQuality)
       setCleanerAudio(PREF_DEFAULTS.cleanerAudio)
+      setCleanerFps(PREF_DEFAULTS.cleanerFps)
       setIsDarkMode(PREF_DEFAULTS.darkMode)
       addToast('Semua preferensi direset ke default.', 'info')
     } else if (confirmAction.type === 'clearHistory') {
@@ -870,7 +878,8 @@ export default function App(): React.ReactElement {
       processingMode,
       cleanMetadata,
       quality: cleanerQuality,
-      audio: cleanerAudio
+      audio: cleanerAudio,
+      fps: cleanerFps
     })
   }
 
@@ -924,6 +933,15 @@ export default function App(): React.ReactElement {
     { value: 'aac128', label: 'AAC 128 kbps', description: 'Ukuran kecil, cukup untuk suara biasa.' },
     { value: 'aac192', label: 'AAC 192 kbps', description: 'Seimbang untuk suara jernih.' },
     { value: 'aac256', label: 'AAC 256 kbps', description: 'Kualitas audio tinggi.' }
+  ]
+
+  // Opsi framerate keluaran. Deskripsi menyesuaikan metode yang dipakai engine:
+  // naikkan FPS di mode Jernih = interpolasi gerak (halus); selainnya = duplikasi.
+  const fpsOptions: SelectOption[] = [
+    { value: 'source', label: 'Pertahankan Asli', description: 'FPS mengikuti video sumber.' },
+    { value: 'fps60', label: '60 FPS', description: 'Naikkan ke 60 FPS — gerakan halus (Jernih) / duplikasi (Cepat).' },
+    { value: 'fps30', label: '30 FPS', description: 'Turunkan/naikkan ke 30 FPS.' },
+    { value: 'fps24', label: '24 FPS', description: 'Turunkan/naikkan ke 24 FPS (nuansa film).' }
   ]
 
   return (
@@ -1266,7 +1284,7 @@ export default function App(): React.ReactElement {
 
                 {/* Panel pengaturan — beberapa select dengan opsi detail */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800 sm:p-5">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <FloatingSelect
                       label="Prasetel"
                       value={preset}
@@ -1282,6 +1300,14 @@ export default function App(): React.ReactElement {
                       onChange={(v) => setCleanerQuality(v as QualityLevel)}
                       disabled={isProcessing}
                       icon={<Gem className="h-4 w-4" />}
+                    />
+                    <FloatingSelect
+                      label="Framerate"
+                      value={cleanerFps}
+                      options={fpsOptions}
+                      onChange={(v) => setCleanerFps(v as FpsOption)}
+                      disabled={isProcessing}
+                      icon={<Gauge className="h-4 w-4" />}
                     />
                     <FloatingSelect
                       label="Audio"

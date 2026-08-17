@@ -232,6 +232,7 @@ async function handleProcessing(payload: {
   cleanMetadata?: boolean
   quality?: 'auto' | 'best' | 'balanced' | 'compact'
   audio?: 'original' | 'aac128' | 'aac192' | 'aac256'
+  fps?: 'source' | 'fps24' | 'fps30' | 'fps60'
 }): Promise<void> {
   if (
     !payload ||
@@ -258,7 +259,8 @@ async function handleProcessing(payload: {
       processingMode: payload.processingMode ?? 'enhance',
       cleanMetadata: payload.cleanMetadata !== false,
       quality: payload.quality ?? 'auto',
-      audio: payload.audio ?? 'original'
+      audio: payload.audio ?? 'original',
+      fps: payload.fps ?? 'source'
     })
     emit('processing:complete', { outputFolder })
   } catch (err) {

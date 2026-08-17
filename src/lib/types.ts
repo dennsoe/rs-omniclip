@@ -5,6 +5,11 @@ export type ProcessingMode = 'privacy' | 'enhance'
 export type QualityLevel = 'auto' | 'best' | 'balanced' | 'compact'
 /** Penanganan audio keluaran. */
 export type AudioMode = 'original' | 'aac128' | 'aac192' | 'aac256'
+/**
+ * Framerate keluaran video. 'source' = pertahankan FPS asli (default);
+ * lainnya memaksa konversi ke nilai tersebut (naikkan/turunkan).
+ */
+export type FpsOption = 'source' | 'fps24' | 'fps30' | 'fps60'
 export type FileStatus = 'pending' | 'processing' | 'success' | 'failed'
 
 export interface FileItem {
@@ -31,6 +36,8 @@ export interface ProcessingPayload {
   cleanMetadata?: boolean
   quality?: QualityLevel
   audio?: AudioMode
+  /** Framerate keluaran (default 'source' = pertahankan FPS asli). */
+  fps?: FpsOption
 }
 
 /** Satu item video hasil scrape akun/halaman (yt-dlp --flat-playlist). */

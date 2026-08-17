@@ -195,6 +195,7 @@ const api = {
     cleanMetadata?: boolean
     quality?: string
     audio?: string
+    fps?: string
   }): void => {
     ipcRenderer.send('processing:start', payload)
   },

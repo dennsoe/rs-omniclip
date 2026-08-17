@@ -4,6 +4,7 @@ import type {
   ProcessingMode,
   QualityLevel,
   AudioMode,
+  FpsOption,
   ScrapeItem,
   UpdateInfo,
   ResourceInfo,
@@ -37,6 +38,7 @@ declare global {
         cleanMetadata?: boolean
         quality?: QualityLevel
         audio?: AudioMode
+        fps?: FpsOption
       }) => void
       onProcessingProgress: (
         cb: (data: {
