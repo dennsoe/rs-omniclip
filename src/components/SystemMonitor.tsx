@@ -5,7 +5,6 @@ import {
   Cpu,
   MemoryStick,
   HardDrive,
-  Network,
   DownloadCloud,
   UploadCloud,
   Loader2
@@ -117,7 +116,7 @@ function MetricCell({
   sub?: React.ReactNode
   tone: Tone
   pct: number
-  spark: number[]
+  spark?: number[]
   danger?: boolean
   className?: string
   hint?: string
@@ -150,7 +149,7 @@ function MetricCell({
         />
       </div>
       {sub && <div className="mt-1 truncate text-[9px] font-medium tabular-nums text-slate-400 dark:text-slate-500">{sub}</div>}
-      {spark.length > 1 && <Sparkline values={spark} className={`mt-1 h-5 w-full ${tone.spark}`} />}
+      {spark && spark.length > 1 && <Sparkline values={spark} className={`mt-1 h-5 w-full ${tone.spark}`} />}
     </div>
   )
 }
@@ -162,7 +161,6 @@ export default function SystemMonitor(): React.ReactElement {
   const [workers, setWorkers] = useState(0)
   const [history, setHistory] = useState<number[]>([])
   const [ramHistory, setRamHistory] = useState<number[]>([])
-  const [diskHistory, setDiskHistory] = useState<number[]>([])
   const [diskFreeMb, setDiskFreeMb] = useState(0)
   const [diskTotalMb, setDiskTotalMb] = useState(0)
   const [netRxBps, setNetRxBps] = useState(0)
@@ -180,9 +178,6 @@ export default function SystemMonitor(): React.ReactElement {
       setHistory((prev) => [...prev.slice(-(HISTORY_LEN - 1)), data.cpu])
       const ramPct = data.ramTotalMb > 0 ? Math.min(100, Math.round((data.ramUsedMb / data.ramTotalMb) * 100)) : 0
       setRamHistory((prev) => [...prev.slice(-(HISTORY_LEN - 1)), ramPct])
-      const diskUsed = Math.max(0, (data.diskTotalMb ?? 0) - (data.diskFreeMb ?? 0))
-      const diskPct = data.diskTotalMb > 0 ? Math.min(100, Math.round((diskUsed / data.diskTotalMb) * 100)) : 0
-      setDiskHistory((prev) => [...prev.slice(-(HISTORY_LEN - 1)), diskPct])
       setDiskFreeMb(data.diskFreeMb ?? 0)
       setDiskTotalMb(data.diskTotalMb ?? 0)
       setNetRxBps(data.netRxBps ?? 0)
@@ -267,23 +262,21 @@ export default function SystemMonitor(): React.ReactElement {
           sub={`${diskUsedDisplay}/${diskTotalDisplay} GB`}
           tone={diskT}
           pct={diskUsedPct}
-          spark={diskHistory}
           danger={diskDanger}
           className="col-span-2"
           hint={`Disk: total ${diskTotalDisplay} GB · dipakai ${diskUsedDisplay} GB · bebas ${diskFreeDisplay} GB`}
         />
 
-        {/* Jaringan — baris full-width, warna ↓/↑, icon Download/UploadCloud */}
+        {/* Jaringan — baris full-width (col-span-2, sejajar dgn Disk), label kiri + ↓ unduh (sky) · ↑ unggah (violet) */}
         {networkActive && (
           <div
             title={`Jaringan sistem: unduh ${formatSpeed(netRxBps)} · unggah ${formatSpeed(netTxBps)}`}
-            className="group flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white/50 px-2.5 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-900/40 dark:hover:border-slate-700"
+            className="group col-span-2 flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white/50 px-2.5 py-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md dark:border-slate-800/60 dark:bg-slate-900/40 dark:hover:border-slate-700"
           >
             <span className="flex min-w-0 items-center gap-1 text-slate-500 dark:text-slate-400">
-              <Network className="h-3 w-3 shrink-0" />
               <span className="truncate text-[10px] font-bold uppercase tracking-wider">Jaringan</span>
             </span>
-            <span className="flex shrink-0 items-center gap-3 text-xs font-semibold tabular-nums">
+            <span className="flex shrink-0 items-center gap-4 text-xs font-semibold tabular-nums">
               <motion.span
                 key={formatSpeed(netRxBps)}
                 initial={{ opacity: 0.4, scale: 0.9 }}

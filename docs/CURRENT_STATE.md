@@ -89,6 +89,14 @@ super responsif, realtime & interaktif:
   ↓/↑ (`DownloadCloud`/`UploadCloud`), teks tabular-nums, pop animasi saat data
   berubah. CATATAN audit: versi "meter analog" (bar vertikal h-9 + teks 8px)
   dianggap jelek/tidak responsif → dikembalikan ke baris tunggal yang jelas.
+  **Audit lanjutan (2026-08-17)**: baris jaringan TIDAK punya `col-span-2`
+  sehingga render setengah lebar (kolom 2 kosong) → label+kecepatan berjejal &
+  icon Network bentrok dengan Download/UploadCloud → **FIX**: `col-span-2`
+  (sejajar Disk), hapus icon `Network` dari label (cukup icon ↓/↑).
+- **Grafik Disk DIHAPUS (2026-08-17)**: nilai Disk hampir statis (tidak
+  berubah real-time) → sparkline cuma noise visual. `spark` di `MetricCell`
+  kini opsional (`spark?: number[]`); state `diskHistory` & `setDiskHistory`
+  dibuang. Grafik tetap ada untuk CPU & RAM (dinamis).
 
 **Verifikasi**: typecheck/lint/build/get_errors PASS; bundle memuat
 `MetricCell`/`grid-cols-2`/`animate-ping`/`animate-pulse`/glow ambang; preview
