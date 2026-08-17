@@ -104,10 +104,14 @@ x264 + CRF (`crfForQuality`/`x264QualityArgs`); `audio` memetakan
 membaca `frameRate` sumber dari `probe()` (parse `avg_frame_rate` ffprobe, mis.
 `30/1` → 30, `30000/1001` → 29.97). `buildFpsFilter()` menghasilkan filter:
 - `source` atau target == FPS sumber (pembulatan) → tanpa konversi.
-- NAIKKAN FPS + mode `enhance` + preset BUKAN `uhd` → `minterpolate=fps=T:mi_mode=mci`
+- **Preset `uhd` (4K) → SELALU tanpa konversi** (Opsi 2): pengolahan 4K sudah
+  berat; interpolasi sangat lambat & duplikasi frame kurang ideal. UI
+  menonaktifkan dropdown Framerate & memaksa kembali ke `source`; guard di
+  engine menjaga tetap aman bila nilai non-source masuk.
+- NAIKKAN FPS + mode `enhance` (non-4K) → `minterpolate=fps=T:mi_mode=mci`
   (interpolasi gerak sejati — halus, lebih lambat).
-- Selainnya (privacy, atau `uhd` 4K, atau menurunkan FPS) → `fps=T`
-  (duplikasi/buang frame — cepat; interpolasi diblokir di 4K karena sangat lambat).
+- Selainnya (privacy, atau menurunkan FPS) → `fps=T` (duplikasi/buang frame —
+  cepat).
 - Konversi FPS memaksa re-encode: pada `privacy`+`archive` jalur `-c copy`
   dilewati (re-encode wajib). Preset `metadata` (remux lossless) TIDAK
   menerapkan konversi FPS.
@@ -157,7 +161,8 @@ hqdn3d=2.5:2.5:12:9 → deband → [scale long-side + flags=lanczos | pad-blur] 
 - Audio mengikuti `audio` (original → `-c:a copy` tanpa filter; selainnya
   AAC + `afftdn=nr=12:nf=-30`, dgn fallback tanpa filter audio).
 - Konversi FPS (lihat catatan atas): naikkan + bukan `uhd` → `minterpolate`
-  disisipkan di AKHIR chain (setelah `eq`); `uhd`/menurunkan → `fps=`.
+  disisipkan di AKHIR chain (setelah `eq`); menurunkan → `fps=`; preset `uhd`
+  (4K) → tanpa konversi (dropdown nonaktif di UI).
 
 Catatan empiris (2026-08-17, klip 720p): chain ini memberi detail bersih
 +6.9% vs sumber & noise −36%. `cas=1.0` di build ini justru menurunkan detail

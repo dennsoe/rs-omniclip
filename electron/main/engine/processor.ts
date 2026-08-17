@@ -125,12 +125,12 @@ function audioModeArgs(audio: AudioMode): string[] {
 /**
  * Membangun filter konversi FPS bila diperlukan; '' bila tidak ada konversi.
  * - 'source' atau target == FPS sumber (pembulatan) → tanpa konversi.
- * - NAIKKAN FPS (mis. 30→60):
- *   - mode enhance + bukan preset UHD → `minterpolate` (interpolasi gerak
- *     sejati, halus). Terverifikasi empiris di FFmpeg 9.0 (kompatibel dgn
- *     chain penjernihan, output 60/1).
- *   - selainnya (privacy / UHD 4K) → `fps=` (duplikasi frame, cepat) —
- *     interpolasi di 4K sangat lambat, jadi diblokir di preset uhd.
+ * - Preset 4K UHD → SELALU tanpa konversi (keputusan desain: pengolahan 4K
+ *   sudah berat, interpolasi sangat lambat & duplikasi frame kurang ideal).
+ *   UI menonaktifkan dropdown; guard ini menjaga engine tetap aman.
+ * - NAIKKAN FPS (mis. 30→60): mode enhance → `minterpolate` (interpolasi
+ *   gerak sejati, halus; terverifikasi di FFmpeg 9.0), selainnya → `fps=`
+ *   (duplikasi frame, cepat).
  * - TURUNKAN FPS (mis. 60→30) → `fps=` (buang frame, tidak butuh interpolasi).
  */
 function buildFpsFilter(
@@ -141,10 +141,12 @@ function buildFpsFilter(
 ): string {
   const target = FPS_TARGET[fps]
   if (target === null || sourceFrameRate <= 0) return ''
+  // Preset 4K UHD: konversi FPS nonaktif total (Opsi 2 — dropdown disabled + guard engine).
+  if (preset === 'uhd') return ''
   const src = Math.round(sourceFrameRate)
   if (src === target) return ''
   const upscale = target > src
-  if (upscale && processingMode === 'enhance' && preset !== 'uhd') {
+  if (upscale && processingMode === 'enhance') {
     return `minterpolate=fps=${target}:mi_mode=mci`
   }
   return `fps=${target}`
